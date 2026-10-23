@@ -316,14 +316,16 @@ export function Timeline({
           if (item.kind === "email") return <MailEntry key={`m${item.email.id}`} mail={item.email} projects={projects} today={today} />;
           const a = item.activity;
           const Icon = ICON[a.type];
+          // Verlorene Vorgänge hervorheben, damit Grund und Notiz beim nächsten Kontakt auffallen
+          const lost = a.type === "phase" && a.body.includes("→ Abgelehnt / Verloren");
           return (
-            <li key={`a${a.id}`} className="flex gap-3.5 border-t border-line-soft px-5 py-3.5">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg text-muted">
+            <li key={`a${a.id}`} className={`flex gap-3.5 border-t border-line-soft px-5 py-3.5 ${lost ? "bg-accent-soft/60" : ""}`}>
+              <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${lost ? "bg-accent-soft text-accent-ink" : "bg-bg text-muted"}`}>
                 <Icon size={15} aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-muted">
-                  {LABEL[a.type]} · {relativeTime(a.createdAt)}
+                <p className={`text-xs ${lost ? "font-semibold text-accent-ink" : "text-muted"}`}>
+                  {lost ? "Verloren" : LABEL[a.type]} · {relativeTime(a.createdAt)}
                 </p>
                 <p className="whitespace-pre-line text-sm">{a.body}</p>
                 {a.type !== "phase" && (

@@ -68,8 +68,9 @@ async function applyStageEffects(tx: Tx, dealId: number, to: Stage, from: Stage 
     companyId: deal.companyId,
     dealId,
     type: "phase",
+    // Beim Verlieren Grund und Notiz mit in die Zeitleiste, damit sie bei der Firma sichtbar sind
     body: to === "verloren" && deal.lostReason
-      ? `${text} (${LOST_REASON_LABEL[deal.lostReason]})`
+      ? `${text} (${LOST_REASON_LABEL[deal.lostReason]})${deal.lostNote ? `\nNotiz: ${deal.lostNote}` : ""}`
       : text,
   });
 }

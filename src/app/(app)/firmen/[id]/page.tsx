@@ -5,7 +5,7 @@ import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import { MIN_OFFERS, ratingFor } from "@/lib/rating";
 import { AssessmentCard } from "@/components/rating";
-import { dealsWonBy, getCompany } from "@/lib/queries";
+import { companyName, dealsWonBy, getCompany } from "@/lib/queries";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
@@ -20,6 +20,11 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
   const { company, stats } = data;
   const assessment = await ratingFor(company.id);
   const won = company.kind === "wettbewerber" ? await dealsWonBy(company.id) : [];
+  const competitorNames = new Map(
+    await Promise.all(
+      [...new Set(data.deals.map((d) => d.competitorId).filter((x): x is number => !!x))].map(async (cid) => [cid, (await companyName(cid)) ?? ""] as const),
+    ),
+  );
 
   const kpis = [
     { label: "Umsatz (Lexware)", value: euro(assessment?.facts.revenue ?? 0) },
@@ -131,6 +136,14 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{d.title}</p>
                   <p className="text-xs text-muted">{STAGE_LABEL[d.stage]}{d.number && ` · ${d.number}`}</p>
+                  {d.stage === "verloren" && (
+                    <p className="mt-1 text-xs text-accent-ink">
+                      {[d.lostReason && LOST_REASON_LABEL[d.lostReason], d.competitorId && `an ${competitorNames.get(d.competitorId) ?? "Wettbewerber"}`]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      {d.lostNote && <span className="mt-0.5 block whitespace-pre-line text-ink">{d.lostNote}</span>}
+                    </p>
+                  )}
                 </div>
                 {d.compareOnly && <Badge tone="info">Vergleich?</Badge>}
                 <span className="text-[13px] tabular-nums">{euro(d.amountNet)}</span>
