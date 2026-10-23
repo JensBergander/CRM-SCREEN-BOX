@@ -11,6 +11,7 @@ import {
   Inbox,
   LogOut,
   Plus,
+  Settings,
   Users,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ const NAV = [
   { href: "/posteingang", label: "Posteingang", icon: Inbox },
   { href: "/aufgaben", label: "Aufgaben", icon: CheckSquare },
   { href: "/auswertungen", label: "Auswertungen", icon: BarChart3 },
+  { href: "/einstellungen", label: "Einstellungen", icon: Settings },
 ];
 
 export function Sidebar({ userName }: { userName: string }) {

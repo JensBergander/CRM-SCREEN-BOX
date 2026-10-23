@@ -1,18 +1,10 @@
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-
-const KPIS = [
-  { label: "Offen zur Abrechnung", hint: "erledigt, noch keine Rechnung", dot: "bg-accent" },
-  { label: "Angebote nachfassen", hint: "über 10 Tage ohne Antwort", dot: "bg-[#91CCF4]" },
-  { label: "Laufende Projekte", hint: "in Phase Beauftragt", dot: "bg-ink" },
-  { label: "Offene Angebote", hint: "Summe verschickter Angebote", dot: "bg-line" },
-];
-
-const SECTIONS = [
-  { title: "Offen zur Abrechnung", empty: "Nichts offen. Alles abgerechnet." },
-  { title: "Heute zu tun", empty: "Keine Aufgaben für heute." },
-  { title: "Angebote nachfassen", empty: "Keine Angebote, die auf Antwort warten." },
-  { title: "Neue Mails ohne Zuordnung", empty: "Die Mail-Anbindung folgt in Stufe 2." },
-];
+import { ageLabel, daysSince, euro, todayIso } from "@/lib/format";
+import { getDashboard } from "@/lib/queries";
+import { TaskList } from "@/components/task-list";
+import { Badge, btnQuiet, Card, Empty, PageHeader, Row } from "@/components/ui";
+import { advanceDealAction } from "./actions";
 
 function greeting(date: Date) {
   const hour = Number(
@@ -24,45 +16,98 @@ function greeting(date: Date) {
 }
 
 export default async function StartPage() {
-  const user = await getCurrentUser();
+  const [user, data] = await Promise.all([getCurrentUser(), getDashboard()]);
   const now = new Date();
-  const firstName = user.name.split(" ")[0];
   const today = new Intl.DateTimeFormat("de-DE", {
     weekday: "long",
     day: "numeric",
     month: "long",
     timeZone: "Europe/Berlin",
   }).format(now);
+  const billingSum = data.billing.reduce((s, d) => s + Number(d.amountNet ?? 0), 0);
+  const oldestBilling = data.billing[0] ? daysSince(data.billing[0].stageChangedAt) : null;
+
+  const kpis = [
+    {
+      label: "Offen zur Abrechnung",
+      value: String(data.billing.length),
+      hint: oldestBilling !== null ? `ältester ${ageLabel(oldestBilling)} erledigt` : "erledigt, noch keine Rechnung",
+      dot: "bg-accent",
+      hot: data.billing.length > 0,
+    },
+    { label: "Angebote nachfassen", value: String(data.followUps.length), hint: "über 10 Tage ohne Antwort", dot: "bg-[#91CCF4]" },
+    { label: "Laufende Projekte", value: String(data.beauftragt), hint: "in Phase Beauftragt", dot: "bg-ink" },
+    { label: "Offene Angebote", value: euro(data.offers.total ?? 0), hint: `${data.offers.n} Angebote verschickt`, dot: "bg-[#C7C7CC]" },
+  ];
 
   return (
     <div className="flex flex-col gap-7">
-      <header>
-        <p className="text-[13px] text-muted">{today}</p>
-        <h1 className="mt-1 text-[28px] font-bold tracking-tight">
-          {greeting(now)}, {firstName}
-        </h1>
-      </header>
+      <PageHeader title={`${greeting(now)}, ${user.name.split(" ")[0]}`} sub={today}>
+        <Link href="/vorgaenge/neu" className="inline-flex min-h-11 items-center rounded-full border border-ink px-5 text-sm font-semibold">
+          Neuer Vorgang
+        </Link>
+      </PageHeader>
 
       <section aria-label="Kennzahlen" className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-        {KPIS.map((kpi) => (
+        {kpis.map((kpi) => (
           <div key={kpi.label} className="flex flex-col gap-1.5 rounded-2xl bg-surface p-5">
             <div className="flex items-center gap-2 text-[13px] text-muted">
               <span className={`h-2 w-2 rounded-full ${kpi.dot}`} />
               {kpi.label}
             </div>
-            <div className="text-3xl font-bold tracking-tight">0</div>
+            <div className={`text-3xl font-bold tracking-tight ${kpi.hot ? "text-accent-ink" : ""}`}>{kpi.value}</div>
             <div className="text-xs text-muted">{kpi.hint}</div>
           </div>
         ))}
       </section>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(380px,100%),1fr))] items-start gap-5">
-        {SECTIONS.map((section) => (
-          <section key={section.title} className="rounded-2xl bg-surface py-2">
-            <h2 className="px-5 pb-2 pt-4 text-base font-semibold">{section.title}</h2>
-            <p className="border-t border-line-soft px-5 py-6 text-sm text-muted">{section.empty}</p>
-          </section>
-        ))}
+        <Card
+          title="Offen zur Abrechnung"
+          aside={data.billing.length > 0 && <Badge tone="accent">{data.billing.length} · {euro(billingSum)}</Badge>}
+        >
+          {data.billing.length === 0 && <Empty>Nichts offen. Alles abgerechnet.</Empty>}
+          {data.billing.map((deal) => {
+            const days = daysSince(deal.stageChangedAt);
+            return (
+              <div key={deal.id} className="flex items-center gap-3.5 border-t border-line-soft px-5 py-3.5">
+                <span className={`w-1 self-stretch rounded ${days >= 7 ? "bg-accent" : "bg-accent-soft"}`} />
+                <Link href={`/vorgaenge/${deal.id}`} className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{deal.companyName}</p>
+                  <p className="truncate text-[13px] text-muted">{deal.title} · {euro(deal.amountNet)}</p>
+                </Link>
+                <span className={`whitespace-nowrap text-xs font-semibold ${days >= 7 ? "text-accent-ink" : "text-muted"}`}>
+                  {ageLabel(days)}
+                </span>
+                <form action={advanceDealAction.bind(null, deal.id, "rechnung")}>
+                  <button type="submit" className={btnQuiet}>Rechnung erfasst</button>
+                </form>
+              </div>
+            );
+          })}
+        </Card>
+
+        <Card title="Heute zu tun" aside={<Link href="/aufgaben" className="text-[13px] text-muted">Alle Aufgaben</Link>}>
+          <TaskList tasks={data.todayTasks} today={todayIso()} empty="Keine Aufgaben für heute." />
+        </Card>
+
+        <Card title="Angebote nachfassen" aside={<span className="text-xs text-muted">ohne Rückmeldung seit über 10 Tagen</span>}>
+          {data.followUps.length === 0 && <Empty>Keine Angebote, die auf Antwort warten.</Empty>}
+          {data.followUps.map((deal) => (
+            <Row key={deal.id} href={`/vorgaenge/${deal.id}`}>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">{deal.companyName}</p>
+                <p className="truncate text-[13px] text-muted">{deal.title} · {euro(deal.amountNet)}</p>
+              </div>
+              {deal.compareOnly && <Badge tone="info">Vergleichsangebot?</Badge>}
+              <span className="whitespace-nowrap text-xs text-muted">{daysSince(deal.stageChangedAt)} Tage</span>
+            </Row>
+          ))}
+        </Card>
+
+        <Card title="Neue Mails ohne Zuordnung">
+          <Empty>Die Mail-Anbindung folgt in Stufe 2.</Empty>
+        </Card>
       </div>
     </div>
   );
