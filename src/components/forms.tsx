@@ -241,18 +241,22 @@ export function EditCompanyForm({ company, tagOptions }: { company: Company; tag
     ["industry", "Branche"],
   ];
   return (
-    <form action={action} className="flex flex-col gap-3 px-5 pb-5 pt-2">
-      <KindFields kind={company.kind} tags={company.tags} options={tagOptions} />
+    <form action={action} className="grid gap-3 px-5 pb-5 pt-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="sm:col-span-2 lg:col-span-4">
+        <KindFields kind={company.kind} tags={company.tags} options={tagOptions} />
+      </div>
       {fields.map(([key, label, hint]) => (
         <Field key={key} label={label} hint={hint}>
           <Input name={key} defaultValue={(company[key] as string | null) ?? ""} required={key === "name"} />
         </Field>
       ))}
-      <Field label="Notiz">
-        <Textarea name="notes" defaultValue={company.notes ?? ""} />
-      </Field>
+      <div className="sm:col-span-2 lg:col-span-4">
+        <Field label="Notiz">
+          <Textarea name="notes" defaultValue={company.notes ?? ""} />
+        </Field>
+      </div>
       <FormError message={state?.error} />
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 sm:col-span-2 lg:col-span-4">
         <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Speichern"}</button>
         {state && !state.error && !pending && <span className="text-sm text-muted">Gespeichert</span>}
       </div>

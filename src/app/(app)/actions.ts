@@ -268,6 +268,19 @@ export async function syncMailAction(): Promise<SyncResult | { error: string }> 
   }
 }
 
+// Volltext einer Mail für die Zeitleiste
+export async function mailTextAction(mailId: number): Promise<{ text: string } | { error: string }> {
+  await getCurrentUser();
+  const [mail] = await db.select({ mailbox: emails.mailbox, graphId: emails.graphId }).from(emails).where(eq(emails.id, mailId));
+  if (!mail) return { error: "Mail nicht gefunden." };
+  try {
+    const { unique, full } = await messageText(mail.mailbox, mail.graphId);
+    return { text: unique || full };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Mail konnte nicht geladen werden." };
+  }
+}
+
 export type MailForContact = {
   text: string;
   suggestion: SignatureData & { email: string };

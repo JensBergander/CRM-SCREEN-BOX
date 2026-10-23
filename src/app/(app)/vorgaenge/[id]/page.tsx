@@ -67,7 +67,7 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
           </Card>
           <Card title="Verlauf">
             <ActivityForm companyId={deal.companyId} dealId={deal.id} />
-            <Timeline items={data.timeline} emails={data.emails} />
+            <Timeline items={data.timeline} emails={data.emails} searchable />
           </Card>
         </div>
         <div className="flex flex-col gap-5">

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { dateDe, euro, todayIso } from "@/lib/format";
 import { STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import { getCompany } from "@/lib/queries";
@@ -64,17 +64,36 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         ))}
       </section>
 
-      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[320px_minmax(0,1fr)_340px]">
-        <Card title="Stammdaten">
+      <details className="group rounded-2xl bg-surface">
+        <summary className="flex cursor-pointer list-none items-center gap-4 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="text-base font-semibold">Stammdaten</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-muted">
+            {[
+              [company.street, [company.zip, company.city].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+              company.phone,
+              company.website,
+              company.emailDomain && `@${company.emailDomain}`,
+              company.folderName && `Ordner ${company.folderName}`,
+            ]
+              .filter(Boolean)
+              .join(" · ") || "noch keine Angaben"}
+          </span>
+          <span className="flex items-center gap-1.5 text-[13px] font-semibold text-muted">
+            <span className="group-open:hidden">Öffnen</span>
+            <span className="hidden group-open:inline">Schließen</span>
+            <ChevronDown size={18} className="transition-transform group-open:rotate-180" aria-hidden="true" />
+          </span>
+        </summary>
+        <div className="border-t border-line-soft pt-2">
           <EditCompanyForm company={company} tagOptions={await serviceTagOptions()} />
-        </Card>
-
-        <div className="flex flex-col gap-5">
-          <Card title="Zeitleiste">
-            <ActivityForm companyId={company.id} dealId={null} />
-            <Timeline items={data.timeline} emails={data.emails} />
-          </Card>
         </div>
+      </details>
+
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <Card title="Zeitleiste">
+          <ActivityForm companyId={company.id} dealId={null} />
+          <Timeline items={data.timeline} emails={data.emails} searchable />
+        </Card>
 
         <div className="flex flex-col gap-5">
           <Card title="Vorgänge">

@@ -287,7 +287,7 @@ export async function emailsFor(filter: { companyId?: number; dealId?: number })
       ),
     )
     .orderBy(desc(emails.receivedAt))
-    .limit(100);
+    .limit(300);
 }
 
 // Lexware-Belege der Firma eines Vorgangs: verknüpfte und noch freie (letzte 12 Monate)
