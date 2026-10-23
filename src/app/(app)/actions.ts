@@ -12,6 +12,7 @@ import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexwa
 import { rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { sendDigest } from "@/lib/digest";
 import { linkVoucher, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
+import { createQuotationDraft } from "@/lib/lexware-draft";
 import { changeStage, createDeal } from "@/lib/pipeline";
 
 export type FormState = { error?: string } | undefined;
@@ -322,6 +323,30 @@ export async function linkVoucherAction(dealId: number, voucherId: string) {
   await getCurrentUser();
   await linkVoucher(dealId, voucherId);
   refresh();
+}
+
+const draftItem = z.object({
+  name: z.string().trim().min(1, "Jede Position braucht eine Bezeichnung."),
+  description: z.string().trim().optional(),
+  quantity: z.number().positive("Menge muss größer als 0 sein."),
+  unitName: z.string().trim().min(1),
+  netPrice: z.number().min(0),
+});
+
+export async function createQuotationDraftAction(
+  dealId: number,
+  items: z.input<typeof draftItem>[],
+): Promise<{ url: string } | { error: string }> {
+  await getCurrentUser();
+  const parsed = z.array(draftItem).min(1, "Mindestens eine Position angeben.").safeParse(items);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  try {
+    const url = await createQuotationDraft(dealId, parsed.data);
+    refresh();
+    return { url };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Entwurf fehlgeschlagen" };
+  }
 }
 
 export async function syncLexwareAction(): Promise<{ log: string[] } | { error: string }> {

@@ -6,6 +6,7 @@ import { FolderPlus } from "lucide-react";
 import { folderLink } from "@/lib/folders";
 import { getDeal, vouchersForDeal } from "@/lib/queries";
 import { LexwareVouchers } from "@/components/lexware-vouchers";
+import { QuotationDraft } from "@/components/quotation-draft";
 import { ActivityForm, EditDealForm, StageControl, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
@@ -72,6 +73,9 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
         <div className="flex flex-col gap-5">
           <Card title="Lexware">
             <LexwareVouchers dealId={deal.id} {...vouchers} />
+            {vouchers.hasLexware && !deal.offerNumber && ["anfrage", "angebot"].includes(deal.stage) && (
+              <QuotationDraft dealId={deal.id} title={deal.title} amountNet={deal.amountNet} />
+            )}
           </Card>
           <Card title="Details">
             <EditDealForm deal={deal} />
