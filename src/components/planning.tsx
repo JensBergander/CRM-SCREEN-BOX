@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { CalendarDays, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, MapPin, Plus, Trash2 } from "lucide-react";
 import { loadPlanningAction, savePlanningAction, type Planning } from "@/app/(app)/actions";
-import { addDaysIso, dateDe } from "@/lib/format";
+import { addDaysIso, dateDe, mapsUrl } from "@/lib/format";
 import { btnPrimary, btnQuiet, Field, FormError, Input } from "./ui";
+import { PlaceInput } from "./place-input";
 
 type Day = Planning["days"][number];
 
@@ -34,6 +35,8 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
   onLater?: () => void;
 }) {
   const [location, setLocation] = useState(initial.location);
+  // Adresse und Koordinaten gelten nur, solange der Text der Auswahl nicht verändert wird
+  const [place, setPlace] = useState(initial.place);
   const [days, setDays] = useState<Day[]>(initial.days);
   const [block, setBlock] = useState(initial.blockContinuous);
   const lastDay = [...days].sort((a, b) => a.day.localeCompare(b.day)).at(-1)?.day ?? "";
@@ -64,6 +67,8 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
     startTransition(async () => {
       const r = await savePlanningAction(dealId, {
         location,
+        place,
+        localPlaces: [],
         days: days.filter((d) => d.day),
         postStart: effectivePostStart || null,
         postEnd: postEnd || null,
@@ -80,9 +85,35 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
           <CalendarDays size={16} aria-hidden="true" /> Produktion
           <span className="text-xs font-normal text-muted">kommt in den Kalender von office@</span>
         </h3>
-        <Field label="Drehort">
-          <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Adresse oder z. B. Studio" />
-        </Field>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={`location-${dealId}`} className="text-[13px] font-semibold text-muted">Drehort</label>
+          <PlaceInput
+            id={`location-${dealId}`}
+            value={location}
+            onChange={(text) => {
+              setLocation(text);
+              setPlace(null);
+            }}
+            onPick={(p) => {
+              setLocation(p.label);
+              setPlace({ street: p.street, zip: p.zip, city: p.city, country: p.country, lat: p.lat, lng: p.lng });
+            }}
+            local={initial.localPlaces}
+            placeholder="Ort, Firma oder Adresse suchen, oder z. B. Studio"
+          />
+          {location.trim() && (
+            <p className="flex items-center gap-1.5 text-xs text-muted">
+              {place ? (
+                <>
+                  <MapPin size={13} aria-hidden="true" /> Mit Karte und Navigation im Kalender ·
+                  <a href={mapsUrl(location)} target="_blank" rel="noreferrer" className="font-semibold text-ink underline">In Google Maps öffnen</a>
+                </>
+              ) : (
+                "ohne Karte: aus der Liste wählen, damit der Termin Karte und Navigation bekommt"
+              )}
+            </p>
+          )}
+        </div>
         <div className="flex flex-col gap-2">
           {days.map((d, i) => (
             <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1">

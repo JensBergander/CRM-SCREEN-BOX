@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useActionState, useEffect, useRef, useState, useTransition } from "react";
 import {
   addActivityAction,
   createContactAction,
@@ -14,6 +14,7 @@ import type { Company, Deal, LostReason, Stage } from "@/db/schema";
 import { STAGE_LABEL } from "@/lib/labels";
 import { LostDialog } from "./deal-board";
 import { PlanningDialog } from "./planning";
+import { AddressSearch } from "./place-input";
 import { RunningDot } from "./timeline";
 import { btnPrimary, btnQuiet, Field, FormError, Input, Textarea } from "./ui";
 
@@ -301,9 +302,17 @@ export function EditCompanyForm({ company, tagOptions }: { company: Company; tag
         <KindFields kind={company.kind} tags={company.tags} options={tagOptions} withCompetitor />
       </div>
       {fields.map(([key, label, hint]) => (
-        <Field key={key} label={label} hint={hint}>
-          <Input name={key} defaultValue={(company[key] as string | null) ?? ""} required={key === "name"} />
-        </Field>
+        <Fragment key={key}>
+          {key === "street" && (
+            <div className="flex flex-col gap-1.5 text-[13px] font-semibold text-muted sm:col-span-2 lg:col-span-4">
+              Adresse suchen
+              <AddressSearch />
+            </div>
+          )}
+          <Field label={label} hint={hint}>
+            <Input name={key} defaultValue={(company[key] as string | null) ?? ""} required={key === "name"} />
+          </Field>
+        </Fragment>
       ))}
       <div className="sm:col-span-2 lg:col-span-4">
         <Field label="Notiz">

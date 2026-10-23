@@ -13,6 +13,7 @@ import {
   type MailForContact,
 } from "@/app/(app)/actions";
 import { relativeTime } from "@/lib/format";
+import { AddressSearch } from "./place-input";
 import type { InboxRow } from "@/lib/queries";
 import type { SyncResult } from "@/lib/mail";
 import { KindFields } from "./forms";
@@ -114,6 +115,7 @@ function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; com
           <Input name="mobile" aria-label="Mobil" placeholder="Mobil" defaultValue={s.mobile} />
         </div>
         <Input name="website" aria-label="Website" placeholder="Website" defaultValue={s.website} />
+        <AddressSearch />
         <Input name="street" aria-label="Straße" placeholder="Straße" defaultValue={s.street} />
         <div className="grid grid-cols-[6rem_1fr] gap-2">
           <Input name="zip" aria-label="PLZ" placeholder="PLZ" defaultValue={s.zip} />

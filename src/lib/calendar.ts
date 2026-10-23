@@ -3,6 +3,7 @@ import { asc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { companies, contacts, deals, productionDays } from "@/db/schema";
 import { graphSend, mailboxes } from "./graph";
+import { mapsUrl } from "./format";
 
 // Produktionstermine eines Vorgangs im Kalender von office@ abbilden. Das CRM führt:
 // Änderungen in Outlook werden nicht zurückgelesen, sondern beim nächsten Abgleich überschrieben.
@@ -30,10 +31,28 @@ type Context = {
   contact: { name: string; phone: string | null; email: string | null } | null;
 };
 
+// Mit Koordinaten zeigen Outlook und iPhone eine Karte und starten die Navigation
+function eventLocation(deal: typeof deals.$inferSelect) {
+  if (!deal.location) return undefined;
+  if (deal.locationLat === null || deal.locationLng === null) return { displayName: deal.location };
+  return {
+    displayName: deal.location,
+    locationType: "default",
+    address: {
+      street: deal.locationStreet ?? "",
+      postalCode: deal.locationZip ?? "",
+      city: deal.locationCity ?? "",
+      countryOrRegion: deal.locationCountry ?? "",
+    },
+    coordinates: { latitude: deal.locationLat, longitude: deal.locationLng },
+  };
+}
+
 function eventBody(ctx: Context, start: string, end: string, startTime: string) {
   const { deal } = ctx;
   const lines = [
     deal.number && `<b>Projekt:</b> ${escape(deal.number)}`,
+    deal.location && deal.locationLat !== null && `<b>Drehort:</b> ${escape(deal.location)} · <a href="${escape(mapsUrl(deal.location))}">Route in Google Maps</a>`,
     ctx.contact && `<b>Ansprechpartner:</b> ${escape(ctx.contact.name)}${ctx.contact.phone ? `, ${escape(ctx.contact.phone)}` : ""}${ctx.contact.email ? `, ${escape(ctx.contact.email)}` : ""}`,
     deal.notes && `<b>Notiz:</b> ${escape(deal.notes).replace(/\n/g, "<br>")}`,
     `<a href="${crmLink(deal.id)}">Vorgang im CRM öffnen</a>`,
@@ -44,7 +63,7 @@ function eventBody(ctx: Context, start: string, end: string, startTime: string) 
     body: { contentType: "HTML", content: lines.join("<br>") },
     start: { dateTime: start, timeZone: TZ },
     end: { dateTime: end, timeZone: TZ },
-    location: deal.location ? { displayName: deal.location } : undefined,
+    location: eventLocation(deal),
     showAs: "busy",
     isReminderOn: true,
     reminderMinutesBeforeStart: reminderMinutes(startTime),

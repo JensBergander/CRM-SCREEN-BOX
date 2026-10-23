@@ -82,3 +82,8 @@ export function suggestFolderName(companyName: string): string {
     .replace(/[\s.-]+$/, "")
     .toUpperCase();
 }
+
+// Link zu Google Maps (Karte und Route), z. B. für Drehorte mit Koordinaten
+export function mapsUrl(query: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}

@@ -4,6 +4,7 @@ import {
   customType,
   date,
   decimal,
+  double,
   index,
   int,
   mysqlEnum,
@@ -121,6 +122,13 @@ export const deals = mysqlTable(
     competitorId: int("competitor_id"),
     // Planung: Drehort, Postproduktion (nur Daten), Produktion durchgehend im Kalender blocken
     location: varchar("location", { length: 500 }),
+    // gesetzt, wenn der Drehort aus der Adresssuche gewählt wurde: Karte und Navigation im Kalender
+    locationStreet: varchar("location_street", { length: 255 }),
+    locationZip: varchar("location_zip", { length: 16 }),
+    locationCity: varchar("location_city", { length: 120 }),
+    locationCountry: varchar("location_country", { length: 2 }),
+    locationLat: double("location_lat"),
+    locationLng: double("location_lng"),
     postStart: date("post_start", { mode: "string" }),
     postEnd: date("post_end", { mode: "string" }),
     blockContinuous: boolean("block_continuous").notNull().default(false),

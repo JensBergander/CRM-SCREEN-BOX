@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { createCompanyAction } from "@/app/(app)/actions";
 import { KindFields } from "./forms";
+import { AddressSearch } from "./place-input";
 import { btnPrimary, Field, FormError, Input, Textarea } from "./ui";
 
 export function NewCompanyForm({ kind, tagOptions }: { kind?: "kunde" | "dienstleister" | "wettbewerber"; tagOptions: string[] }) {
@@ -16,6 +17,11 @@ export function NewCompanyForm({ kind, tagOptions }: { kind?: "kunde" | "dienstl
       <Field label="Ordnername" hint="Leer lassen: wird aus dem Namen gebildet, z. B. EUROWINGS">
         <Input name="folderName" />
       </Field>
+      <div className="flex flex-col gap-1.5 text-[13px] font-semibold text-muted">
+        Adresse suchen
+        <AddressSearch fillName />
+        <span className="text-xs font-normal">füllt Straße, PLZ und Ort aus, leere Felder wie Name und Website auch</span>
+      </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
         <Field label="Straße"><Input name="street" /></Field>
         <Field label="PLZ"><Input name="zip" /></Field>

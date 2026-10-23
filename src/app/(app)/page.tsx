@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { addDaysIso, ageLabel, daysSince, euro, todayIso } from "@/lib/format";
+import { MapPin } from "lucide-react";
+import { addDaysIso, ageLabel, daysSince, euro, mapsUrl, todayIso } from "@/lib/format";
 import { upcomingProductionDays } from "@/lib/schedule";
 import { getDashboard } from "@/lib/queries";
 import { TaskList } from "@/components/task-list";
@@ -91,7 +92,8 @@ export default async function StartPage() {
         <Card title="Nächste Produktionstage" aside={<Link href="/planung" className="text-[13px] text-muted">Planung</Link>}>
           {upcoming.length === 0 && <Empty>In den nächsten 14 Tagen ist keine Produktion geplant.</Empty>}
           {upcoming.map((p, i) => (
-            <Row key={`${p.dealId}-${p.day}-${i}`} href={`/vorgaenge/${p.dealId}`}>
+            <div key={`${p.dealId}-${p.day}-${i}`} className="relative">
+            <Row href={`/vorgaenge/${p.dealId}`}>
               <div className="w-14 shrink-0 text-center">
                 <p className="text-[11px] font-semibold uppercase text-muted">
                   {new Intl.DateTimeFormat("de-DE", { weekday: "short", timeZone: "UTC" }).format(new Date(`${p.day}T12:00:00Z`))}
@@ -102,7 +104,15 @@ export default async function StartPage() {
                 <p className="truncate text-sm font-semibold">{p.company} · {p.title}</p>
                 <p className="truncate text-[13px] text-muted">{p.startTime}–{p.endTime}{p.location && ` · ${p.location}`}</p>
               </div>
+              {!!Number(p.hasMap) && <span className="w-10 shrink-0" />}
             </Row>
+            {/* Route außerhalb des Zeilenlinks, weil Links nicht verschachtelt sein dürfen */}
+            {!!Number(p.hasMap) && p.location && (
+              <a href={mapsUrl(p.location)} target="_blank" rel="noreferrer" aria-label={`Route zu ${p.location}`} title="In Google Maps öffnen" className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
+                <MapPin size={17} aria-hidden="true" />
+              </a>
+            )}
+            </div>
           ))}
         </Card>
 

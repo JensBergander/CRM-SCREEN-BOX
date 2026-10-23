@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { addDaysIso, dateDe, todayIso } from "@/lib/format";
+import { addDaysIso, dateDe, mapsUrl, todayIso } from "@/lib/format";
 import { scheduleBetween } from "@/lib/schedule";
 import { Card, Empty, PageHeader } from "@/components/ui";
 
@@ -107,6 +107,12 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
                   {r.days.map((x) => `${dateDe(x.day)} ${x.startTime}–${x.endTime}`).join(", ") || "keine Produktionstage"}
                   {r.postStart && r.postEnd && ` · Postproduktion ${dateDe(r.postStart)} bis ${dateDe(r.postEnd)}`}
                 </span>
+                {r.location && (
+                  <span className="block text-muted">
+                    Drehort:{" "}
+                    {r.hasMap ? <a href={mapsUrl(r.location)} target="_blank" rel="noreferrer" className="text-ink underline">{r.location}</a> : r.location}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

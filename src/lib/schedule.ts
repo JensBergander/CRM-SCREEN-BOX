@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gte, inArray, lte, ne, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { companies, deals, productionDays } from "@/db/schema";
 
@@ -8,6 +8,8 @@ export type ScheduleRow = {
   title: string;
   company: string;
   stage: string;
+  location: string | null;
+  hasMap: boolean;
   days: { day: string; startTime: string; endTime: string }[];
   postStart: string | null;
   postEnd: string | null;
@@ -28,7 +30,7 @@ export async function scheduleBetween(from: string, to: string): Promise<Schedul
 
   const [rows, days] = await Promise.all([
     db
-      .select({ id: deals.id, title: deals.title, stage: deals.stage, postStart: deals.postStart, postEnd: deals.postEnd, company: companies.name })
+      .select({ id: deals.id, title: deals.title, stage: deals.stage, location: deals.location, lat: deals.locationLat, postStart: deals.postStart, postEnd: deals.postEnd, company: companies.name })
       .from(deals)
       .innerJoin(companies, eq(companies.id, deals.companyId))
       .where(and(inArray(deals.id, ids), ne(deals.stage, "verloren"))),
@@ -40,6 +42,8 @@ export async function scheduleBetween(from: string, to: string): Promise<Schedul
       title: r.title,
       company: r.company,
       stage: r.stage,
+      location: r.location,
+      hasMap: r.lat !== null,
       days: days.filter((d) => d.dealId === r.id).map((d) => ({ day: d.day, startTime: d.startTime, endTime: d.endTime })),
       postStart: r.postStart,
       postEnd: r.postEnd,
@@ -57,6 +61,7 @@ export async function upcomingProductionDays(from: string, to: string) {
       dealId: deals.id,
       title: deals.title,
       location: deals.location,
+      hasMap: sql<number>`${deals.locationLat} IS NOT NULL`,
       company: companies.name,
     })
     .from(productionDays)

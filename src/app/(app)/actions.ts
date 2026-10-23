@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -21,6 +21,7 @@ import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
 import { projectsFor, type ProjectOption } from "@/lib/queries";
 import { hintProps, ratingFor } from "@/lib/rating";
+import { autocomplete, placeDetails, resolveAddress, type Place } from "@/lib/places";
 
 export type FormState = { error?: string } | undefined;
 
@@ -199,8 +200,15 @@ export async function renameCompanyAction(companyId: number, name: string): Prom
   return {};
 }
 
+// Drehort mit Adresse und Koordinaten (aus der Adresssuche)
+export type PlaceGeo = Omit<Place, "label" | "website">;
+// Vorschlag aus eigenen Daten; ohne Koordinaten wird er beim Auswählen über Google bestätigt
+export type LocalPlace = { label: string; hint: string; geo: PlaceGeo | null };
+
 export type Planning = {
   location: string;
+  place: PlaceGeo | null;
+  localPlaces: LocalPlace[];
   days: { id?: number; day: string; startTime: string; endTime: string }[];
   postStart: string | null;
   postEnd: string | null;
@@ -208,18 +216,37 @@ export type Planning = {
   calendarError?: string | null;
 };
 
-// Planung eines Vorgangs; der Drehort ist anfangs die Firmenadresse
+// Planung eines Vorgangs; als Drehort werden zuerst die Firmenadresse und frühere Drehorte vorgeschlagen
 export async function loadPlanningAction(dealId: number): Promise<Planning | null> {
   await getCurrentUser();
   const [row] = await db
-    .select({ deal: deals, street: companies.street, zip: companies.zip, city: companies.city })
+    .select({ deal: deals, company: companies.name, street: companies.street, zip: companies.zip, city: companies.city })
     .from(deals)
     .innerJoin(companies, eq(companies.id, deals.companyId))
     .where(eq(deals.id, dealId));
   if (!row) return null;
   const days = await db.select().from(productionDays).where(eq(productionDays.dealId, dealId)).orderBy(asc(productionDays.day), asc(productionDays.startTime));
+  const { deal } = row;
+
+  const localPlaces: LocalPlace[] = [];
+  const companyAddress = [row.street, [row.zip, row.city].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  if (row.street && row.city) localPlaces.push({ label: `${row.company}, ${companyAddress}`, hint: "Firmenadresse", geo: null });
+  const earlier = await db
+    .select({ deal: deals, company: companies.name })
+    .from(deals)
+    .innerJoin(companies, eq(companies.id, deals.companyId))
+    .where(isNotNull(deals.locationLat))
+    .orderBy(desc(deals.updatedAt))
+    .limit(60);
+  for (const e of earlier) {
+    if (!e.deal.location || localPlaces.some((p) => p.label === e.deal.location)) continue;
+    localPlaces.push({ label: e.deal.location, hint: e.deal.id === dealId ? "dieser Vorgang" : `zuletzt bei ${e.company}`, geo: geoOf(e.deal) });
+  }
+
   return {
-    location: row.deal.location ?? [row.street, [row.zip, row.city].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+    location: deal.location ?? "",
+    place: geoOf(deal),
+    localPlaces,
     days: days.map((d) => ({ id: d.id, day: d.day, startTime: d.startTime, endTime: d.endTime })),
     postStart: row.deal.postStart,
     postEnd: row.deal.postEnd,
@@ -228,8 +255,23 @@ export async function loadPlanningAction(dealId: number): Promise<Planning | nul
   };
 }
 
+function geoOf(deal: typeof deals.$inferSelect): PlaceGeo | null {
+  if (deal.locationLat === null || deal.locationLng === null) return null;
+  return { street: deal.locationStreet, zip: deal.locationZip, city: deal.locationCity, country: deal.locationCountry, lat: deal.locationLat, lng: deal.locationLng };
+}
+
 const planningSchema = z.object({
   location: z.string().trim().max(500),
+  place: z
+    .object({
+      street: z.string().max(255).nullable(),
+      zip: z.string().max(16).nullable(),
+      city: z.string().max(120).nullable(),
+      country: z.string().length(2).nullable(),
+      lat: z.number().min(-90).max(90),
+      lng: z.number().min(-180).max(180),
+    })
+    .nullable(),
   days: z
     .array(
       z
@@ -277,6 +319,13 @@ export async function savePlanningAction(dealId: number, input: Planning): Promi
     .update(deals)
     .set({
       location: data.location || null,
+      // Koordinaten nur zusammen mit einem Drehort; Freitext hat keine
+      locationStreet: data.location && data.place ? data.place.street : null,
+      locationZip: data.location && data.place ? data.place.zip : null,
+      locationCity: data.location && data.place ? data.place.city : null,
+      locationCountry: data.location && data.place ? data.place.country : null,
+      locationLat: data.location && data.place ? data.place.lat : null,
+      locationLng: data.location && data.place ? data.place.lng : null,
       postStart: data.postStart || null,
       postEnd: data.postEnd || null,
       blockContinuous: data.blockContinuous,
@@ -288,6 +337,22 @@ export async function savePlanningAction(dealId: number, input: Planning): Promi
   const [after] = await db.select({ e: deals.calendarError }).from(deals).where(eq(deals.id, dealId));
   refresh();
   return { calendarError: after?.e ?? null };
+}
+
+// Adresssuche (Google Places); null heißt: keine Vorschläge, von Hand tippen
+export async function placeSearchAction(input: string, sessionToken: string) {
+  await getCurrentUser();
+  return autocomplete(input.slice(0, 200), sessionToken.slice(0, 64));
+}
+
+export async function placeDetailsAction(placeId: string, sessionToken: string, name: string, withWebsite: boolean) {
+  await getCurrentUser();
+  return placeDetails(placeId, sessionToken.slice(0, 64), name.slice(0, 200), withWebsite);
+}
+
+export async function resolveAddressAction(text: string) {
+  await getCurrentUser();
+  return resolveAddress(text.slice(0, 300), "");
 }
 
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)
