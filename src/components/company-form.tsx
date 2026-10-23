@@ -20,6 +20,10 @@ export function NewCompanyForm() {
         <Field label="Ort"><Input name="city" /></Field>
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+        <Field label="Telefon (Zentrale)"><Input name="phone" type="tel" /></Field>
+        <Field label="E-Mail (allgemein)"><Input name="email" type="email" /></Field>
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
         <Field label="Website"><Input name="website" placeholder="https://" /></Field>
         <Field label="Mail-Domain" hint="für die Zuordnung der Mails"><Input name="emailDomain" placeholder="firma.de" /></Field>
       </div>

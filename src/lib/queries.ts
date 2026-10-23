@@ -113,6 +113,8 @@ export async function listCompanies(query?: string) {
       city: companies.city,
       emailDomain: companies.emailDomain,
       customerNumber: companies.customerNumber,
+      phone: companies.phone,
+      email: companies.email,
       deals: count(deals.id),
       lastChange: max(deals.stageChangedAt),
     })

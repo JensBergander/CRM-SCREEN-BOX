@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { dateDe, euro, todayIso } from "@/lib/format";
 import { STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import { getCompany } from "@/lib/queries";
+import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
@@ -35,6 +36,9 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           </p>
           <h1 className="mt-1 text-[28px] font-bold tracking-tight">{company.name}</h1>
         </div>
+        {(company.phone || company.email) && (
+          <ContactActions name={company.name} phone={company.phone} email={company.email} />
+        )}
         <Link href={`/vorgaenge/neu?firma=${company.id}`} className={btnSecondary}>Neuer Vorgang</Link>
         <Link href={`/vorgaenge/neu?schnell=1&firma=${company.id}`} className={btnPrimary}>
           <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
@@ -81,17 +85,20 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
 
           <Card title="Kontakte">
             {data.contacts.length === 0 && <Empty>Noch keine Kontakte.</Empty>}
-            {data.contacts.map((c) => (
-              <Row key={c.id}>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{[c.firstName, c.lastName].filter(Boolean).join(" ")}</p>
-                  <p className="truncate text-xs text-muted">
-                    {[c.position, c.email, c.phone].filter(Boolean).join(" · ") || "–"}
-                  </p>
-                </div>
-                {c.email && <a href={`mailto:${c.email}`} className="text-[13px] font-semibold">Mail</a>}
-              </Row>
-            ))}
+            {data.contacts.map((c) => {
+              const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
+              return (
+                <Row key={c.id}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">{name}</p>
+                    <p className="truncate text-xs text-muted">
+                      {[c.position, c.phone, c.email].filter(Boolean).join(" · ") || "–"}
+                    </p>
+                  </div>
+                  <ContactActions name={name} phone={c.phone} email={c.email} />
+                </Row>
+              );
+            })}
             <ContactForm companyId={company.id} />
           </Card>
 

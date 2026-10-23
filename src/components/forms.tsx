@@ -192,6 +192,8 @@ export function EditCompanyForm({ company }: { company: Company }) {
     ["street", "Straße"],
     ["zip", "PLZ"],
     ["city", "Ort"],
+    ["phone", "Telefon (Zentrale)"],
+    ["email", "E-Mail (allgemein)"],
     ["website", "Website"],
     ["emailDomain", "Mail-Domain", "z. B. eurowings.com, für die Zuordnung der Mails"],
     ["industry", "Branche"],

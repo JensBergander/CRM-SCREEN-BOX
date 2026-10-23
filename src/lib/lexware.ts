@@ -70,6 +70,7 @@ export async function importLexwareCustomers(): Promise<ImportResult> {
         ?? [lx.person?.firstName, lx.person?.lastName].filter(Boolean).join(" ");
       const address = lx.addresses?.billing?.[0];
       const emails = Object.values(lx.emailAddresses ?? {}).flat();
+      const phones = Object.values(lx.phoneNumbers ?? {}).flat();
       const persons = lx.company?.contactPersons ?? [];
       const emailDomain = [...emails, ...persons.map((p) => p.emailAddress)]
         .map(domainOf)
@@ -88,7 +89,12 @@ export async function importLexwareCustomers(): Promise<ImportResult> {
       if (existing) {
         await db
           .update(companies)
-          .set({ ...values, emailDomain: existing.emailDomain ?? emailDomain })
+          .set({
+            ...values,
+            emailDomain: existing.emailDomain ?? emailDomain,
+            phone: existing.phone ?? phones[0] ?? null,
+            email: existing.email ?? emails[0] ?? null,
+          })
           .where(eq(companies.id, existing.id));
         companyId = existing.id;
         result.updated++;
@@ -97,6 +103,8 @@ export async function importLexwareCustomers(): Promise<ImportResult> {
           ...values,
           lexwareId: lx.id,
           emailDomain,
+          phone: phones[0] ?? null,
+          email: emails[0] ?? null,
           folderName: suggestFolderName(name),
           notes: lx.note ?? null,
         });
@@ -105,7 +113,7 @@ export async function importLexwareCustomers(): Promise<ImportResult> {
       }
 
       const people = lx.person
-        ? [{ firstName: lx.person.firstName, lastName: lx.person.lastName, emailAddress: emails[0], phoneNumber: Object.values(lx.phoneNumbers ?? {}).flat()[0] }]
+        ? [{ firstName: lx.person.firstName, lastName: lx.person.lastName, emailAddress: emails[0], phoneNumber: phones[0] }]
         : persons;
       for (const p of people) {
         const known = await db

@@ -61,6 +61,7 @@ Angelehnt an screen-box.de: Schrift Inter, Hintergrund `#F5F5F7`, fast schwarze 
 - Nur lesen. Gesendet wird weiter aus Outlook.
 - Zuordnung über Absenderadresse (Kontakt) und Absender-Domain (Firma). Unbekannte Absender landen im Posteingang und werden mit einem Klick zugeordnet. Neue Personen einer bekannten Domain werden als Kontakt vorgeschlagen.
 - Beim Start werden die letzten 12 Monate eingelesen.
+- Aus jeder Mail lässt sich mit einem Klick eine Aufgabe oder ein Vorgang anlegen. Firma, Kontakt und Betreff werden übernommen, die Mail hängt danach in der Zeitleiste des Vorgangs.
 
 ## Lexware Office
 
@@ -112,7 +113,7 @@ Die Vorlage ist in der App einstellbar. Bestehende Ordner werden nie verändert.
 |---|---|
 | 0 | Design-Entwürfe, Server, Subdomain, Login mit Microsoft |
 | 1 | Firmen, Kontakte, Vorgänge mit Pipeline, Schnellauftrag, Aufgaben, Absagegründe, Import der Lexware-Kontakte |
-| 2 | Mails einlesen und zuordnen, Posteingang, Zeitleiste |
+| 2 | Mails einlesen und zuordnen, Posteingang, Zeitleiste, aus Mails Aufgaben und Vorgänge erstellen |
 | 3 | Montags-Mail, Lexware-Abgleich (Angebot, Rechnung, bezahlt) |
 | 4 | Auswertungen |
 | 5 | Ordner-Helfer, Angebote als Entwurf in Lexware, Belege hochladen |

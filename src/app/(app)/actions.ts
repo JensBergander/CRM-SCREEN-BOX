@@ -127,6 +127,8 @@ const companySchema = z.object({
   zip: optionalText,
   city: optionalText,
   website: optionalText,
+  phone: optionalText,
+  email: optionalText,
   emailDomain: optionalText,
   industry: optionalText,
   notes: optionalText,

@@ -57,6 +57,8 @@ export const companies = mysqlTable(
     zip: varchar("zip", { length: 16 }),
     city: varchar("city", { length: 120 }),
     website: varchar("website", { length: 255 }),
+    phone: varchar("phone", { length: 64 }),
+    email: varchar("email", { length: 255 }),
     emailDomain: varchar("email_domain", { length: 120 }),
     industry: varchar("industry", { length: 120 }),
     notes: text("notes"),

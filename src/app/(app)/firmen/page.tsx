@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { dateDe } from "@/lib/format";
 import { listCompanies } from "@/lib/queries";
+import { ContactActions } from "@/components/contact-actions";
 import { SearchBox } from "@/components/search-box";
 import { btnPrimary, PageHeader } from "@/components/ui";
 
@@ -28,7 +29,8 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
               <th className="px-3 py-3 font-medium">Ort</th>
               <th className="px-3 py-3 font-medium">Mail-Domain</th>
               <th className="px-3 py-3 text-right font-medium">Vorgänge</th>
-              <th className="px-5 py-3 font-medium">Letzte Bewegung</th>
+              <th className="px-3 py-3 font-medium">Letzte Bewegung</th>
+              <th className="px-5 py-3 font-medium"><span className="sr-only">Anrufen oder schreiben</span></th>
             </tr>
           </thead>
           <tbody>
@@ -41,12 +43,15 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
                 <td className="px-3 py-3 text-muted">{c.city ?? "–"}</td>
                 <td className="px-3 py-3 text-muted">{c.emailDomain ?? "–"}</td>
                 <td className="px-3 py-3 text-right tabular-nums">{c.deals}</td>
-                <td className="px-5 py-3 text-muted">{c.lastChange ? dateDe(new Date(c.lastChange).toISOString()) : "–"}</td>
+                <td className="px-3 py-3 text-muted">{c.lastChange ? dateDe(new Date(c.lastChange).toISOString()) : "–"}</td>
+                <td className="px-5 py-2">
+                  <ContactActions name={c.name} phone={c.phone} email={c.email} />
+                </td>
               </tr>
             ))}
             {companies.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-6 text-muted">
+                <td colSpan={6} className="px-5 py-6 text-muted">
                   {query ? "Keine Firma gefunden." : (
                     <>Noch keine Firmen. Unter <Link href="/einstellungen" className="underline">Einstellungen</Link> kannst du deine Kunden aus Lexware importieren.</>
                   )}
