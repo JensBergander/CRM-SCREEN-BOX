@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* Farben nach screen-box.de. Orange nur für Dinge, die Handeln verlangen. */
+:root {
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --line: #e5e5ea;
+  --line-soft: #f0f0f3;
+  --accent: #e84a14;
+  --accent-ink: #b93a0e;
+  --accent-soft: #fdede6;
+  --info-soft: #e8f4fc;
+  --info-ink: #1f5f8b;
+  --ok: #34a869;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111113;
+    --surface: #1c1c1e;
+    --ink: #f5f5f7;
+    --muted: #a1a1a6;
+    --line: #2c2c2e;
+    --line-soft: #242426;
+    --accent-ink: #ff8a5c;
+    --accent-soft: #3a1d12;
+    --info-soft: #14283a;
+    --info-ink: #9cd2f5;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+  --color-ok: var(--ok);
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
