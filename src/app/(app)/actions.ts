@@ -11,7 +11,7 @@ import { suggestFolderName, todayIso } from "@/lib/format";
 import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
 import { rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { sendDigest } from "@/lib/digest";
-import { linkVoucher, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
+import { linkVoucher, quickReconcile, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { changeStage, createDeal } from "@/lib/pipeline";
@@ -117,6 +117,14 @@ export async function moveDealAction(
   z.enum(STAGES).parse(stage);
   if (lost) z.enum(LOST_REASONS).parse(lost.reason);
   await changeStage(dealId, stage, lost);
+  // Gleich in Lexware nach passendem Angebot bzw. Rechnung schauen, statt auf den nächsten Cronjob zu warten
+  if (["angebot", "beauftragt", "erledigt"].includes(stage)) {
+    try {
+      await quickReconcile();
+    } catch (e) {
+      console.error("Lexware-Abgleich nach Phasenwechsel fehlgeschlagen:", e);
+    }
+  }
   refresh();
 }
 

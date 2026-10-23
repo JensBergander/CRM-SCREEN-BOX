@@ -1,7 +1,8 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lt, lte, max, ne, or, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, companies, contacts, deals, emails, lexwareVouchers, mailSync, tasks } from "@/db/schema";
+import { activities, companies, contacts, deals, emails, lexwareVouchers, mailSync, tasks, voucherFiles } from "@/db/schema";
+import { lexwareUrl, type LineItem } from "./lexware-sync";
 import { addDaysIso, todayIso } from "./format";
 
 const dealWithCompany = {
@@ -267,12 +268,21 @@ export async function vouchersForDeal(deal: { offerNumber: string | null; invoic
     (await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals)).flatMap((d) => [d.o, d.i]).filter(Boolean),
   );
   const yearAgo = new Date(Date.now() - 365 * 86_400_000);
+  const withPdf = new Set(
+    (await db.select({ id: voucherFiles.voucherId }).from(voucherFiles).where(inArray(voucherFiles.voucherId, all.map((v) => v.id).concat("")))).map((f) => f.id),
+  );
+  const enrich = (v: (typeof all)[number]) => ({
+    ...v,
+    url: lexwareUrl(v),
+    pdfUrl: withPdf.has(v.id) ? `/api/belege/${v.id}` : null,
+    items: v.lineItems ? (JSON.parse(v.lineItems) as LineItem[]) : [],
+  });
   return {
     hasLexware: true,
-    linked: all.filter((v) => v.number === deal.offerNumber || v.number === deal.invoiceNumber),
-    candidates: all.filter(
-      (v) => !used.has(v.number) && v.voucherDate && v.voucherDate > yearAgo && !["voided", "draft"].includes(v.status),
-    ),
+    linked: all.filter((v) => v.number === deal.offerNumber || v.number === deal.invoiceNumber).map(enrich),
+    candidates: all
+      .filter((v) => !used.has(v.number) && v.voucherDate && v.voucherDate > yearAgo && !["voided", "draft"].includes(v.status))
+      .map(enrich),
   };
 }
 

@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, companies, deals, lexwareVouchers, type Deal, type LexwareVoucher } from "@/db/schema";
+import { activities, companies, deals, lexwareVouchers, voucherFiles, type Deal, type LexwareVoucher } from "@/db/schema";
 import { changeStage } from "./pipeline";
 
 const API = "https://api.lexware.io/v1";
@@ -31,15 +31,91 @@ type ListItem = {
 type Details = {
   totalPrice?: { totalNetAmount?: number };
   relatedVouchers?: { id: string; voucherType: string }[];
+  lineItems?: {
+    type: string;
+    name?: string;
+    description?: string;
+    quantity?: number;
+    unitName?: string;
+    unitPrice?: { netAmount?: number };
+    lineItemAmount?: number;
+    optional?: boolean;
+    alternative?: boolean;
+  }[];
 };
+
+export type LineItem = { name: string; description: string | null; quantity: number | null; unitName: string | null; net: number | null; total: number | null; optional: boolean };
+
+const resource = (v: { type: string }) => (v.type === "invoice" ? "invoices" : "quotations");
+
+// Link zum Beleg in der Lexware-Weboberfläche
+export const lexwareUrl = (v: { type: string; id: string }) => `https://app.lexware.de/permalink/${resource(v)}/view/${v.id}`;
+
+async function loadDetails(v: { id: string; type: string }) {
+  const details = await lexGet<Details>(`/${resource(v)}/${v.id}`);
+  const items: LineItem[] = (details.lineItems ?? [])
+    .filter((li) => li.type !== "text" || li.name)
+    .map((li) => ({
+      name: li.name ?? "",
+      description: li.description ?? null,
+      quantity: li.quantity ?? null,
+      unitName: li.unitName ?? null,
+      net: li.unitPrice?.netAmount ?? null,
+      total: li.lineItemAmount ?? null,
+      optional: !!(li.optional || li.alternative),
+    }));
+  await db
+    .update(lexwareVouchers)
+    .set({
+      netAmount: details.totalPrice?.totalNetAmount?.toFixed(2) ?? null,
+      quotationId: details.relatedVouchers?.find((r) => r.voucherType === "quotation")?.id ?? null,
+      lineItems: JSON.stringify(items),
+      detailsLoaded: true,
+    })
+    .where(eq(lexwareVouchers.id, v.id));
+}
+
+// PDF eines Belegs aus Lexware holen und in der Datenbank ablegen (einmalig)
+async function ensurePdf(v: { id: string; type: string; status: string }) {
+  if (v.status === "draft") return;
+  const [existing] = await db.select({ id: voucherFiles.voucherId }).from(voucherFiles).where(eq(voucherFiles.voucherId, v.id));
+  if (existing) return;
+  await pause();
+  const { documentFileId } = await lexGet<{ documentFileId?: string }>(`/${resource(v)}/${v.id}/document`);
+  if (!documentFileId) return;
+  await pause();
+  const response = await fetch(`${API}/files/${documentFileId}`, {
+    headers: { Authorization: `Bearer ${process.env.LEXWARE_API_KEY}`, Accept: "application/pdf" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`Lexware-PDF nicht abrufbar (${response.status})`);
+  const pdf = Buffer.from(await response.arrayBuffer());
+  await db.insert(voucherFiles).values({ voucherId: v.id, pdf, size: pdf.length }).onDuplicateKeyUpdate({ set: { pdf, size: pdf.length } });
+}
+
+// Details und PDF für einen verknüpften Beleg sicherstellen; Fehler hier sollen den Abgleich nicht stoppen
+async function secureVoucher(number: string) {
+  const [v] = await db.select().from(lexwareVouchers).where(eq(lexwareVouchers.number, number));
+  if (!v) return;
+  try {
+    if (!v.detailsLoaded || v.lineItems === null) {
+      await pause();
+      await loadDetails(v);
+    }
+    await ensurePdf(v);
+  } catch (e) {
+    console.error(`Beleg ${number} konnte nicht vollständig geladen werden:`, e);
+  }
+}
 
 const PAID = ["paid", "paidoff"];
 const DEAD = ["voided", "rejected", "draft"];
 // Belegdetails nur für das letzte Jahr und begrenzt pro Lauf nachladen
 const DETAILS_PER_RUN = 25;
 
-// Angebote und Rechnungen aus Lexware in den Zwischenspeicher holen
-export async function syncVouchers(): Promise<number> {
+// Angebote und Rechnungen aus Lexware in den Zwischenspeicher holen.
+// quick: nur die Liste, ohne Details nachzuladen (z. B. direkt nach einem Phasenwechsel)
+export async function syncVouchers(options: { quick?: boolean } = {}): Promise<number> {
   let count = 0;
   for (let page = 0; ; page++) {
     const data = await lexGet<{ content: ListItem[]; last: boolean }>(
@@ -63,23 +139,16 @@ export async function syncVouchers(): Promise<number> {
     if (data.last) break;
     await pause();
   }
+  if (options.quick) return count;
 
-  // Details (Nettobetrag, zugehöriges Angebot) für neuere Belege nachladen
+  // Details (Nettobetrag, zugehöriges Angebot, Positionen) für neuere Belege nachladen
   const yearAgo = new Date(Date.now() - 365 * 86_400_000);
   const pending = (await db.select().from(lexwareVouchers).where(eq(lexwareVouchers.detailsLoaded, false)))
     .filter((v) => v.voucherDate && v.voucherDate > yearAgo && v.status !== "draft")
     .slice(0, DETAILS_PER_RUN);
   for (const v of pending) {
     await pause();
-    const details = await lexGet<Details>(`/${v.type === "invoice" ? "invoices" : "quotations"}/${v.id}`);
-    await db
-      .update(lexwareVouchers)
-      .set({
-        netAmount: details.totalPrice?.totalNetAmount?.toFixed(2) ?? null,
-        quotationId: details.relatedVouchers?.find((r) => r.voucherType === "quotation")?.id ?? null,
-        detailsLoaded: true,
-      })
-      .where(eq(lexwareVouchers.id, v.id));
+    await loadDetails(v);
   }
   return count;
 }
@@ -89,7 +158,10 @@ async function note(deal: Deal, body: string) {
 }
 
 const DAY = 86_400_000;
-const after = (v: LexwareVoucher, deal: Deal) => !!v.voucherDate && v.voucherDate.getTime() >= deal.createdAt.getTime() - 2 * DAY;
+// Angebote ab 30 Tage vor Anlage des Vorgangs kommen in Frage (das Angebot entsteht oft vor dem Eintrag im CRM),
+// Rechnungen nur ab 2 Tage davor, damit keine Rechnung eines früheren Auftrags erwischt wird
+const after = (v: LexwareVoucher, deal: Deal, days: number) =>
+  !!v.voucherDate && v.voucherDate.getTime() >= deal.createdAt.getTime() - days * DAY;
 
 // Lexware-Belege mit Vorgängen abgleichen; ändert nur eindeutige Fälle
 export async function reconcileDeals(): Promise<string[]> {
@@ -113,7 +185,7 @@ export async function reconcileDeals(): Promise<string[]> {
 
     // 1. Angebot verknüpfen: genau ein neues, noch freies Angebot der Firma
     if (!current.offerNumber && (current.stage === "anfrage" || current.stage === "angebot")) {
-      const offers = mine.filter((v) => v.type === "quotation" && !used.has(v.number) && after(v, current));
+      const offers = mine.filter((v) => v.type === "quotation" && !used.has(v.number) && after(v, current, 30));
       if (offers.length === 1) {
         const offer = offers[0];
         await db.update(deals).set({ offerNumber: offer.number, amountNet: current.amountNet ?? offer.netAmount }).where(eq(deals.id, current.id));
@@ -142,7 +214,7 @@ export async function reconcileDeals(): Promise<string[]> {
       const otherOpenDeals = active.filter(
         (a) => a.lexwareId === lexwareId && a.deal.id !== current.id && !a.deal.invoiceNumber && ["beauftragt", "erledigt"].includes(a.deal.stage),
       );
-      const recent = free.filter((v) => after(v, current));
+      const recent = free.filter((v) => after(v, current, 2));
       const invoice = fromOffer.length === 1 ? fromOffer[0] : recent.length === 1 && otherOpenDeals.length === 0 ? recent[0] : undefined;
       if (invoice) {
         await db.update(deals).set({ invoiceNumber: invoice.number, amountNet: current.amountNet ?? invoice.netAmount }).where(eq(deals.id, current.id));
@@ -163,7 +235,25 @@ export async function reconcileDeals(): Promise<string[]> {
       log.push(`${current.title}: Rechnung gestellt`);
     }
   }
+
+  // Positionen und PDF aller verknüpften Belege sichern (holt Fehlendes nach, höchstens 10 pro Lauf)
+  const linked = await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals);
+  const numbers = linked.flatMap((d) => [d.o, d.i]).filter((n): n is string => !!n);
+  if (numbers.length) {
+    const stored = new Set((await db.select({ id: voucherFiles.voucherId }).from(voucherFiles)).map((f) => f.id));
+    const missing = (await db.select().from(lexwareVouchers).where(inArray(lexwareVouchers.number, numbers)))
+      .filter((v) => !stored.has(v.id) || !v.lineItems)
+      .slice(0, 10);
+    for (const v of missing) await secureVoucher(v.number);
+  }
   return log;
+}
+
+// Schneller Abgleich direkt nach einem Phasenwechsel im CRM
+export async function quickReconcile(): Promise<string[]> {
+  if (!process.env.LEXWARE_API_KEY) return [];
+  await syncVouchers({ quick: true });
+  return reconcileDeals();
 }
 
 // Manuelle Verknüpfung aus dem Vorgang heraus

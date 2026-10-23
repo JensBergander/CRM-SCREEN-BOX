@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   date,
   decimal,
   index,
@@ -12,6 +13,11 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
+
+// MEDIUMBLOB (bis 16 MB) für PDF-Dateien
+const customBlob = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "mediumblob",
+});
 
 export const STAGES = [
   "anfrage",
@@ -209,11 +215,21 @@ export const lexwareVouchers = mysqlTable(
     dueDate: timestamp("due_date"),
     // ID des Angebots, aus dem eine Rechnung entstanden ist
     quotationId: varchar("quotation_id", { length: 64 }),
+    // Positionen als JSON: [{ name, description, quantity, unitName, net, total }]
+    lineItems: text("line_items"),
     detailsLoaded: boolean("details_loaded").notNull().default(false),
     updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   },
   (t) => [index("lexware_vouchers_contact_idx").on(t.contactId, t.type), index("lexware_vouchers_number_idx").on(t.number)],
 );
+
+// PDF-Kopien verknüpfter Angebote und Rechnungen; liegen in der Datenbank und damit in der Sicherung
+export const voucherFiles = mysqlTable("voucher_files", {
+  voucherId: varchar("voucher_id", { length: 64 }).primaryKey(),
+  pdf: customBlob("pdf").notNull(),
+  size: int("size").notNull(),
+  fetchedAt: timestamp("fetched_at").notNull().defaultNow(),
+});
 
 // Einfache Schlüssel-Wert-Ablage, z. B. wann die Montags-Mail zuletzt verschickt wurde
 export const appState = mysqlTable("app_state", {

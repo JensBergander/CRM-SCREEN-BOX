@@ -43,6 +43,13 @@
       "when": 1792762012811,
       "tag": "0005_email_autoreply",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1792763578103,
+      "tag": "0006_voucher_files",
+      "breakpoints": true
     }
   ]
 }
