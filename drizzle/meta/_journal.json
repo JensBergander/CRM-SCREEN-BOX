@@ -36,6 +36,13 @@
       "when": 1792757526916,
       "tag": "0004_lexware_vouchers",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1792762012811,
+      "tag": "0005_email_autoreply",
+      "breakpoints": true
     }
   ]
 }

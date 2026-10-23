@@ -13,6 +13,7 @@ import { rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { sendDigest } from "@/lib/digest";
 import { linkVoucher, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
+import { saveAutoReplySettings } from "@/lib/autoreply";
 import { changeStage, createDeal } from "@/lib/pipeline";
 
 export type FormState = { error?: string } | undefined;
@@ -369,6 +370,17 @@ export async function sendDigestAction(): Promise<{ message: string } | { error:
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Versand fehlgeschlagen" };
   }
+}
+
+export async function saveAutoReplyAction(_: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const domain = text(form, "domain")?.trim() ?? "";
+  const body = text(form, "text")?.trim() ?? "";
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain.replace(/^@/, ""))) return { error: "Bitte eine gültige Domain angeben, z. B. bergander-film.de" };
+  if (body.length < 20) return { error: "Der Antworttext ist zu kurz." };
+  await saveAutoReplySettings({ enabled: form.get("enabled") === "on", domain, text: body });
+  refresh();
+  return {};
 }
 
 export async function saveFolderTemplateAction(_: FormState, form: FormData): Promise<FormState> {

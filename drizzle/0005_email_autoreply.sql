@@ -1,0 +1,1 @@
+ALTER TABLE `emails` ADD `auto_reply` enum('gesendet','uebersprungen','fehler');

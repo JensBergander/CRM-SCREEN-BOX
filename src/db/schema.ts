@@ -165,6 +165,8 @@ export const emails = mysqlTable(
     contactId: int("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     dealId: int("deal_id").references(() => deals.id, { onDelete: "set null" }),
     status: mysqlEnum("status", MAIL_STATUS).notNull().default("neu"),
+    // automatische Antwort auf Mails an alte Adressen
+    autoReply: mysqlEnum("auto_reply", ["gesendet", "uebersprungen", "fehler"]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

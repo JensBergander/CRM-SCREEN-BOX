@@ -1,4 +1,5 @@
 import "server-only";
+import { sendAutoReplies } from "./autoreply";
 import { sendDigestIfDue } from "./digest";
 import { reconcileDeals, syncVouchers } from "./lexware-sync";
 import { mailboxes } from "./graph";
@@ -14,7 +15,10 @@ export async function runJobs() {
       result[name] = { error: e instanceof Error ? e.message : String(e) };
     }
   };
-  if (mailboxes().length) await step("mail", syncMailboxes);
+  if (mailboxes().length) {
+    await step("mail", syncMailboxes);
+    await step("autoantwort", sendAutoReplies);
+  }
   if (process.env.LEXWARE_API_KEY) {
     await step("lexware", syncVouchers);
     await step("abgleich", reconcileDeals);

@@ -1,8 +1,42 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { saveFolderTemplateAction, sendDigestAction, syncLexwareAction } from "@/app/(app)/actions";
-import { btnPrimary, btnQuiet, FormError, Textarea } from "./ui";
+import { saveAutoReplyAction, saveFolderTemplateAction, sendDigestAction, syncLexwareAction } from "@/app/(app)/actions";
+import { btnPrimary, btnQuiet, FormError, Input, Textarea } from "./ui";
+
+export function AutoReplyForm({ settings, sent }: { settings: { enabled: boolean; domain: string; text: string; since: string | null }; sent: number }) {
+  const [state, action, pending] = useActionState(saveAutoReplyAction, undefined);
+  return (
+    <form action={action} className="flex flex-col gap-3 px-5 pb-5">
+      <p className="text-sm text-muted">
+        Schreibt jemand an eine Adresse dieser Domain, antwortet das CRM automatisch von office@ aus. Pro Absender höchstens einmal in
+        30 Tagen, nicht an Newsletter, Systemabsender oder ignorierte Absender. Gilt nur für Mails, die nach dem Einschalten eingehen.
+      </p>
+      <label className="flex items-center gap-3 text-sm font-semibold">
+        <input type="checkbox" name="enabled" defaultChecked={settings.enabled} className="h-5 w-5 accent-ink" />
+        Automatische Antwort eingeschaltet
+      </label>
+      <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-muted">
+        Alte Domain
+        <Input name="domain" defaultValue={settings.domain} required />
+      </label>
+      <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-muted">
+        Antworttext
+        <Textarea name="text" rows={11} defaultValue={settings.text} required />
+      </label>
+      {settings.enabled && settings.since && (
+        <p className="text-xs text-muted">
+          Aktiv seit {new Date(settings.since).toLocaleString("de-DE", { timeZone: "Europe/Berlin" })} · bisher {sent} Antworten verschickt
+        </p>
+      )}
+      <FormError message={state?.error} />
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Speichern"}</button>
+        {state && !state.error && !pending && <span className="text-sm text-muted">Gespeichert</span>}
+      </div>
+    </form>
+  );
+}
 
 export function FolderTemplateForm({ template }: { template: string }) {
   const [state, action, pending] = useActionState(saveFolderTemplateAction, undefined);

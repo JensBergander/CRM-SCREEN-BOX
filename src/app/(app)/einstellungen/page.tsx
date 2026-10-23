@@ -2,7 +2,8 @@ import { asc } from "drizzle-orm";
 import { db } from "@/db";
 import { mailIgnore } from "@/db/schema";
 import { LexwareImport } from "@/components/lexware-import";
-import { DigestButton, FolderTemplateForm, LexwareSyncButton } from "@/components/settings-actions";
+import { AutoReplyForm, DigestButton, FolderTemplateForm, LexwareSyncButton } from "@/components/settings-actions";
+import { autoReplyCount, autoReplySettings } from "@/lib/autoreply";
 import { folderTemplate } from "@/lib/folders";
 import { btnQuiet, Card, Empty, PageHeader, Row } from "@/components/ui";
 import { removeIgnoreAction } from "../actions";
@@ -23,6 +24,9 @@ export default async function SettingsPage() {
       </Card>
       <Card title="Montags-Mail" className="max-w-2xl">
         <DigestButton />
+      </Card>
+      <Card title="Automatische Antwort für alte Adressen" className="max-w-2xl">
+        <AutoReplyForm settings={await autoReplySettings()} sent={await autoReplyCount()} />
       </Card>
       <Card title="Vorlage für Projektordner" className="max-w-2xl">
         <FolderTemplateForm template={await folderTemplate()} />
