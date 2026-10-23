@@ -16,6 +16,7 @@ import { relativeTime } from "@/lib/format";
 import type { InboxRow } from "@/lib/queries";
 import type { SyncResult } from "@/lib/mail";
 import { KindFields } from "./forms";
+import { RunningDot } from "./timeline";
 import { btnPrimary, btnQuiet, Empty, Field, FormError, Input } from "./ui";
 
 export function SyncButton() {
@@ -45,7 +46,7 @@ export function SyncButton() {
 function ProjectPicker({ projects, companyName }: { projects: { id: number; title: string }[]; companyName: string }) {
   const [target, setTarget] = useState(String(projects[0].id));
   const pill = (on: boolean) =>
-    `inline-flex min-h-8 cursor-pointer items-center rounded-full border px-3 text-[12px] font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
+    `inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
       on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted"
     }`;
   return (
@@ -55,6 +56,7 @@ function ProjectPicker({ projects, companyName }: { projects: { id: number; titl
         {[...projects.map((p) => ({ value: String(p.id), label: p.title })), { value: "", label: "Nur Firma" }].map((o) => (
           <label key={o.value || "firma"} className={pill(target === o.value)}>
             <input type="radio" name="dealId" value={o.value} checked={target === o.value} onChange={() => setTarget(o.value)} className="sr-only" />
+            {o.value && <RunningDot />}
             {o.label}
           </label>
         ))}
@@ -155,7 +157,8 @@ export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; c
                   <p className="mt-1 text-xs">
                     Zugeordnet: <Link href={`/firmen/${m.companyId}`} className="font-semibold hover:underline">{row.companyName}</Link>
                     {row.dealTitle && (
-                      <Link href={`/vorgaenge/${m.dealId}`} className="ml-2 inline-flex min-h-6 items-center rounded-full bg-ink px-2.5 text-[11px] font-semibold text-surface">
+                      <Link href={`/vorgaenge/${m.dealId}`} className="ml-2 inline-flex min-h-6 items-center gap-1.5 rounded-full bg-ink px-2.5 text-[11px] font-semibold text-surface">
+                        {!!Number(row.dealActive) && <RunningDot />}
                         {row.dealTitle}
                       </Link>
                     )}

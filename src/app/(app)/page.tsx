@@ -36,7 +36,7 @@ export default async function StartPage() {
       hot: data.billing.length > 0,
     },
     { label: "Angebote nachfassen", value: String(data.followUps.length), hint: "über 10 Tage ohne Antwort", dot: "bg-[#91CCF4]" },
-    { label: "Laufende Projekte", value: String(data.beauftragt), hint: "in Phase Beauftragt", dot: "bg-ink" },
+    { label: "Laufende Projekte", value: String(data.beauftragt), hint: "in Phase Beauftragt", dot: "bg-ok" },
     { label: "Offene Angebote", value: euro(data.offers.total ?? 0), hint: `${data.offers.n} Angebote verschickt`, dot: "bg-[#C7C7CC]" },
   ];
 

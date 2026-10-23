@@ -253,7 +253,12 @@ export type InboxRow = Awaited<ReturnType<typeof listInbox>>[number];
 export async function listInbox(view: "offen" | "alle" | "ignoriert", query?: string) {
   const q = query?.trim();
   return db
-    .select({ mail: emails, companyName: companies.name, dealTitle: deals.title })
+    .select({
+      mail: emails,
+      companyName: companies.name,
+      dealTitle: deals.title,
+      dealActive: sql<boolean>`${deals.stage} in ('anfrage','angebot','beauftragt','erledigt','rechnung')`,
+    })
     .from(emails)
     .leftJoin(companies, eq(companies.id, emails.companyId))
     .leftJoin(deals, eq(deals.id, emails.dealId))

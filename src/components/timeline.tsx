@@ -31,7 +31,12 @@ type Item =
   | { kind: "activity"; at: Date; activity: Activity; text: string }
   | { kind: "email"; at: Date; email: Email; text: string };
 
-const pillClass = "inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold";
+const pillClass = "inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold";
+
+// Grüner Punkt für laufende Projekte
+export function RunningDot() {
+  return <span className="h-2 w-2 shrink-0 rounded-full bg-ok" aria-label="läuft" />;
+}
 
 // Projekt-Pill eines zugeordneten Eintrags mit Menü zum Umhängen oder Lösen; ohne Zuordnung die aktiven Projekte als Knöpfe
 function ProjectControl({ entry, projects }: { entry: Entry; projects: Project[] }) {
@@ -64,6 +69,7 @@ function ProjectControl({ entry, projects }: { entry: Entry; projects: Project[]
           aria-label={`Projekt ${current.title}, Zuordnung ändern`}
           className={`${pillClass} ${current.active ? "bg-ink text-surface" : "bg-line text-ink"}`}
         >
+          {current.active && <RunningDot />}
           {current.title}
           <ChevronDown size={12} aria-hidden="true" />
         </button>
@@ -71,7 +77,8 @@ function ProjectControl({ entry, projects }: { entry: Entry; projects: Project[]
           <div role="menu" className="absolute left-0 top-full z-20 mt-1 flex min-w-56 flex-col rounded-xl border border-line bg-surface p-1 shadow-lg">
             {others.length > 0 && <p className="px-3 pb-1 pt-2 text-[11px] font-semibold text-muted">Anderem Projekt zuordnen</p>}
             {others.map((p) => (
-              <button key={p.id} type="button" role="menuitem" onClick={() => assign(p.id)} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-bg">
+              <button key={p.id} type="button" role="menuitem" onClick={() => assign(p.id)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-bg">
+                <RunningDot />
                 {p.title}
               </button>
             ))}
@@ -89,7 +96,7 @@ function ProjectControl({ entry, projects }: { entry: Entry; projects: Project[]
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Einem Projekt zuordnen">
       {active.map((p) => (
         <button key={p.id} type="button" disabled={pending} onClick={() => assign(p.id)} className={`${pillClass} border border-dashed border-line text-muted hover:border-ink hover:text-ink`}>
-          → {p.title}
+          <RunningDot />→ {p.title}
         </button>
       ))}
     </div>
@@ -284,7 +291,7 @@ export function Timeline({
               <span className="mr-1 text-xs text-muted">Projekt:</span>
               {[
                 { key: "alle" as const, label: "Alle" },
-                ...filterProjects.map((p) => ({ key: p.id, label: p.title })),
+                ...filterProjects.map((p) => ({ key: p.id, label: p.title, active: p.active })),
                 { key: "ohne" as const, label: "Ohne Projekt" },
               ].map((o) => (
                 <button
@@ -292,8 +299,9 @@ export function Timeline({
                   type="button"
                   aria-pressed={project === o.key}
                   onClick={() => setProject(o.key)}
-                  className={`min-h-8 rounded-full border px-3 text-[12px] font-semibold ${project === o.key ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted hover:text-ink"}`}
+                  className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold ${project === o.key ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted hover:text-ink"}`}
                 >
+                  {"active" in o && o.active && <RunningDot />}
                   {o.label}
                 </button>
               ))}

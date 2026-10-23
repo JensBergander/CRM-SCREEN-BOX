@@ -12,6 +12,7 @@ import {
 import type { Company, Deal, LostReason, Stage } from "@/db/schema";
 import { STAGE_LABEL } from "@/lib/labels";
 import { LostDialog } from "./deal-board";
+import { RunningDot } from "./timeline";
 import { btnPrimary, btnQuiet, Field, FormError, Input, Textarea } from "./ui";
 
 // Leert ein Formular nach erfolgreichem Absenden
@@ -131,7 +132,7 @@ export function ActivityForm({ companyId, dealId, projects = [] }: {
   const ref = useResetOnSuccess(state, pending);
   const [target, setTarget] = useState<string>(projects[0] ? String(projects[0].id) : "");
   const pill = (on: boolean) =>
-    `inline-flex min-h-8 cursor-pointer items-center rounded-full border px-3 text-[12px] font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
+    `inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
       on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted"
     }`;
   return (
@@ -150,6 +151,7 @@ export function ActivityForm({ companyId, dealId, projects = [] }: {
           {[...projects.map((p) => ({ value: String(p.id), label: p.title })), { value: "", label: "Nur Firma" }].map((o) => (
             <label key={o.value || "firma"} className={pill(target === o.value)}>
               <input type="radio" name="dealId" value={o.value} checked={target === o.value} onChange={() => setTarget(o.value)} className="sr-only" />
+              {o.value && <RunningDot />}
               {o.label}
             </label>
           ))}
