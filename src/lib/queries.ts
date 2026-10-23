@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lt, lte, max, ne, or, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, companies, contacts, deals, emails, mailSync, tasks } from "@/db/schema";
+import { activities, companies, contacts, deals, emails, lexwareVouchers, mailSync, tasks } from "@/db/schema";
 import { addDaysIso, todayIso } from "./format";
 
 const dealWithCompany = {
@@ -239,6 +239,28 @@ export async function emailsFor(filter: { companyId?: number; dealId?: number })
     )
     .orderBy(desc(emails.receivedAt))
     .limit(100);
+}
+
+// Lexware-Belege der Firma eines Vorgangs: verknüpfte und noch freie (letzte 12 Monate)
+export async function vouchersForDeal(deal: { offerNumber: string | null; invoiceNumber: string | null; companyId: number }) {
+  const [company] = await db.select({ lexwareId: companies.lexwareId }).from(companies).where(eq(companies.id, deal.companyId));
+  if (!company?.lexwareId) return { linked: [], candidates: [], hasLexware: false };
+  const all = await db
+    .select()
+    .from(lexwareVouchers)
+    .where(eq(lexwareVouchers.contactId, company.lexwareId))
+    .orderBy(desc(lexwareVouchers.voucherDate));
+  const used = new Set(
+    (await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals)).flatMap((d) => [d.o, d.i]).filter(Boolean),
+  );
+  const yearAgo = new Date(Date.now() - 365 * 86_400_000);
+  return {
+    hasLexware: true,
+    linked: all.filter((v) => v.number === deal.offerNumber || v.number === deal.invoiceNumber),
+    candidates: all.filter(
+      (v) => !used.has(v.number) && v.voucherDate && v.voucherDate > yearAgo && !["voided", "draft"].includes(v.status),
+    ),
+  };
 }
 
 export async function contactsForCompanies(ids: number[]) {

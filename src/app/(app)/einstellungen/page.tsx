@@ -2,6 +2,7 @@ import { asc } from "drizzle-orm";
 import { db } from "@/db";
 import { mailIgnore } from "@/db/schema";
 import { LexwareImport } from "@/components/lexware-import";
+import { DigestButton, LexwareSyncButton } from "@/components/settings-actions";
 import { btnQuiet, Card, Empty, PageHeader, Row } from "@/components/ui";
 import { removeIgnoreAction } from "../actions";
 
@@ -13,6 +14,14 @@ export default async function SettingsPage() {
       <PageHeader title="Einstellungen" />
       <Card title="Lexware Office" className="max-w-2xl">
         <LexwareImport configured={!!process.env.LEXWARE_API_KEY} />
+        <p className="px-5 pb-2 text-sm text-muted">
+          Angebote und Rechnungen werden alle 15 Minuten abgeglichen. Eindeutige Fälle verknüpft die App selbst und setzt die Phase
+          weiter (Rechnung gestellt, Bezahlt).
+        </p>
+        <LexwareSyncButton />
+      </Card>
+      <Card title="Montags-Mail" className="max-w-2xl">
+        <DigestButton />
       </Card>
       <Card
         title="Ignorierte Absender"

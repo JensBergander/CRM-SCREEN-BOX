@@ -29,6 +29,13 @@
       "when": 1792755273244,
       "tag": "0003_mail_ignore",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1792757526916,
+      "tag": "0004_lexware_vouchers",
+      "breakpoints": true
     }
   ]
 }

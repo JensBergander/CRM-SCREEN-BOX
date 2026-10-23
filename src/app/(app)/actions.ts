@@ -10,6 +10,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, todayIso } from "@/lib/format";
 import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
 import { rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
+import { sendDigest } from "@/lib/digest";
+import { linkVoucher, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
 import { changeStage, createDeal } from "@/lib/pipeline";
 
 export type FormState = { error?: string } | undefined;
@@ -314,6 +316,34 @@ export async function taskFromMailAction(mailId: number) {
     await db.update(emails).set({ status: "zugeordnet" }).where(eq(emails.id, mailId));
   }
   refresh();
+}
+
+export async function linkVoucherAction(dealId: number, voucherId: string) {
+  await getCurrentUser();
+  await linkVoucher(dealId, voucherId);
+  refresh();
+}
+
+export async function syncLexwareAction(): Promise<{ log: string[] } | { error: string }> {
+  await getCurrentUser();
+  try {
+    await syncVouchers();
+    const log = await reconcileDeals();
+    refresh();
+    return { log };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Abgleich fehlgeschlagen" };
+  }
+}
+
+export async function sendDigestAction(): Promise<{ message: string } | { error: string }> {
+  await getCurrentUser();
+  try {
+    const result = await sendDigest();
+    return { message: result.sent ? `Montags-Mail mit ${result.total} Punkten verschickt.` : "Nichts offen, deshalb keine Mail." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Versand fehlgeschlagen" };
+  }
 }
 
 export async function importLexwareAction(): Promise<ImportResult | { error: string }> {

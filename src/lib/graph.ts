@@ -57,6 +57,24 @@ export async function graphGet<T>(pathOrUrl: string): Promise<T> {
   throw new GraphError(429, "Microsoft Graph ist gerade überlastet, bitte später erneut versuchen.");
 }
 
+export async function graphPost(path: string, body: unknown): Promise<void> {
+  const response = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${await getToken()}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new GraphError(
+      response.status,
+      response.status === 403
+        ? `Keine Berechtigung zum Senden (403). Ist Mail.Send für die App freigegeben? ${data?.error?.message ?? ""}`
+        : `Microsoft Graph: ${data?.error?.message ?? response.statusText}`,
+    );
+  }
+}
+
 export function mailboxes(): string[] {
   return (process.env.MAIL_MAILBOXES ?? "")
     .split(",")

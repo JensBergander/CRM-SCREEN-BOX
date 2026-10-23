@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_LABEL } from "@/lib/labels";
-import { getDeal } from "@/lib/queries";
+import { getDeal, vouchersForDeal } from "@/lib/queries";
+import { LexwareVouchers } from "@/components/lexware-vouchers";
 import { ActivityForm, EditDealForm, StageControl, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
@@ -13,6 +14,7 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
   const data = await getDeal(Number(id));
   if (!data) notFound();
   const { deal } = data;
+  const vouchers = await vouchersForDeal(deal);
 
   return (
     <div className="flex flex-col gap-6">
@@ -51,9 +53,14 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
             <Timeline items={data.timeline} emails={data.emails} />
           </Card>
         </div>
-        <Card title="Details">
-          <EditDealForm deal={deal} />
-        </Card>
+        <div className="flex flex-col gap-5">
+          <Card title="Lexware">
+            <LexwareVouchers dealId={deal.id} {...vouchers} />
+          </Card>
+          <Card title="Details">
+            <EditDealForm deal={deal} />
+          </Card>
+        </div>
       </div>
     </div>
   );

@@ -190,6 +190,37 @@ export const mailSync = mysqlTable("mail_sync", {
   lastError: text("last_error"),
 });
 
+// Zwischenspeicher der Angebote und Rechnungen aus Lexware (nur gelesen)
+export const lexwareVouchers = mysqlTable(
+  "lexware_vouchers",
+  {
+    id: varchar("id", { length: 64 }).primaryKey(),
+    number: varchar("number", { length: 64 }).notNull(),
+    type: varchar("type", { length: 32 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull(),
+    contactId: varchar("contact_id", { length: 64 }),
+    contactName: varchar("contact_name", { length: 255 }),
+    totalAmount: decimal("total_amount", { precision: 12, scale: 2 }),
+    netAmount: decimal("net_amount", { precision: 12, scale: 2 }),
+    openAmount: decimal("open_amount", { precision: 12, scale: 2 }),
+    voucherDate: timestamp("voucher_date"),
+    dueDate: timestamp("due_date"),
+    // ID des Angebots, aus dem eine Rechnung entstanden ist
+    quotationId: varchar("quotation_id", { length: 64 }),
+    detailsLoaded: boolean("details_loaded").notNull().default(false),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  (t) => [index("lexware_vouchers_contact_idx").on(t.contactId, t.type), index("lexware_vouchers_number_idx").on(t.number)],
+);
+
+// Einfache Schlüssel-Wert-Ablage, z. B. wann die Montags-Mail zuletzt verschickt wurde
+export const appState = mysqlTable("app_state", {
+  key: varchar("key", { length: 64 }).primaryKey(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export type LexwareVoucher = typeof lexwareVouchers.$inferSelect;
 export type Email = typeof emails.$inferSelect;
 export type Company = typeof companies.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
