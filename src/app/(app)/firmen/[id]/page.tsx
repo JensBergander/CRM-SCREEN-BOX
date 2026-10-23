@@ -55,7 +55,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         </Link>
       </header>
 
-      <section aria-label="Kennzahlen" className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3">
+      <section aria-label="Kennzahlen" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => (
           <div key={k.label} className="rounded-2xl bg-surface p-4">
             <p className="text-xs text-muted">{k.label}</p>
@@ -89,7 +89,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         </div>
       </details>
 
-      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
         <Card title="Zeitleiste">
           <ActivityForm companyId={company.id} dealId={null} />
           <Timeline items={data.timeline} emails={data.emails} searchable />

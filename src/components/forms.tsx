@@ -125,13 +125,14 @@ export function ActivityForm({ companyId, dealId }: { companyId: number | null; 
   const [state, action, pending] = useActionState(addActivityAction.bind(null, { companyId, dealId }), undefined);
   const ref = useResetOnSuccess(state, pending);
   return (
-    <form ref={ref} action={action} className="flex flex-col gap-3 px-5 pb-4 pt-1">
-      <Textarea name="body" rows={2} placeholder="Notiz oder Anruf festhalten, z. B. „Herr X will Fotos vom Lager“" required />
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="submit" name="type" value="notiz" disabled={pending} className={btnQuiet}>Als Notiz</button>
-        <button type="submit" name="type" value="anruf" disabled={pending} className={btnQuiet}>Als Anruf</button>
-        <FormError message={state?.error} />
-      </div>
+    <form ref={ref} action={action} className="flex flex-wrap items-start gap-2 px-5 pb-3 pt-1">
+      <label className="min-w-0 flex-[1_1_260px]">
+        <span className="sr-only">Notiz oder Anruf festhalten</span>
+        <Textarea name="body" rows={1} placeholder="Notiz oder Anruf festhalten …" required className="min-h-10 resize-y py-2" />
+      </label>
+      <button type="submit" name="type" value="notiz" disabled={pending} className={btnQuiet}>Notiz</button>
+      <button type="submit" name="type" value="anruf" disabled={pending} className={btnQuiet}>Anruf</button>
+      <FormError message={state?.error} />
     </form>
   );
 }
