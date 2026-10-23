@@ -23,6 +23,7 @@ type ListItem = {
   voucherNumber: string;
   voucherDate?: string;
   dueDate?: string;
+  updatedDate?: string;
   contactId?: string;
   contactName?: string;
   totalAmount?: number;
@@ -117,12 +118,20 @@ const DETAILS_PER_RUN = 25;
 // quick: nur die Liste, ohne Details nachzuladen (z. B. direkt nach einem Phasenwechsel)
 export async function syncVouchers(options: { quick?: boolean } = {}): Promise<number> {
   let count = 0;
+  const known = new Map(
+    (await db.select({ id: lexwareVouchers.id, updated: lexwareVouchers.lexwareUpdatedAt }).from(lexwareVouchers)).map((v) => [v.id, v.updated]),
+  );
   for (let page = 0; ; page++) {
     const data = await lexGet<{ content: ListItem[]; last: boolean }>(
       `/voucherlist?voucherType=invoice,quotation&voucherStatus=any&size=250&page=${page}&sort=voucherDate,DESC`,
     );
     for (const v of data.content) {
+      // In Lexware geändert (z. B. Angebot überarbeitet): Positionen und PDF verwerfen, sie werden neu geholt
+      const changed = known.has(v.id) && known.get(v.id) !== null && known.get(v.id) !== (v.updatedDate ?? null);
+      if (changed) await db.delete(voucherFiles).where(eq(voucherFiles.voucherId, v.id));
       const values = {
+        lexwareUpdatedAt: v.updatedDate ?? null,
+        ...(changed && { detailsLoaded: false, lineItems: null }),
         number: v.voucherNumber,
         type: v.voucherType,
         status: v.voucherStatus,
@@ -286,17 +295,20 @@ export async function quickReconcile(): Promise<string[]> {
 
 // Manuelle Verknüpfung aus dem Vorgang heraus
 export async function linkVoucher(dealId: number, voucherId: string) {
-  const [voucher] = await db.select().from(lexwareVouchers).where(eq(lexwareVouchers.id, voucherId));
+  const [found] = await db.select().from(lexwareVouchers).where(eq(lexwareVouchers.id, voucherId));
   const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
-  if (!voucher || !deal) return;
+  if (!found || !deal) return;
+  // Positionen, Nettobetrag und PDF gleich holen, damit der Vorgang sofort vollständig ist
+  await secureVoucher(found.number);
+  const [voucher] = await db.select().from(lexwareVouchers).where(eq(lexwareVouchers.id, voucherId));
+  const replaced = voucher.type === "invoice" ? deal.invoiceNumber : deal.offerNumber;
+  // Bei einer neuen Version gilt deren Betrag, sonst nur ergänzen
+  const amountNet = replaced ? voucher.netAmount ?? deal.amountNet : deal.amountNet ?? voucher.netAmount;
   await db
     .update(deals)
-    .set(
-      voucher.type === "invoice"
-        ? { invoiceNumber: voucher.number, amountNet: deal.amountNet ?? voucher.netAmount }
-        : { offerNumber: voucher.number, amountNet: deal.amountNet ?? voucher.netAmount },
-    )
+    .set(voucher.type === "invoice" ? { invoiceNumber: voucher.number, amountNet } : { offerNumber: voucher.number, amountNet })
     .where(eq(deals.id, dealId));
-  await note(deal, `${voucher.type === "invoice" ? "Rechnung" : "Angebot"} ${voucher.number} von Hand verknüpft`);
+  const kind = voucher.type === "invoice" ? "Rechnung" : "Angebot";
+  await note(deal, replaced ? `${kind} ${replaced} ersetzt durch ${voucher.number}` : `${kind} ${voucher.number} von Hand verknüpft`);
   await reconcileDeals();
 }

@@ -218,6 +218,8 @@ export const lexwareVouchers = mysqlTable(
     // Positionen als JSON: [{ name, description, quantity, unitName, net, total }]
     lineItems: text("line_items"),
     detailsLoaded: boolean("details_loaded").notNull().default(false),
+    // Änderungszeitpunkt in Lexware; ändert er sich, werden Positionen und PDF neu geholt
+    lexwareUpdatedAt: varchar("lexware_updated_at", { length: 40 }),
     updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   },
   (t) => [index("lexware_vouchers_contact_idx").on(t.contactId, t.type), index("lexware_vouchers_number_idx").on(t.number)],

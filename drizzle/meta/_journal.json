@@ -50,6 +50,13 @@
       "when": 1792763578103,
       "tag": "0006_voucher_files",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1792763898607,
+      "tag": "0007_voucher_updated",
+      "breakpoints": true
     }
   ]
 }

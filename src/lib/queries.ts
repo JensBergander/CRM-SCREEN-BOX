@@ -271,11 +271,19 @@ export async function vouchersForDeal(deal: { offerNumber: string | null; invoic
   const withPdf = new Set(
     (await db.select({ id: voucherFiles.voucherId }).from(voucherFiles).where(inArray(voucherFiles.voucherId, all.map((v) => v.id).concat("")))).map((f) => f.id),
   );
+  const linkedOffer = all.find((v) => v.number === deal.offerNumber);
   const enrich = (v: (typeof all)[number]) => ({
     ...v,
     url: lexwareUrl(v),
     pdfUrl: withPdf.has(v.id) ? `/api/belege/${v.id}` : null,
     items: v.lineItems ? (JSON.parse(v.lineItems) as LineItem[]) : [],
+    // jüngeres Angebot als das verknüpfte, z. B. eine überarbeitete Fassung mit neuer Nummer
+    newer:
+      v.type === "quotation" &&
+      !!linkedOffer?.voucherDate &&
+      !!v.voucherDate &&
+      v.number !== linkedOffer.number &&
+      v.voucherDate.getTime() >= linkedOffer.voucherDate.getTime(),
   });
   return {
     hasLexware: true,

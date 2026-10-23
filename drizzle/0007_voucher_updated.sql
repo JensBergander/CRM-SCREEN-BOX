@@ -1,0 +1,1 @@
+ALTER TABLE `lexware_vouchers` ADD `lexware_updated_at` varchar(40);

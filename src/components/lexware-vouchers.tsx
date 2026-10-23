@@ -8,7 +8,7 @@ import { euro } from "@/lib/format";
 import { Badge, btnQuiet, Empty } from "./ui";
 
 type LineItem = { name: string; description: string | null; quantity: number | null; unitName: string | null; net: number | null; total: number | null; optional: boolean };
-export type VoucherView = LexwareVoucher & { url: string; pdfUrl: string | null; items: LineItem[] };
+export type VoucherView = LexwareVoucher & { url: string; pdfUrl: string | null; items: LineItem[]; newer: boolean };
 
 const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "info" | "ok" }> = {
   open: { label: "offen", tone: "neutral" },
@@ -81,24 +81,28 @@ export function LexwareVouchers({ dealId, linked, candidates, hasLexware }: {
 }) {
   const [pending, startTransition] = useTransition();
   if (!hasLexware) return <Empty>Diese Firma ist nicht mit Lexware verknüpft (nicht aus Lexware importiert).</Empty>;
+  const newer = candidates.filter((v) => v.newer);
+  const others = candidates.filter((v) => !v.newer);
+  const link = (v: VoucherView, label: string) => (
+    <button type="button" disabled={pending} onClick={() => startTransition(() => linkVoucherAction(dealId, v.id))} className={btnQuiet}>
+      {label}
+    </button>
+  );
   return (
     <>
+      {newer.length > 0 && (
+        <div className="mx-5 mb-2 mt-1 rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-ink" role="status">
+          Für diese Firma gibt es ein neueres Angebot ({newer.map((v) => v.number).join(", ")}). Ist es die überarbeitete Fassung,
+          verknüpfe es stattdessen.
+        </div>
+      )}
+      {newer.map((v) => <VoucherRow key={v.id} v={v} showItems action={link(v, "Stattdessen verknüpfen")} />)}
       {linked.length === 0 && <Empty>Noch kein Angebot und keine Rechnung verknüpft. Die App verknüpft eindeutige Fälle selbst.</Empty>}
       {linked.map((v) => <VoucherRow key={v.id} v={v} showItems />)}
-      {candidates.length > 0 && (
+      {others.length > 0 && (
         <>
           <p className="border-t border-line-soft px-5 pb-1 pt-4 text-xs font-semibold text-muted">Weitere Belege dieser Firma (noch keinem Vorgang zugeordnet)</p>
-          {candidates.slice(0, 8).map((v) => (
-            <VoucherRow
-              key={v.id}
-              v={v}
-              action={
-                <button type="button" disabled={pending} onClick={() => startTransition(() => linkVoucherAction(dealId, v.id))} className={btnQuiet}>
-                  Verknüpfen
-                </button>
-              }
-            />
-          ))}
+          {others.slice(0, 8).map((v) => <VoucherRow key={v.id} v={v} action={link(v, "Verknüpfen")} />)}
         </>
       )}
     </>
