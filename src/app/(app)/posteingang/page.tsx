@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { mailboxes } from "@/lib/graph";
-import { serviceTagOptions } from "@/lib/service-tags";
+import { allTagOptions } from "@/lib/service-tags";
 import { relativeTime } from "@/lib/format";
 import { companyOptions, listInbox, mailState } from "@/lib/queries";
 import { InboxList, SyncButton } from "@/components/inbox";
@@ -13,7 +13,7 @@ export default async function InboxPage({ searchParams }: PageProps<"/posteingan
   const { ansicht, q } = await searchParams;
   const view = ansicht === "alle" || ansicht === "ignoriert" ? ansicht : "offen";
   const query = typeof q === "string" && q.trim() ? q.trim() : undefined;
-  const [rows, state, companies, tagOptions] = await Promise.all([listInbox(view, query), mailState(), companyOptions(), serviceTagOptions()]);
+  const [rows, state, companies, tagOptions] = await Promise.all([listInbox(view, query), mailState(), companyOptions(), allTagOptions()]);
   const configured = mailboxes().length > 0;
   const lastError = state.syncs.find((s) => s.lastError);
   const lastRun = state.syncs.map((s) => s.lastRunAt).filter(Boolean).sort().at(-1);

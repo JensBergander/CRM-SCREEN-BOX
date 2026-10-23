@@ -14,12 +14,13 @@ import {
 } from "@/app/(app)/actions";
 import { relativeTime } from "@/lib/format";
 import { AddressSearch } from "./place-input";
+import type { TagOptions } from "@/lib/service-tags";
 import type { InboxRow } from "@/lib/queries";
 import type { SyncResult } from "@/lib/mail";
 import { KindFields } from "./forms";
 import { RunningDot } from "./timeline";
 import { RatingHintView } from "./rating";
-import { btnPrimary, btnQuiet, Empty, Field, FormError, Input } from "./ui";
+import { btnPrimary, btnQuiet, Empty, Field, FormError, Input, Select } from "./ui";
 
 export function SyncButton() {
   const [pending, startTransition] = useTransition();
@@ -45,12 +46,27 @@ export function SyncButton() {
 }
 
 // Laufende Projekte der erkannten Firma; das erste ist vorausgewählt
-function ProjectPicker({ projects, companyName }: { projects: { id: number; title: string }[]; companyName: string }) {
-  const [target, setTarget] = useState(String(projects[0].id));
+function ProjectPicker({ projects, companyName }: { projects: { id: number; title: string; company?: string }[]; companyName: string }) {
+  // Lieferanten: laufende Projekte aller Kunden als Auswahlliste, vorausgewählt „Nur Firma“
+  const foreign = projects.some((p) => p.company);
+  const [target, setTarget] = useState(foreign ? "" : String(projects[0].id));
   const pill = (on: boolean) =>
     `inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
       on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted"
     }`;
+  if (foreign || projects.length > 4) {
+    return (
+      <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-muted">
+        {foreign ? "Zu einem Kundenprojekt?" : `Projekt bei ${companyName}`}
+        <Select name="dealId" value={target} onChange={(e) => setTarget(e.target.value)}>
+          <option value="">Nur {foreign ? "Lieferant" : "Firma"}</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>{p.company ? `${p.company} · ${p.title}` : p.title}</option>
+          ))}
+        </Select>
+      </label>
+    );
+  }
   return (
     <fieldset className="flex flex-col gap-1.5">
       <legend className="mb-1 text-[13px] font-semibold text-muted">Projekt bei {companyName}</legend>
@@ -68,7 +84,7 @@ function ProjectPicker({ projects, companyName }: { projects: { id: number; titl
 }
 
 // Mail im Volltext lesen und Absender mit den Daten aus der Signatur übernehmen
-function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; companies: { id: number; name: string }[]; tagOptions: string[]; onClose: () => void }) {
+function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; companies: { id: number; name: string }[]; tagOptions: TagOptions; onClose: () => void }) {
   const [data, setData] = useState<MailForContact | { error: string } | null>(null);
   const [state, action, pending] = useActionState(createContactFromMailAction.bind(null, row.mail.id), undefined);
   const [, startLoading] = useTransition();
@@ -137,7 +153,7 @@ function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; com
   );
 }
 
-export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; companies: { id: number; name: string }[]; tagOptions: string[] }) {
+export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; companies: { id: number; name: string }[]; tagOptions: TagOptions }) {
   const [open, setOpen] = useState<number | null>(null);
   const [, startTransition] = useTransition();
   if (!rows.length) return <Empty>Keine Mails in dieser Ansicht.</Empty>;

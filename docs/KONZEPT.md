@@ -123,6 +123,13 @@ Die Vorlage ist in der App einstellbar. Bestehende Ordner werden nie verändert.
 - Google Places API (New), Projekt screen-box, Schlüssel nur serverseitig (`GOOGLE_PLACES_KEY`, im Schlüsselbund „CRM SCREEN-BOX – Google Places“), beschränkt auf die Server-IPs und auf Places API (New).
 - Kostenschutz: nur Essentials-Felder (Adresse, Koordinaten; Name aus dem Vorschlag), Website (Enterprise) nur bei leerem Feld. Google-Kontingente 300 Autocomplete und 100 GetPlace pro Tag, Budget 1 € mit Ausgabenobergrenze und Mails, CRM-eigene Grenzen 250 Abfragen pro Tag und 300 Website-Abfragen pro Monat. Ist eine Grenze erreicht, gibt es nur noch eigene Vorschläge.
 
+## Lieferanten
+
+- Eigene Art „Lieferant“ (Verleih, Druck, Hardware usw.) neben Kunde, Dienstleister und Wettbewerber; Seite „Lieferanten“ mit Kategorie-Pills (Einstellungen → Kategorien für Lieferanten).
+- Lexware-Import holt Kunden und Lieferanten; wer beides ist, bleibt Kunde. Lieferanten haben keine eigenen Vorgänge und erscheinen nicht bei „Neuer Vorgang“, keine Sterne-Bewertung.
+- Mails von Lieferanten gehören zur Lieferanten-Firma und lassen sich zusätzlich einem laufenden Kundenprojekt zuordnen (Suchmenü, nächste Produktion zuerst; ganze Unterhaltung). Sie erscheinen im Verlauf des Projekts und beim Kunden, gekennzeichnet mit „Lieferant: …“.
+- Im Vorgang Karte „Lieferanten“ mit Notiz und Kosten netto, von Hand oder automatisch über eine zugeordnete Mail; darunter „Auftrag · Lieferanten · bleibt“. Die Firmenseite des Lieferanten listet seine Projekte mit Kosten.
+
 ## Kundeneinschätzung und Wettbewerber
 
 - Firmen haben eine Art: Kunde, Dienstleister oder Wettbewerber.

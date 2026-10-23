@@ -8,7 +8,7 @@ export default async function NewDealPage({ searchParams }: PageProps<"/vorgaeng
   const params = await searchParams;
   const quick = params.schnell === "1";
   const [companies, mailRow, note] = await Promise.all([
-    companyOptions(),
+    companyOptions(true),
     params.mail ? getMail(Number(params.mail)) : Promise.resolve(null),
     params.notiz ? getActivity(Number(params.notiz)) : Promise.resolve(null),
   ]);

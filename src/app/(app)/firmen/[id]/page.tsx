@@ -7,8 +7,8 @@ import { MIN_OFFERS, ratingFor } from "@/lib/rating";
 import { AssessmentCard } from "@/components/rating";
 import { InlineTitle } from "@/components/inline-title";
 import { renameCompanyAction } from "../../actions";
-import { companyName, dealsWonBy, getCompany } from "@/lib/queries";
-import { serviceTagOptions } from "@/lib/service-tags";
+import { companyName, dealsWonBy, getCompany, projectsOfSupplier } from "@/lib/queries";
+import { allTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
@@ -22,35 +22,48 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
   const { company, stats } = data;
   const assessment = await ratingFor(company.id);
   const won = company.kind === "wettbewerber" ? await dealsWonBy(company.id) : [];
+  const supplier = company.kind === "lieferant";
+  const supplied = supplier ? await projectsOfSupplier(company.id) : [];
+  const suppliedCost = supplied.reduce((s, p) => s + Number(p.costNet ?? 0), 0);
   const competitorNames = new Map(
     await Promise.all(
       [...new Set(data.deals.map((d) => d.competitorId).filter((x): x is number => !!x))].map(async (cid) => [cid, (await companyName(cid)) ?? ""] as const),
     ),
   );
 
-  const kpis = [
-    { label: "Umsatz (Lexware)", value: euro(assessment?.facts.revenue ?? 0) },
-    { label: "Vorgänge im CRM", value: String(stats.requests) },
-    { label: "Letzter Kontakt", value: stats.lastContact ? dateDe(new Date(stats.lastContact).toISOString()) : "–" },
-  ];
+  const lastContact = { label: "Letzter Kontakt", value: stats.lastContact ? dateDe(new Date(stats.lastContact).toISOString()) : "–" };
+  const kpis = supplier
+    ? [{ label: "Projekte", value: String(supplied.length) }, { label: "Kosten in Projekten", value: euro(suppliedCost) }, lastContact]
+    : [
+        { label: "Umsatz (Lexware)", value: euro(assessment?.facts.revenue ?? 0) },
+        { label: "Vorgänge im CRM", value: String(stats.requests) },
+        lastContact,
+      ];
+  const tagLinks = { dienstleister: { href: "/dienstleister", param: "gewerk", label: "Dienstleister" }, lieferant: { href: "/lieferanten", param: "kategorie", label: "Lieferant" } };
+  const tagLink = company.kind === "dienstleister" || company.kind === "lieferant" ? tagLinks[company.kind] : null;
 
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end gap-4">
         <div className="min-w-0 flex-[1_1_320px]">
           <p className="text-[13px] text-muted">
-            {[company.city, company.customerNumber && `Kd.-Nr. ${company.customerNumber}`, company.folderName && `Ordner ${company.folderName}`]
+            {[
+              company.city,
+              company.customerNumber && `Kd.-Nr. ${company.customerNumber}`,
+              company.supplierNumber && `Lief.-Nr. ${company.supplierNumber}`,
+              company.folderName && `Ordner ${company.folderName}`,
+            ]
               .filter(Boolean)
               .join(" · ") || "Firma"}
           </p>
           <div className="mt-1">
             <InlineTitle value={company.name} label="Firmenname" onSave={renameCompanyAction.bind(null, company.id)} />
           </div>
-          {company.kind === "dienstleister" && (
+          {tagLink && (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <Link href="/dienstleister" className="rounded-md bg-line-soft px-2 py-0.5 text-[11px] font-semibold">Dienstleister</Link>
+              <Link href={tagLink.href} className="rounded-md bg-line-soft px-2 py-0.5 text-[11px] font-semibold">{tagLink.label}</Link>
               {(company.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
-                <Link key={t} href={`/dienstleister?gewerk=${encodeURIComponent(t)}`} className="rounded-md bg-info-soft px-2 py-0.5 text-[11px] font-semibold text-info-ink">{t}</Link>
+                <Link key={t} href={`${tagLink.href}?${tagLink.param}=${encodeURIComponent(t)}`} className="rounded-md bg-info-soft px-2 py-0.5 text-[11px] font-semibold text-info-ink">{t}</Link>
               ))}
             </div>
           )}
@@ -58,11 +71,15 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         {(company.phone || company.email) && (
           <ContactActions name={company.name} phone={company.phone} email={company.email} />
         )}
-        <Link href={`/vorgaenge/neu?firma=${company.id}`} className={btnSecondary}>Neuer Vorgang</Link>
-        <Link href={`/vorgaenge/neu?schnell=1&firma=${company.id}`} className={btnPrimary}>
-          <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
-          Schnellauftrag
-        </Link>
+        {!supplier && (
+          <>
+            <Link href={`/vorgaenge/neu?firma=${company.id}`} className={btnSecondary}>Neuer Vorgang</Link>
+            <Link href={`/vorgaenge/neu?schnell=1&firma=${company.id}`} className={btnPrimary}>
+              <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
+              Schnellauftrag
+            </Link>
+          </>
+        )}
       </header>
 
       <section aria-label="Kennzahlen" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -95,14 +112,15 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           </span>
         </summary>
         <div className="border-t border-line-soft pt-2">
-          <EditCompanyForm key={company.name} company={company} tagOptions={await serviceTagOptions()} />
+          <EditCompanyForm key={company.name} company={company} tagOptions={await allTagOptions()} />
         </div>
       </details>
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
         <Card title="Zeitleiste">
-          <ActivityForm companyId={company.id} dealId={null} projects={data.projects.filter((p) => p.active)} />
-          <Timeline items={data.timeline} emails={data.emails} searchable projects={data.projects} projectFilter today={todayIso()} />
+          {/* Lieferanten: Notizen nur zur Firma; Mails ordnest du über die Zeitleiste einem Kundenprojekt zu */}
+          <ActivityForm companyId={company.id} dealId={null} projects={supplier ? [] : data.projects.filter((p) => p.active)} />
+          <Timeline items={data.timeline} emails={data.emails} senders={data.senders} searchable projects={data.projects} projectFilter today={todayIso()} />
         </Card>
 
         <div className="flex flex-col gap-5">
@@ -119,6 +137,20 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
                 </Row>
               ))}
             </Card>
+          ) : supplier ? (
+            <Card title="Projekte" aside={supplied.length > 0 && <span className="text-[13px] font-semibold tabular-nums">{euro(suppliedCost)}</span>}>
+              {supplied.length === 0 && <Empty>Noch bei keinem Projekt eingetragen. Im Vorgang unter „Lieferanten“ hinzufügen oder eine Mail einem Projekt zuordnen.</Empty>}
+              {supplied.map((p) => (
+                <Row key={p.dealId} href={`/vorgaenge/${p.dealId}`}>
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${STAGE_DOT[p.stage]}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{p.customer} · {p.title}</p>
+                    <p className="truncate text-xs text-muted">{[p.number, p.note].filter(Boolean).join(" · ") || STAGE_LABEL[p.stage]}</p>
+                  </div>
+                  <span className="text-[13px] tabular-nums">{p.costNet !== null ? euro(p.costNet) : "–"}</span>
+                </Row>
+              ))}
+            </Card>
           ) : (
             assessment && (
               <AssessmentCard
@@ -132,7 +164,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
               />
             )
           )}
-          <Card title="Vorgänge">
+          {!supplier && <Card title="Vorgänge">
             {data.deals.length === 0 && <Empty>Noch keine Vorgänge.</Empty>}
             {data.deals.map((d) => (
               <Row key={d.id} href={`/vorgaenge/${d.id}`}>
@@ -153,7 +185,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
                 <span className="text-[13px] tabular-nums">{euro(d.amountNet)}</span>
               </Row>
             ))}
-          </Card>
+          </Card>}
 
           <Card title="Kontakte">
             {data.contacts.length === 0 && <Empty>Noch keine Kontakte.</Empty>}

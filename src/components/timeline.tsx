@@ -24,7 +24,8 @@ const ICON = { notiz: MessageSquare, anruf: Phone, phase: ArrowRightLeft, mail: 
 const LABEL = { notiz: "Notiz", anruf: "Anruf", phase: "Phase", mail: "Mail" };
 const FILTERS = { alle: "Alle", mails: "Mails", notizen: "Notizen & Anrufe" } as const;
 
-export type Project = { id: number; title: string; number: string | null; active: boolean };
+// company: Kunde des Projekts, wenn Projekte mehrerer Kunden zur Wahl stehen (bei Lieferanten)
+export type Project = { id: number; title: string; number: string | null; active: boolean; company?: string };
 type Entry = { kind: "mail" | "activity"; id: number; dealId: number | null; companyId: number | null; title: string };
 
 type Item =
@@ -38,7 +39,48 @@ export function RunningDot() {
   return <span className="h-2 w-2 shrink-0 rounded-full bg-ok" aria-label="läuft" />;
 }
 
-// Projekt-Pill eines zugeordneten Eintrags mit Menü zum Umhängen oder Lösen; ohne Zuordnung die aktiven Projekte als Knöpfe
+// Auswahlliste der Projekte; bei vielen mit Suchfeld (Projekt, Nummer oder Kunde)
+function ProjectMenu({ projects, onPick, onClear, heading }: { projects: Project[]; onPick: (id: number) => void; onClear?: () => void; heading: string }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const list = projects.filter((p) => !q || [p.title, p.number, p.company].some((v) => v?.toLowerCase().includes(q)));
+  return (
+    <div role="menu" className="absolute left-0 top-full z-20 mt-1 flex max-h-96 w-72 flex-col rounded-xl border border-line bg-surface p-1 shadow-lg">
+      {projects.length > 0 && <p className="px-3 pb-1 pt-2 text-[11px] font-semibold text-muted">{heading}</p>}
+      {projects.length > 6 && (
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Projekt oder Kunde suchen"
+          aria-label="Projekt oder Kunde suchen"
+          autoFocus
+          className="mx-1 mb-1 min-h-9 rounded-lg border border-line px-3 text-sm outline-none focus:border-ink"
+        />
+      )}
+      <div className="overflow-auto">
+        {list.map((p) => (
+          <button key={p.id} type="button" role="menuitem" onClick={() => onPick(p.id)} className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-bg">
+            <span className="mt-1.5"><RunningDot /></span>
+            <span className="min-w-0">
+              <span className="block truncate">{p.title}</span>
+              {p.company && <span className="block truncate text-xs text-muted">{p.company}</span>}
+            </span>
+          </button>
+        ))}
+        {q && list.length === 0 && <p className="px-3 py-2 text-sm text-muted">Kein Projekt gefunden.</p>}
+      </div>
+      {onClear && (
+        <button type="button" role="menuitem" onClick={onClear} className="rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-bg">
+          Zuordnung lösen
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Projekt-Pill eines zugeordneten Eintrags mit Menü zum Umhängen oder Lösen; ohne Zuordnung die aktiven Projekte
+// als Knöpfe, bei vielen oder fremden Projekten (Lieferanten) ein Knopf mit Suchmenü
 function ProjectControl({ entry, projects }: { entry: Entry; projects: Project[] }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -58,7 +100,6 @@ function ProjectControl({ entry, projects }: { entry: Entry; projects: Project[]
   }, [open]);
 
   if (current) {
-    const others = active.filter((p) => p.id !== current.id);
     return (
       <div ref={ref} className="relative">
         <button
@@ -70,28 +111,32 @@ function ProjectControl({ entry, projects }: { entry: Entry; projects: Project[]
           className={`${pillClass} ${current.active ? "bg-ink text-surface" : "bg-line text-ink"}`}
         >
           {current.active && <RunningDot />}
-          {current.title}
+          {current.company ? `${current.company} · ${current.title}` : current.title}
           <ChevronDown size={12} aria-hidden="true" />
         </button>
-        {open && (
-          <div role="menu" className="absolute left-0 top-full z-20 mt-1 flex min-w-56 flex-col rounded-xl border border-line bg-surface p-1 shadow-lg">
-            {others.length > 0 && <p className="px-3 pb-1 pt-2 text-[11px] font-semibold text-muted">Anderem Projekt zuordnen</p>}
-            {others.map((p) => (
-              <button key={p.id} type="button" role="menuitem" onClick={() => assign(p.id)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-bg">
-                <RunningDot />
-                {p.title}
-              </button>
-            ))}
-            <button type="button" role="menuitem" onClick={() => assign(null)} className="rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-bg">
-              Zuordnung lösen
-            </button>
-          </div>
-        )}
+        {open && <ProjectMenu projects={active.filter((p) => p.id !== current.id)} heading="Anderem Projekt zuordnen" onPick={assign} onClear={() => assign(null)} />}
       </div>
     );
   }
 
   if (!active.length) return null;
+  if (active.length > 3 || active.some((p) => p.company)) {
+    return (
+      <div ref={ref} className="relative">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          className={`${pillClass} border border-dashed border-line text-muted hover:border-ink hover:text-ink`}
+        >
+          → Projekt zuordnen
+          <ChevronDown size={12} aria-hidden="true" />
+        </button>
+        {open && <ProjectMenu projects={active} heading="Laufende Projekte" onPick={assign} />}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Einem Projekt zuordnen">
       {active.map((p) => (
@@ -164,7 +209,7 @@ function EntryActions({ entry, projects, newDealHref, today }: { entry: Entry; p
   );
 }
 
-function MailEntry({ mail, projects, today }: { mail: Email; projects: Project[]; today: string }) {
+function MailEntry({ mail, sender, projects, today }: { mail: Email; sender?: string; projects: Project[]; today: string }) {
   const [full, setFull] = useState<{ text: string } | { error: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -184,6 +229,11 @@ function MailEntry({ mail, projects, today }: { mail: Email; projects: Project[]
         <p className="text-xs text-muted">
           {mail.outgoing ? `Mail an ${mail.toAddresses?.split(",")[0]}` : `Mail von ${mail.fromName ?? mail.fromAddress}`} · {relativeTime(mail.receivedAt)}
           {mail.hasAttachments && <Paperclip size={12} className="ml-1 inline" aria-label="mit Anhang" />}
+          {sender && mail.companyId && (
+            <Link href={`/firmen/${mail.companyId}`} className="ml-2 rounded-md bg-line-soft px-1.5 py-0.5 text-[11px] font-semibold text-ink">
+              Lieferant: {sender}
+            </Link>
+          )}
         </p>
         <p className="text-sm font-semibold">{mail.subject || "(ohne Betreff)"}</p>
         {!open && mail.preview && <p className="mt-1 line-clamp-6 whitespace-pre-line text-[13px] text-muted">{tidyMailText(mail.preview)}</p>}
@@ -218,6 +268,7 @@ function MailEntry({ mail, projects, today }: { mail: Email; projects: Project[]
 export function Timeline({
   items,
   emails = [],
+  senders = {},
   searchable = false,
   projects = [],
   projectFilter = false,
@@ -225,6 +276,8 @@ export function Timeline({
 }: {
   items: Activity[];
   emails?: Email[];
+  // Namen fremder Absender-Firmen (Lieferanten-Mails in Kundenprojekten), nach Firmen-ID
+  senders?: Record<number, string>;
   searchable?: boolean;
   projects?: Project[];
   projectFilter?: boolean;
@@ -249,9 +302,10 @@ export function Timeline({
   );
 
   const dealOf = (item: Item) => (item.kind === "email" ? item.email.dealId : item.activity.dealId);
-  // Im Filter: aktive Projekte und abgeschlossene, denen Einträge zugeordnet sind
+  // Im Filter: aktive Projekte und abgeschlossene, denen Einträge zugeordnet sind;
+  // bei Lieferanten (Projekte fremder Kunden) nur die, denen Einträge zugeordnet sind
   const used = new Set(merged.map(dealOf).filter(Boolean));
-  const filterProjects = projects.filter((p) => p.active || used.has(p.id));
+  const filterProjects = projects.filter((p) => (p.active && !p.company) || used.has(p.id));
 
   const q = query.trim().toLowerCase();
   const visible = merged.filter(
@@ -313,7 +367,7 @@ export function Timeline({
       {visible.length === 0 && <Empty>{merged.length ? "Nichts gefunden." : "Noch keine Einträge."}</Empty>}
       <ol>
         {visible.map((item) => {
-          if (item.kind === "email") return <MailEntry key={`m${item.email.id}`} mail={item.email} projects={projects} today={today} />;
+          if (item.kind === "email") return <MailEntry key={`m${item.email.id}`} mail={item.email} sender={item.email.companyId ? senders[item.email.companyId] : undefined} projects={projects} today={today} />;
           const a = item.activity;
           const Icon = ICON[a.type];
           // Verlorene Vorgänge hervorheben, damit Grund und Notiz beim nächsten Kontakt auffallen

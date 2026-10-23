@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lt, lte, max, ne, or, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, companies, contacts, deals, emails, lexwareVouchers, mailSync, tasks, voucherFiles } from "@/db/schema";
+import { activities, companies, contacts, dealSuppliers, deals, emails, lexwareVouchers, mailSync, productionDays, tasks, voucherFiles, type CompanyKind, type Email } from "@/db/schema";
 import { lexwareUrl, type LineItem } from "./lexware-sync";
 import { addDaysIso, todayIso } from "./format";
 
@@ -100,15 +100,26 @@ export async function getDeal(id: number) {
     db.select().from(activities).where(eq(activities.dealId, id)).orderBy(desc(activities.createdAt)),
     emailsFor({ dealId: id }),
   ]);
-  return { ...row, tasks: dealTasks, timeline, emails: dealEmails, projects: await projectsFor(row.deal.companyId) };
+  return {
+    ...row,
+    tasks: dealTasks,
+    timeline,
+    emails: dealEmails,
+    senders: await foreignSenders(dealEmails, row.deal.companyId),
+    projects: await projectsFor(row.deal.companyId),
+  };
 }
 
 export const ACTIVE_STAGES = ["anfrage", "angebot", "beauftragt", "erledigt", "rechnung"] as const;
 
-export type ProjectOption = { id: number; title: string; number: string | null; active: boolean };
+// company: Kunde des Projekts, wenn die Liste Projekte mehrerer Kunden enthält (bei Lieferanten)
+export type ProjectOption = { id: number; title: string; number: string | null; active: boolean; company?: string };
 
-// Alle Vorgänge einer Firma als Projekte; aktive zuerst, zuletzt bewegte vorn
+// Alle Vorgänge einer Firma als Projekte; aktive zuerst, zuletzt bewegte vorn.
+// Lieferanten haben keine eigenen Vorgänge: für sie die laufenden Projekte aller Kunden
 export async function projectsFor(companyId: number): Promise<ProjectOption[]> {
+  const [company] = await db.select({ kind: companies.kind }).from(companies).where(eq(companies.id, companyId));
+  if (company?.kind === "lieferant") return supplierProjectOptions(companyId);
   const rows = await db
     .select({ id: deals.id, title: deals.title, number: deals.number, stage: deals.stage, moved: deals.stageChangedAt })
     .from(deals)
@@ -116,6 +127,79 @@ export async function projectsFor(companyId: number): Promise<ProjectOption[]> {
     .orderBy(desc(deals.stageChangedAt));
   const list = rows.map((r) => ({ id: r.id, title: r.title, number: r.number, active: (ACTIVE_STAGES as readonly string[]).includes(r.stage) }));
   return [...list.filter((p) => p.active), ...list.filter((p) => !p.active)];
+}
+
+// Laufende Projekte aller Kunden; die mit der nächsten Produktion zuerst, dann zuletzt bewegte
+export async function runningProjects(): Promise<ProjectOption[]> {
+  const today = todayIso();
+  const rows = await db
+    .select({
+      id: deals.id,
+      title: deals.title,
+      number: deals.number,
+      company: companies.name,
+      moved: deals.stageChangedAt,
+      next: sql<string | null>`(select min(${productionDays.day}) from ${productionDays} where ${productionDays.dealId} = ${deals.id} and ${productionDays.day} >= ${today})`,
+    })
+    .from(deals)
+    .innerJoin(companies, eq(companies.id, deals.companyId))
+    .where(inArray(deals.stage, [...ACTIVE_STAGES]));
+  return rows
+    .sort((a, b) => (a.next && b.next ? a.next.localeCompare(b.next) : a.next ? -1 : b.next ? 1 : b.moved.getTime() - a.moved.getTime()))
+    .map((r) => ({ id: r.id, title: r.title, number: r.number, active: true, company: r.company }));
+}
+
+// Für Lieferanten: laufende Projekte plus abgeschlossene, mit denen sie schon verknüpft sind
+async function supplierProjectOptions(companyId: number): Promise<ProjectOption[]> {
+  const running = await runningProjects();
+  const linked = await db
+    .select({ id: deals.id, title: deals.title, number: deals.number, company: companies.name })
+    .from(deals)
+    .innerJoin(companies, eq(companies.id, deals.companyId))
+    .where(
+      or(
+        inArray(deals.id, db.select({ id: dealSuppliers.dealId }).from(dealSuppliers).where(eq(dealSuppliers.companyId, companyId))),
+        inArray(deals.id, db.select({ id: emails.dealId }).from(emails).where(and(eq(emails.companyId, companyId), isNotNull(emails.dealId)))),
+      ),
+    );
+  const ids = new Set(running.map((p) => p.id));
+  return [...running, ...linked.filter((d) => !ids.has(d.id)).map((d) => ({ ...d, active: false }))];
+}
+
+// Namen der Absender-Firmen von Mails, die nicht von der eigenen Firma stammen (Lieferanten-Mails im Projekt)
+export async function foreignSenders(list: Email[], ownCompanyId: number): Promise<Record<number, string>> {
+  const ids = [...new Set(list.map((m) => m.companyId).filter((id): id is number => !!id && id !== ownCompanyId))];
+  if (!ids.length) return {};
+  const rows = await db.select({ id: companies.id, name: companies.name }).from(companies).where(inArray(companies.id, ids));
+  return Object.fromEntries(rows.map((r) => [r.id, r.name]));
+}
+
+export type SupplierRow = Awaited<ReturnType<typeof suppliersForDeal>>[number];
+
+// Lieferanten eines Vorgangs mit Notiz und Kosten
+export async function suppliersForDeal(dealId: number) {
+  return db
+    .select({ id: dealSuppliers.id, companyId: dealSuppliers.companyId, name: companies.name, tags: companies.tags, note: dealSuppliers.note, costNet: dealSuppliers.costNet })
+    .from(dealSuppliers)
+    .innerJoin(companies, eq(companies.id, dealSuppliers.companyId))
+    .where(eq(dealSuppliers.dealId, dealId))
+    .orderBy(asc(dealSuppliers.createdAt));
+}
+
+// Projekte, für die ein Lieferant eingetragen ist, neueste zuerst
+export async function projectsOfSupplier(companyId: number) {
+  return db
+    .select({ dealId: deals.id, title: deals.title, number: deals.number, stage: deals.stage, customer: companies.name, note: dealSuppliers.note, costNet: dealSuppliers.costNet })
+    .from(dealSuppliers)
+    .innerJoin(deals, eq(deals.id, dealSuppliers.dealId))
+    .innerJoin(companies, eq(companies.id, deals.companyId))
+    .where(eq(dealSuppliers.companyId, companyId))
+    .orderBy(desc(deals.createdAt));
+}
+
+export async function supplierNames(): Promise<string[]> {
+  const rows = await db.select({ name: companies.name }).from(companies).where(eq(companies.kind, "lieferant")).orderBy(asc(companies.name));
+  return rows.map((r) => r.name);
 }
 
 export async function getActivity(id: number) {
@@ -143,11 +227,16 @@ export async function competitorNames(): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
-export async function companyOptions() {
-  return db.select({ id: companies.id, name: companies.name }).from(companies).orderBy(asc(companies.name));
+// forDeals: ohne Lieferanten, die haben keine eigenen Vorgänge
+export async function companyOptions(forDeals = false) {
+  return db
+    .select({ id: companies.id, name: companies.name })
+    .from(companies)
+    .where(forDeals ? ne(companies.kind, "lieferant") : undefined)
+    .orderBy(asc(companies.name));
 }
 
-export async function listCompanies(query?: string, kind: "kunde" | "dienstleister" | "alle" = "kunde", tag?: string) {
+export async function listCompanies(query?: string, kind: CompanyKind | "alle" = "kunde", tag?: string) {
   const q = query?.trim();
   return db
     .select({
@@ -186,9 +275,9 @@ export async function listCompanies(query?: string, kind: "kunde" | "dienstleist
     .orderBy(asc(companies.name));
 }
 
-// Alle vergebenen Gewerke mit Anzahl, für die Filter auf der Dienstleister-Seite
-export async function serviceTags() {
-  const rows = await db.select({ tags: companies.tags }).from(companies).where(eq(companies.kind, "dienstleister"));
+// Alle vergebenen Gewerke bzw. Kategorien mit Anzahl, für die Filter auf der Dienstleister- und Lieferanten-Seite
+export async function serviceTags(kind: "dienstleister" | "lieferant" = "dienstleister") {
+  const rows = await db.select({ tags: companies.tags }).from(companies).where(eq(companies.kind, kind));
   const counts = new Map<string, number>();
   for (const r of rows) for (const t of (r.tags ?? "").split(",").map((s) => s.trim()).filter(Boolean)) counts.set(t, (counts.get(t) ?? 0) + 1);
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag, n]) => ({ tag, n }));
@@ -216,9 +305,10 @@ export async function getCompany(id: number) {
     db.select().from(activities).where(eq(activities.companyId, id)).orderBy(desc(activities.createdAt)).limit(100),
     listTasks({ open: true, companyId: id }),
     db.select({ at: max(activities.createdAt) }).from(activities).where(eq(activities.companyId, id)),
-    emailsFor({ companyId: id }),
+    emailsFor({ companyId: id, withDeals: true }),
   ]);
-  const lastMail = companyEmails[0]?.receivedAt ?? null;
+  // nur eigene Mails, nicht die von Lieferanten zu ihren Projekten
+  const lastMail = companyEmails.find((m) => m.companyId === id)?.receivedAt ?? null;
   const lastContact =
     lastActivity?.at && lastMail ? (lastActivity.at > lastMail ? lastActivity.at : lastMail) : lastActivity?.at ?? lastMail;
 
@@ -236,6 +326,7 @@ export async function getCompany(id: number) {
     deals: companyDeals,
     timeline,
     emails: companyEmails,
+    senders: await foreignSenders(companyEmails, id),
     tasks: companyTasks,
     projects: await projectsFor(id),
     stats: {
@@ -322,13 +413,21 @@ export async function mailState() {
   return { open: open.n, syncs };
 }
 
-export async function emailsFor(filter: { companyId?: number; dealId?: number }) {
+// withDeals: bei einer Firma auch fremde Mails (Lieferanten), die ihren Projekten zugeordnet sind
+export async function emailsFor(filter: { companyId?: number; dealId?: number; withDeals?: boolean }) {
   return db
     .select()
     .from(emails)
     .where(
       and(
-        filter.companyId ? eq(emails.companyId, filter.companyId) : undefined,
+        filter.companyId
+          ? filter.withDeals
+            ? or(
+                eq(emails.companyId, filter.companyId),
+                inArray(emails.dealId, db.select({ id: deals.id }).from(deals).where(eq(deals.companyId, filter.companyId))),
+              )
+            : eq(emails.companyId, filter.companyId)
+          : undefined,
         filter.dealId ? eq(emails.dealId, filter.dealId) : undefined,
         ne(emails.status, "ignoriert"),
       ),

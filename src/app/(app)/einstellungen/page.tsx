@@ -32,6 +32,9 @@ export default async function SettingsPage() {
       <Card title="Gewerke für Dienstleister" className="max-w-2xl">
         <ServiceTagsForm tags={await serviceTagOptions()} />
       </Card>
+      <Card title="Kategorien für Lieferanten" className="max-w-2xl">
+        <ServiceTagsForm kind="lieferant" tags={await serviceTagOptions("lieferant")} />
+      </Card>
       <Card title="Vorlage für Projektordner" className="max-w-2xl">
         <FolderTemplateForm template={await folderTemplate()} />
       </Card>

@@ -5,7 +5,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { activities, appState, companies, contacts, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks } from "@/db/schema";
+import { activities, appState, companies, COMPANY_KINDS, contacts, dealSuppliers, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, tidyMailText, todayIso } from "@/lib/format";
 import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
@@ -51,12 +51,11 @@ async function resolveCompany(form: FormData): Promise<number | null> {
   if (!name) return null;
   const [existing] = await db.select({ id: companies.id }).from(companies).where(eq(companies.name, name));
   if (existing) return existing.id;
-  const kindValue = form.get("kind");
-  const kind = kindValue === "dienstleister" || kindValue === "wettbewerber" ? kindValue : "kunde";
+  const kind = COMPANY_KINDS.find((k) => k === form.get("kind")) ?? "kunde";
   const [inserted] = await db.insert(companies).values({
     name,
     kind,
-    tags: kind === "dienstleister" ? await pickTags(form.getAll("tags").map(String)) : null,
+    tags: await pickTags(form.getAll("tags").map(String), kind),
     folderName: kind === "kunde" ? suggestFolderName(name) : null,
   });
   return inserted.insertId;
@@ -355,6 +354,35 @@ export async function resolveAddressAction(text: string) {
   return resolveAddress(text.slice(0, 300), "");
 }
 
+// Lieferant von Hand beim Projekt eintragen; ein unbekannter Name legt einen neuen Lieferanten an
+export async function addSupplierAction(dealId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const name = text(form, "name")?.trim().slice(0, 255);
+  if (!name) return { error: "Bitte einen Lieferanten wählen oder eingeben." };
+  const [existing] = await db.select({ id: companies.id }).from(companies).where(eq(companies.name, name));
+  const companyId = existing?.id ?? (await db.insert(companies).values({ name, kind: "lieferant" }))[0].insertId;
+  const values = { note: text(form, "note")?.trim().slice(0, 255) || null, costNet: amount.parse(text(form, "costNet")) };
+  await db.insert(dealSuppliers).values({ dealId, companyId, ...values }).onDuplicateKeyUpdate({ set: values });
+  refresh();
+  return {};
+}
+
+export async function updateSupplierAction(id: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  await db
+    .update(dealSuppliers)
+    .set({ note: text(form, "note")?.trim().slice(0, 255) || null, costNet: amount.parse(text(form, "costNet")) })
+    .where(eq(dealSuppliers.id, id));
+  refresh();
+  return {};
+}
+
+export async function removeSupplierAction(id: number) {
+  await getCurrentUser();
+  await db.delete(dealSuppliers).where(eq(dealSuppliers.id, id));
+  refresh();
+}
+
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)
 export async function advanceDealAction(dealId: number, stage: "angebot" | "beauftragt" | "erledigt" | "rechnung" | "bezahlt") {
   await moveDealAction(dealId, stage);
@@ -379,7 +407,7 @@ const companySchema = z.object({
   emailDomain: optionalText,
   industry: optionalText,
   notes: optionalText,
-  kind: z.enum(["kunde", "dienstleister", "wettbewerber"]).catch("kunde"),
+  kind: z.enum(COMPANY_KINDS).catch("kunde"),
 });
 
 async function companyValues(form: FormData) {
@@ -387,7 +415,7 @@ async function companyValues(form: FormData) {
     Object.fromEntries(Object.keys(companySchema.shape).map((k) => [k, text(form, k)])),
   );
   if (!parsed.success) return parsed;
-  const tags = parsed.data.kind === "dienstleister" ? await pickTags(form.getAll("tags").map(String)) : null;
+  const tags = await pickTags(form.getAll("tags").map(String), parsed.data.kind);
   return { ...parsed, data: { ...parsed.data, tags } };
 }
 
@@ -457,11 +485,29 @@ export async function addActivityAction(
   return {};
 }
 
-// Gehört der Vorgang zur Firma? Sonst keine Zuordnung
+// Gehört der Vorgang zur Firma? Sonst keine Zuordnung. Lieferanten dürfen jedem Kundenprojekt zugeordnet werden
 async function dealOfCompany(dealId: number | null, companyId: number | null): Promise<number | null> {
   if (!dealId || !companyId) return null;
-  const [deal] = await db.select({ companyId: deals.companyId }).from(deals).where(eq(deals.id, dealId));
-  return deal?.companyId === companyId ? dealId : null;
+  const [[deal], [company]] = await Promise.all([
+    db.select({ companyId: deals.companyId }).from(deals).where(eq(deals.id, dealId)),
+    db.select({ kind: companies.kind }).from(companies).where(eq(companies.id, companyId)),
+  ]);
+  if (!deal) return null;
+  return deal.companyId === companyId || company?.kind === "lieferant" ? dealId : null;
+}
+
+// Lieferant beim Projekt eintragen, falls noch nicht vorhanden
+async function linkSupplier(dealId: number, companyId: number) {
+  await db.insert(dealSuppliers).values({ dealId, companyId }).onDuplicateKeyUpdate({ set: { dealId } });
+}
+
+// Automatisch eingetragenen Lieferanten wieder entfernen, wenn nichts mehr dafür spricht
+// (keine Notiz, keine Kosten, keine Mails mehr in diesem Projekt)
+async function unlinkSupplierIfUnused(dealId: number, companyId: number) {
+  const [row] = await db.select().from(dealSuppliers).where(and(eq(dealSuppliers.dealId, dealId), eq(dealSuppliers.companyId, companyId)));
+  if (!row || row.note || row.costNet !== null) return;
+  const [mail] = await db.select({ id: emails.id }).from(emails).where(and(eq(emails.dealId, dealId), eq(emails.companyId, companyId))).limit(1);
+  if (!mail) await db.delete(dealSuppliers).where(eq(dealSuppliers.id, row.id));
 }
 
 // Mail einem Projekt zuordnen, umhängen oder lösen. Eine Unterhaltung gehört immer geschlossen zu einem Projekt:
@@ -478,6 +524,12 @@ async function assignMailToDeal(mailId: number, dealId: number | null) {
   } else {
     await db.update(emails).set({ dealId: target }).where(eq(emails.id, mailId));
   }
+  // Mail eines Lieferanten zu einem Kundenprojekt: Lieferant dort eintragen bzw. beim alten Projekt aufräumen
+  if (!mail.companyId) return;
+  const [company] = await db.select({ kind: companies.kind }).from(companies).where(eq(companies.id, mail.companyId));
+  if (company?.kind !== "lieferant") return;
+  if (target) await linkSupplier(target, mail.companyId);
+  if (mail.dealId && mail.dealId !== target) await unlinkSupplierIfUnused(mail.dealId, mail.companyId);
 }
 
 // Eintrag im Verlauf einem Projekt zuordnen, umhängen oder lösen (dealId = null)
@@ -715,11 +767,11 @@ export async function saveAutoReplyAction(_: FormState, form: FormData): Promise
   return {};
 }
 
-export async function saveServiceTagsAction(_: FormState, form: FormData): Promise<FormState> {
+export async function saveServiceTagsAction(kind: "dienstleister" | "lieferant", _: FormState, form: FormData): Promise<FormState> {
   await getCurrentUser();
   const list = (text(form, "tags") ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
-  if (!list.length) return { error: "Mindestens ein Gewerk angeben." };
-  await saveServiceTagOptions(list);
+  if (!list.length) return { error: kind === "lieferant" ? "Mindestens eine Kategorie angeben." : "Mindestens ein Gewerk angeben." };
+  await saveServiceTagOptions(list, kind);
   refresh();
   return {};
 }

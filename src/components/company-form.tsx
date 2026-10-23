@@ -2,11 +2,13 @@
 
 import { useActionState } from "react";
 import { createCompanyAction } from "@/app/(app)/actions";
+import type { CompanyKind } from "@/db/schema";
+import type { TagOptions } from "@/lib/service-tags";
 import { KindFields } from "./forms";
 import { AddressSearch } from "./place-input";
 import { btnPrimary, Field, FormError, Input, Textarea } from "./ui";
 
-export function NewCompanyForm({ kind, tagOptions }: { kind?: "kunde" | "dienstleister" | "wettbewerber"; tagOptions: string[] }) {
+export function NewCompanyForm({ kind, tagOptions }: { kind?: CompanyKind; tagOptions: TagOptions }) {
   const [state, action, pending] = useActionState(createCompanyAction, undefined);
   return (
     <form action={action} className="flex max-w-xl flex-col gap-4 rounded-2xl bg-surface p-6">

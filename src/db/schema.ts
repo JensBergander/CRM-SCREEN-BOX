@@ -41,6 +41,9 @@ export const LOST_REASONS = [
 ] as const;
 export type LostReason = (typeof LOST_REASONS)[number];
 
+export const COMPANY_KINDS = ["kunde", "dienstleister", "lieferant", "wettbewerber"] as const;
+export type CompanyKind = (typeof COMPANY_KINDS)[number];
+
 export const TASK_KINDS = ["nachfassen", "rechnung", "zahlung"] as const;
 export const ACTIVITY_TYPES = ["notiz", "anruf", "phase", "mail"] as const;
 
@@ -57,17 +60,19 @@ export const companies = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     name: varchar("name", { length: 255 }).notNull(),
-    // Kunde, Dienstleister (Sprecher, Fotografen usw., die man bei Bedarf anfragt) oder Wettbewerber
-    kind: mysqlEnum("kind", ["kunde", "dienstleister", "wettbewerber"]).notNull().default("kunde"),
+    // Kunde, Dienstleister (Sprecher, Fotografen usw., die man bei Bedarf anfragt),
+    // Lieferant (Verleih, Druck, Hardware usw., bei denen man kauft oder mietet) oder Wettbewerber
+    kind: mysqlEnum("kind", COMPANY_KINDS).notNull().default("kunde"),
     // eigene Einschätzung 0–5 Sterne (0 = keine Angebote mehr); leer = Vorschlag der App gilt
     rating: int("rating"),
     ratingNote: text("rating_note"),
-    // Gewerke, kommagetrennt, z. B. „Sprecher, Englisch“
+    // Gewerke (Dienstleister) bzw. Kategorien (Lieferanten), kommagetrennt, z. B. „Sprecher, Englisch“
     tags: varchar("tags", { length: 255 }),
     // Name des Ordners auf der Festplatte, z. B. EUROWINGS für Eurowings GmbH
     folderName: varchar("folder_name", { length: 120 }),
     lexwareId: varchar("lexware_id", { length: 64 }).unique(),
     customerNumber: varchar("customer_number", { length: 32 }),
+    supplierNumber: varchar("supplier_number", { length: 32 }),
     street: varchar("street", { length: 255 }),
     zip: varchar("zip", { length: 16 }),
     city: varchar("city", { length: 120 }),
@@ -141,6 +146,24 @@ export const deals = mysqlTable(
     ...timestamps,
   },
   (t) => [index("deals_company_idx").on(t.companyId), index("deals_stage_idx").on(t.stage)],
+);
+
+// Lieferanten eines Vorgangs (z. B. Technikverleih), von Hand oder über eine zugeordnete Mail
+export const dealSuppliers = mysqlTable(
+  "deal_suppliers",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    dealId: int("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    companyId: int("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    note: varchar("note", { length: 255 }),
+    costNet: decimal("cost_net", { precision: 12, scale: 2 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("deal_suppliers_unique").on(t.dealId, t.companyId), index("deal_suppliers_company_idx").on(t.companyId)],
 );
 
 // Produktionstage eines Vorgangs; jeder Tag hat (ohne „durchgehend blocken“) seinen eigenen Kalendertermin
@@ -288,5 +311,6 @@ export type Company = typeof companies.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type Deal = typeof deals.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
+export type DealSupplier = typeof dealSuppliers.$inferSelect;
 export type ProductionDay = typeof productionDays.$inferSelect;
 export type Activity = typeof activities.$inferSelect;

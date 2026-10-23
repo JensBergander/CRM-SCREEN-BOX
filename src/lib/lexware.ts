@@ -9,7 +9,7 @@ const API = "https://api.lexware.io/v1";
 type LexwareContact = {
   id: string;
   archived: boolean;
-  roles: { customer?: { number: number } };
+  roles: { customer?: { number: number }; vendor?: { number: number } };
   company?: {
     name: string;
     contactPersons?: {
@@ -39,8 +39,8 @@ export function domainOf(email: string | null | undefined): string | null {
   return domain && !FREEMAIL.has(domain) ? domain : null;
 }
 
-async function fetchPage(page: number): Promise<{ content: LexwareContact[]; last: boolean }> {
-  const response = await fetch(`${API}/contacts?customer=true&page=${page}&size=100`, {
+async function fetchPage(role: Role, page: number): Promise<{ content: LexwareContact[]; last: boolean }> {
+  const response = await fetch(`${API}/contacts?${role}=true&page=${page}&size=100`, {
     headers: {
       Authorization: `Bearer ${process.env.LEXWARE_API_KEY}`,
       Accept: "application/json",
@@ -51,21 +51,29 @@ async function fetchPage(page: number): Promise<{ content: LexwareContact[]; las
   return response.json();
 }
 
-export type ImportResult = { created: number; updated: number; contacts: number; skipped: number };
+type Role = "customer" | "vendor";
+export type ImportResult = { created: number; updated: number; contacts: number; skipped: number; suppliers: number };
 
-// Holt alle Kunden aus Lexware und legt sie als Firmen und Kontakte an.
+// Holt alle Kunden und Lieferanten aus Lexware und legt sie als Firmen und Kontakte an.
 // Vorhandene Firmen (gleiche Lexware-ID) werden nur ergänzt, eigene Eingaben bleiben.
+// Wer in Lexware Kunde und Lieferant zugleich ist, wird im CRM als Kunde geführt.
 export async function importLexwareCustomers(): Promise<ImportResult> {
   if (!process.env.LEXWARE_API_KEY) throw new Error("LEXWARE_API_KEY fehlt");
-  const result: ImportResult = { created: 0, updated: 0, contacts: 0, skipped: 0 };
+  const result: ImportResult = { created: 0, updated: 0, contacts: 0, skipped: 0, suppliers: 0 };
+  for (const role of ["customer", "vendor"] as const) await importRole(role, result);
+  return result;
+}
 
+async function importRole(role: Role, result: ImportResult) {
   for (let page = 0; ; page++) {
-    const data = await fetchPage(page);
+    const data = await fetchPage(role, page);
     for (const lx of data.content) {
-      if (lx.archived) {
-        result.skipped++;
+      // Kunden, die zugleich Lieferant sind, hat schon der Kunden-Durchlauf übernommen
+      if (lx.archived || (role === "vendor" && lx.roles.customer)) {
+        if (lx.archived) result.skipped++;
         continue;
       }
+      const supplier = role === "vendor";
       const name = lx.company?.name
         ?? [lx.person?.firstName, lx.person?.lastName].filter(Boolean).join(" ");
       const address = lx.addresses?.billing?.[0];
@@ -79,6 +87,7 @@ export async function importLexwareCustomers(): Promise<ImportResult> {
       const values = {
         name,
         customerNumber: lx.roles.customer ? String(lx.roles.customer.number) : null,
+        supplierNumber: lx.roles.vendor ? String(lx.roles.vendor.number) : null,
         street: address?.street ?? null,
         zip: address?.zip ?? null,
         city: address?.city ?? null,
@@ -93,6 +102,8 @@ export async function importLexwareCustomers(): Promise<ImportResult> {
             ...values,
             // Den Namen im CRM nicht überschreiben, er kann bewusst geändert worden sein
             name: existing.name,
+            // Lieferant, der inzwischen auch Kunde ist, wird Kunde; andere Arten bleiben, wie sie im CRM gesetzt sind
+            kind: existing.kind === "lieferant" && lx.roles.customer ? "kunde" : existing.kind,
             emailDomain: existing.emailDomain ?? emailDomain,
             phone: existing.phone ?? phones[0] ?? null,
             email: existing.email ?? emails[0] ?? null,
@@ -103,15 +114,17 @@ export async function importLexwareCustomers(): Promise<ImportResult> {
       } else {
         const [inserted] = await db.insert(companies).values({
           ...values,
+          kind: supplier ? "lieferant" : "kunde",
           lexwareId: lx.id,
           emailDomain,
           phone: phones[0] ?? null,
           email: emails[0] ?? null,
-          folderName: suggestFolderName(name),
+          folderName: supplier ? null : suggestFolderName(name),
           notes: lx.note ?? null,
         });
         companyId = inserted.insertId;
         result.created++;
+        if (supplier) result.suppliers++;
       }
 
       const people = lx.person
@@ -136,9 +149,8 @@ export async function importLexwareCustomers(): Promise<ImportResult> {
         result.contacts++;
       }
     }
-    if (data.last) break;
     // Lexware erlaubt 2 Anfragen pro Sekunde
     await new Promise((resolve) => setTimeout(resolve, 600));
+    if (data.last) break;
   }
-  return result;
 }

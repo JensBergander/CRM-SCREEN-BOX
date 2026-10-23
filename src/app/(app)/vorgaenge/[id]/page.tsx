@@ -4,7 +4,7 @@ import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_LABEL } from "@/lib/labels";
 import { FolderPlus } from "lucide-react";
 import { folderLink } from "@/lib/folders";
-import { companyName, competitorNames, getDeal, vouchersForDeal } from "@/lib/queries";
+import { companyName, competitorNames, getDeal, supplierNames, suppliersForDeal, vouchersForDeal } from "@/lib/queries";
 import { RatingHint } from "@/components/rating-hint";
 import { InlineTitle } from "@/components/inline-title";
 import { loadPlanningAction, renameDealAction } from "../../actions";
@@ -14,6 +14,7 @@ import { QuotationDraft } from "@/components/quotation-draft";
 import { ActivityForm, CompetitorForm, EditDealForm, StageControl, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
+import { SupplierCard } from "@/components/suppliers";
 import { Badge, btnSecondary, Card } from "@/components/ui";
 
 export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
@@ -27,6 +28,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
   const competitors = await competitorNames();
   const competitor = deal.competitorId ? await companyName(deal.competitorId) : null;
   const folder = data.folderName ? await folderLink(deal, data.folderName) : null;
+  const [suppliers, supplierOptions] = await Promise.all([suppliersForDeal(deal.id), supplierNames()]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -86,7 +88,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
           </Card>
           <Card title="Verlauf">
             <ActivityForm companyId={deal.companyId} dealId={deal.id} />
-            <Timeline items={data.timeline} emails={data.emails} searchable projects={data.projects} today={todayIso()} />
+            <Timeline items={data.timeline} emails={data.emails} senders={data.senders} searchable projects={data.projects} today={todayIso()} />
           </Card>
         </div>
         <div className="flex flex-col gap-5">
@@ -97,6 +99,9 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
               </div>
             </Card>
           )}
+          <Card title="Lieferanten">
+            <SupplierCard dealId={deal.id} amountNet={deal.amountNet} rows={suppliers} options={supplierOptions} />
+          </Card>
           <Card title="Lexware">
             <LexwareVouchers dealId={deal.id} {...vouchers} />
             {vouchers.hasLexware && !deal.offerNumber && ["anfrage", "angebot"].includes(deal.stage) && (
