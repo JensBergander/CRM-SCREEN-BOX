@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -18,6 +18,7 @@ import { createQuotationDraft } from "@/lib/lexware-draft";
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
+import { projectsFor, type ProjectOption } from "@/lib/queries";
 
 export type FormState = { error?: string } | undefined;
 
@@ -89,9 +90,14 @@ export async function createDealAction(_: FormState, form: FormData): Promise<Fo
     compareOnly: form.get("compareOnly") === "on",
     quick,
   });
-  // Vorgang aus einer Mail: die Mail hängt danach am Vorgang
+  // Vorgang aus einer Mail oder Notiz: der Eintrag hängt danach am Vorgang
   if (mail) {
-    await db.update(emails).set({ dealId: id, companyId, status: "zugeordnet" }).where(eq(emails.id, mail.id));
+    await db.update(emails).set({ companyId, status: "zugeordnet" }).where(eq(emails.id, mail.id));
+    await assignMailToDeal(mail.id, id);
+  }
+  const activityId = Number(text(form, "activityId")) || null;
+  if (activityId) {
+    await db.update(activities).set({ dealId: id }).where(and(eq(activities.id, activityId), eq(activities.companyId, companyId)));
   }
   redirect(quick ? "/" : `/vorgaenge/${id}`);
 }
@@ -232,9 +238,45 @@ export async function addActivityAction(
   const body = text(form, "body")?.trim();
   if (!body) return { error: "Bitte etwas eintragen." };
   const type = form.get("type") === "anruf" ? "anruf" : "notiz";
-  await db.insert(activities).values({ ...target, type, body });
+  // Auf der Firmenseite kommt das Projekt aus den Pills („Nur Firma“ = leer)
+  const dealId = target.dealId ?? (await dealOfCompany(Number(text(form, "dealId")) || null, target.companyId));
+  await db.insert(activities).values({ ...target, dealId, type, body });
   refresh();
   return {};
+}
+
+// Gehört der Vorgang zur Firma? Sonst keine Zuordnung
+async function dealOfCompany(dealId: number | null, companyId: number | null): Promise<number | null> {
+  if (!dealId || !companyId) return null;
+  const [deal] = await db.select({ companyId: deals.companyId }).from(deals).where(eq(deals.id, dealId));
+  return deal?.companyId === companyId ? dealId : null;
+}
+
+// Mail einem Projekt zuordnen; übrige Mails derselben Unterhaltung ohne Projekt folgen mit
+async function assignMailToDeal(mailId: number, dealId: number | null) {
+  const [mail] = await db.select().from(emails).where(eq(emails.id, mailId));
+  if (!mail) return;
+  const target = await dealOfCompany(dealId, mail.companyId);
+  await db.update(emails).set({ dealId: target }).where(eq(emails.id, mailId));
+  if (target && mail.conversationId) {
+    await db
+      .update(emails)
+      .set({ dealId: target })
+      .where(and(eq(emails.conversationId, mail.conversationId), eq(emails.companyId, mail.companyId!), isNull(emails.dealId)));
+  }
+}
+
+// Eintrag im Verlauf einem Projekt zuordnen, umhängen oder lösen (dealId = null)
+export async function assignEntryAction(entry: { kind: "mail" | "activity"; id: number }, dealId: number | null) {
+  await getCurrentUser();
+  if (entry.kind === "mail") {
+    await assignMailToDeal(entry.id, dealId);
+  } else {
+    const [activity] = await db.select().from(activities).where(eq(activities.id, entry.id));
+    if (!activity || activity.type === "phase") return;
+    await db.update(activities).set({ dealId: await dealOfCompany(dealId, activity.companyId) }).where(eq(activities.id, entry.id));
+  }
+  refresh();
 }
 
 export async function createTaskAction(_: FormState, form: FormData): Promise<FormState> {
@@ -285,6 +327,7 @@ export type MailForContact = {
   text: string;
   suggestion: SignatureData & { email: string };
   company: { id: number; name: string } | null;
+  projects: ProjectOption[];
 };
 
 // Volltext der Mail holen und Kontaktdaten aus der Signatur vorschlagen
@@ -295,12 +338,14 @@ export async function loadMailForContactAction(mailId: number): Promise<MailForC
   try {
     const { full, unique } = await messageText(mail.mailbox, mail.graphId);
     const address = mail.outgoing ? mail.toAddresses?.split(",")[0]?.trim() ?? "" : mail.fromAddress ?? "";
-    const suggestion = parseSignature(unique, { name: mail.outgoing ? null : mail.fromName, address });
+    // Bei gesendeten Mails steht unten die eigene Signatur, daher nur die Empfängeradresse auswerten
+    const suggestion = parseSignature(mail.outgoing ? "" : unique, { name: mail.outgoing ? null : mail.fromName, address });
     const match = await matchAddress(address);
     const [company] = match
       ? await db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.id, match.companyId))
       : [];
-    return { text: tidyMailText(full), suggestion: { ...suggestion, email: address }, company: company ?? null };
+    const projects = company ? (await projectsFor(company.id)).filter((p) => p.active) : [];
+    return { text: tidyMailText(full), suggestion: { ...suggestion, email: address }, company: company ?? null, projects };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Mail konnte nicht geladen werden." };
   }
@@ -344,6 +389,7 @@ export async function createContactFromMailAction(mailId: number, _: FormState, 
   }
 
   await db.update(emails).set({ companyId, contactId, status: "zugeordnet" }).where(eq(emails.id, mailId));
+  await assignMailToDeal(mailId, Number(text(form, "dealId")) || null);
   await rematchOpenMails();
   refresh();
   return {};

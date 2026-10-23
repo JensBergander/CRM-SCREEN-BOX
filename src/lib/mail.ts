@@ -1,7 +1,7 @@
 import "server-only";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { companies, contacts, emails, mailIgnore, mailSync } from "@/db/schema";
+import { companies, contacts, deals, emails, mailIgnore, mailSync } from "@/db/schema";
 import { graphGet, mailboxes } from "./graph";
 import { domainOf } from "./lexware";
 
@@ -128,6 +128,7 @@ async function storeMessage(mailbox: string, message: GraphMessage, patterns: Se
   const match = await matchAddress(other);
   // nur zwischen eigenen Adressen oder von einem ignorierten Absender
   const internal = !other || (!match && isIgnored(other, patterns));
+  const dealId = match ? await dealOfConversation(message.conversationId, match.companyId) : null;
 
   await db
     .insert(emails)
@@ -147,9 +148,31 @@ async function storeMessage(mailbox: string, message: GraphMessage, patterns: Se
       receivedAt: new Date(message.receivedDateTime),
       companyId: match?.companyId ?? null,
       contactId: match?.contactId ?? null,
+      dealId,
       status: match ? "zugeordnet" : internal ? "ignoriert" : "neu",
     })
     .onDuplicateKeyUpdate({ set: { webLink: sql`values(${emails.webLink})` } });
+}
+
+const ACTIVE = ["anfrage", "angebot", "beauftragt", "erledigt", "rechnung"] as const;
+
+// Antwort in einer Unterhaltung, deren frühere Mail schon einem laufenden Projekt zugeordnet ist: gleiches Projekt
+async function dealOfConversation(conversationId: string | undefined, companyId: number): Promise<number | null> {
+  if (!conversationId) return null;
+  const [row] = await db
+    .select({ dealId: emails.dealId })
+    .from(emails)
+    .innerJoin(deals, eq(deals.id, emails.dealId))
+    .where(
+      and(
+        eq(emails.conversationId, conversationId.slice(0, 255)),
+        eq(emails.companyId, companyId),
+        inArray(deals.stage, [...ACTIVE]),
+      ),
+    )
+    .orderBy(desc(emails.receivedAt))
+    .limit(1);
+  return row?.dealId ?? null;
 }
 
 export type SyncResult = { mailbox: string; fetched: number; done: boolean; error?: string }[];

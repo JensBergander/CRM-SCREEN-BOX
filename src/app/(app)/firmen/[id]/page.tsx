@@ -91,8 +91,8 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
         <Card title="Zeitleiste">
-          <ActivityForm companyId={company.id} dealId={null} />
-          <Timeline items={data.timeline} emails={data.emails} searchable />
+          <ActivityForm companyId={company.id} dealId={null} projects={data.projects.filter((p) => p.active)} />
+          <Timeline items={data.timeline} emails={data.emails} searchable projects={data.projects} projectFilter today={todayIso()} />
         </Card>
 
         <div className="flex flex-col gap-5">

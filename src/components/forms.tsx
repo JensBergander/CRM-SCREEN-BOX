@@ -121,17 +121,40 @@ export function EditDealForm({ deal }: { deal: Deal }) {
   );
 }
 
-export function ActivityForm({ companyId, dealId }: { companyId: number | null; dealId: number | null }) {
+export function ActivityForm({ companyId, dealId, projects = [] }: {
+  companyId: number | null;
+  dealId: number | null;
+  // aktive Projekte der Firma; die erste Pill ist vorausgewählt
+  projects?: { id: number; title: string }[];
+}) {
   const [state, action, pending] = useActionState(addActivityAction.bind(null, { companyId, dealId }), undefined);
   const ref = useResetOnSuccess(state, pending);
+  const [target, setTarget] = useState<string>(projects[0] ? String(projects[0].id) : "");
+  const pill = (on: boolean) =>
+    `inline-flex min-h-8 cursor-pointer items-center rounded-full border px-3 text-[12px] font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
+      on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted"
+    }`;
   return (
-    <form ref={ref} action={action} className="flex flex-wrap items-start gap-2 px-5 pb-3 pt-1">
-      <label className="min-w-0 flex-[1_1_260px]">
-        <span className="sr-only">Notiz oder Anruf festhalten</span>
-        <Textarea name="body" rows={1} placeholder="Notiz oder Anruf festhalten …" required className="min-h-10 resize-y py-2" />
-      </label>
-      <button type="submit" name="type" value="notiz" disabled={pending} className={btnQuiet}>Notiz</button>
-      <button type="submit" name="type" value="anruf" disabled={pending} className={btnQuiet}>Anruf</button>
+    <form ref={ref} action={action} className="flex flex-col gap-2 px-5 pb-3 pt-1">
+      <div className="flex flex-wrap items-start gap-2">
+        <label className="min-w-0 flex-[1_1_260px]">
+          <span className="sr-only">Notiz oder Anruf festhalten</span>
+          <Textarea name="body" rows={1} placeholder="Notiz oder Anruf festhalten …" required className="min-h-10 resize-y py-2" />
+        </label>
+        <button type="submit" name="type" value="notiz" disabled={pending} className={btnQuiet}>Notiz</button>
+        <button type="submit" name="type" value="anruf" disabled={pending} className={btnQuiet}>Anruf</button>
+      </div>
+      {!dealId && projects.length > 0 && (
+        <div role="radiogroup" aria-label="Zuordnen zu" className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs text-muted">Zu:</span>
+          {[...projects.map((p) => ({ value: String(p.id), label: p.title })), { value: "", label: "Nur Firma" }].map((o) => (
+            <label key={o.value || "firma"} className={pill(target === o.value)}>
+              <input type="radio" name="dealId" value={o.value} checked={target === o.value} onChange={() => setTarget(o.value)} className="sr-only" />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      )}
       <FormError message={state?.error} />
     </form>
   );

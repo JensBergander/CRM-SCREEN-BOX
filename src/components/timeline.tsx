@@ -1,21 +1,163 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { ArrowRightLeft, ChevronDown, ExternalLink, Mail, MailOpen, MessageSquare, Paperclip, Phone, Search } from "lucide-react";
-import { mailTextAction } from "@/app/(app)/actions";
+import Link from "next/link";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  ArrowRightLeft,
+  CheckSquare,
+  ChevronDown,
+  ExternalLink,
+  FolderPlus,
+  Mail,
+  MailOpen,
+  MessageSquare,
+  Paperclip,
+  Phone,
+  Search,
+} from "lucide-react";
+import { assignEntryAction, createTaskAction, mailTextAction } from "@/app/(app)/actions";
 import type { Activity, Email } from "@/db/schema";
 import { relativeTime, tidyMailText } from "@/lib/format";
-import { Empty, FormError } from "./ui";
+import { btnQuiet, Empty, FormError, Input } from "./ui";
 
 const ICON = { notiz: MessageSquare, anruf: Phone, phase: ArrowRightLeft, mail: Mail };
 const LABEL = { notiz: "Notiz", anruf: "Anruf", phase: "Phase", mail: "Mail" };
 const FILTERS = { alle: "Alle", mails: "Mails", notizen: "Notizen & Anrufe" } as const;
 
+export type Project = { id: number; title: string; number: string | null; active: boolean };
+type Entry = { kind: "mail" | "activity"; id: number; dealId: number | null; companyId: number | null; title: string };
+
 type Item =
   | { kind: "activity"; at: Date; activity: Activity; text: string }
   | { kind: "email"; at: Date; email: Email; text: string };
 
-function MailEntry({ mail }: { mail: Email }) {
+const pillClass = "inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold";
+
+// Projekt-Pill eines zugeordneten Eintrags mit Menü zum Umhängen oder Lösen; ohne Zuordnung die aktiven Projekte als Knöpfe
+function ProjectControl({ entry, projects }: { entry: Entry; projects: Project[] }) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const ref = useRef<HTMLDivElement>(null);
+  const active = projects.filter((p) => p.active);
+  const current = projects.find((p) => p.id === entry.dealId);
+  const assign = (dealId: number | null) => {
+    setOpen(false);
+    startTransition(() => assignEntryAction({ kind: entry.kind, id: entry.id }, dealId));
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  if (current) {
+    const others = active.filter((p) => p.id !== current.id);
+    return (
+      <div ref={ref} className="relative">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          aria-label={`Projekt ${current.title}, Zuordnung ändern`}
+          className={`${pillClass} ${current.active ? "bg-ink text-surface" : "bg-line text-ink"}`}
+        >
+          {current.title}
+          <ChevronDown size={12} aria-hidden="true" />
+        </button>
+        {open && (
+          <div role="menu" className="absolute left-0 top-full z-20 mt-1 flex min-w-56 flex-col rounded-xl border border-line bg-surface p-1 shadow-lg">
+            {others.length > 0 && <p className="px-3 pb-1 pt-2 text-[11px] font-semibold text-muted">Anderem Projekt zuordnen</p>}
+            {others.map((p) => (
+              <button key={p.id} type="button" role="menuitem" onClick={() => assign(p.id)} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-bg">
+                {p.title}
+              </button>
+            ))}
+            <button type="button" role="menuitem" onClick={() => assign(null)} className="rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-bg">
+              Zuordnung lösen
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!active.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Einem Projekt zuordnen">
+      {active.map((p) => (
+        <button key={p.id} type="button" disabled={pending} onClick={() => assign(p.id)} className={`${pillClass} border border-dashed border-line text-muted hover:border-ink hover:text-ink`}>
+          → {p.title}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// „Aufgabe daraus“: vorausgefüllte Zeile mit Titel, Fälligkeit und Projekt
+function TaskInline({ entry, projects, today, onDone }: { entry: Entry; projects: Project[]; today: string; onDone: () => void }) {
+  const [state, action, pending] = useActionState(createTaskAction, undefined);
+  const active = projects.filter((p) => p.active);
+  const preset = entry.dealId ?? active[0]?.id ?? null;
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (wasPending.current && !pending && state && !state.error) onDone();
+    wasPending.current = pending;
+  }, [pending, state, onDone]);
+
+  return (
+    <form action={action} className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-bg p-3">
+      {entry.companyId && <input type="hidden" name="companyId" value={entry.companyId} />}
+      <label className="min-w-0 flex-[1_1_240px]">
+        <span className="sr-only">Aufgabe</span>
+        <Input name="title" defaultValue={entry.title.slice(0, 200)} required autoFocus />
+      </label>
+      <label>
+        <span className="sr-only">Fällig am</span>
+        <Input name="dueDate" type="date" defaultValue={today} className="w-auto" />
+      </label>
+      {(active.length > 0 || entry.dealId) && (
+        <label>
+          <span className="sr-only">Projekt</span>
+          <select name="dealId" defaultValue={preset ?? ""} className="min-h-11 rounded-xl border border-line bg-surface px-3 text-sm">
+            {projects
+              .filter((p) => p.active || p.id === entry.dealId)
+              .map((p) => (
+                <option key={p.id} value={p.id}>{p.title}</option>
+              ))}
+            <option value="">Nur Firma</option>
+          </select>
+        </label>
+      )}
+      <button type="submit" disabled={pending} className={btnQuiet}>{pending ? "Speichert …" : "Aufgabe anlegen"}</button>
+      <FormError message={state?.error} />
+    </form>
+  );
+}
+
+function EntryActions({ entry, projects, newDealHref, today }: { entry: Entry; projects: Project[]; newDealHref: string; today: string }) {
+  const [task, setTask] = useState(false);
+  const [done, setDone] = useState(false);
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px]">
+        {projects.length > 0 && <ProjectControl entry={entry} projects={projects} />}
+        <button type="button" onClick={() => { setTask(!task); setDone(false); }} aria-expanded={task} className="inline-flex items-center gap-1 text-muted hover:text-ink">
+          <CheckSquare size={13} aria-hidden="true" /> Aufgabe daraus
+        </button>
+        <Link href={newDealHref} className="inline-flex items-center gap-1 text-muted hover:text-ink">
+          <FolderPlus size={13} aria-hidden="true" /> Vorgang daraus
+        </Link>
+        {done && <span role="status" className="text-xs text-muted">Aufgabe angelegt</span>}
+      </div>
+      {task && <TaskInline entry={entry} projects={projects} today={today} onDone={() => { setTask(false); setDone(true); }} />}
+    </>
+  );
+}
+
+function MailEntry({ mail, projects, today }: { mail: Email; projects: Project[]; today: string }) {
   const [full, setFull] = useState<{ text: string } | { error: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -54,15 +196,36 @@ function MailEntry({ mail }: { mail: Email }) {
             </a>
           )}
         </div>
+        <EntryActions
+          entry={{ kind: "mail", id: mail.id, dealId: mail.dealId, companyId: mail.companyId, title: (mail.subject ?? "Mail").replace(/^(AW|WG|RE|FW|Fwd):\s*/i, "") }}
+          projects={projects}
+          newDealHref={`/vorgaenge/neu?mail=${mail.id}`}
+          today={today}
+        />
       </div>
     </li>
   );
 }
 
-// Notizen, Anrufe, Phasenwechsel und Mails in einer Zeitleiste, neueste zuerst; optional mit Suche und Filter
-export function Timeline({ items, emails = [], searchable = false }: { items: Activity[]; emails?: Email[]; searchable?: boolean }) {
+// Notizen, Anrufe, Phasenwechsel und Mails in einer Zeitleiste, neueste zuerst; optional mit Suche, Filter und Projektzuordnung
+export function Timeline({
+  items,
+  emails = [],
+  searchable = false,
+  projects = [],
+  projectFilter = false,
+  today = "",
+}: {
+  items: Activity[];
+  emails?: Email[];
+  searchable?: boolean;
+  projects?: Project[];
+  projectFilter?: boolean;
+  today?: string;
+}) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<keyof typeof FILTERS>("alle");
+  const [project, setProject] = useState<number | "alle" | "ohne">("alle");
 
   const merged = useMemo<Item[]>(
     () =>
@@ -78,48 +241,71 @@ export function Timeline({ items, emails = [], searchable = false }: { items: Ac
     [items, emails],
   );
 
+  const dealOf = (item: Item) => (item.kind === "email" ? item.email.dealId : item.activity.dealId);
+  // Im Filter: aktive Projekte und abgeschlossene, denen Einträge zugeordnet sind
+  const used = new Set(merged.map(dealOf).filter(Boolean));
+  const filterProjects = projects.filter((p) => p.active || used.has(p.id));
+
   const q = query.trim().toLowerCase();
   const visible = merged.filter(
     (item) =>
       (filter === "alle" || (filter === "mails" ? item.kind === "email" : item.kind === "activity")) &&
+      (project === "alle" || (project === "ohne" ? !dealOf(item) : dealOf(item) === project)) &&
       (!q || item.text.toLowerCase().includes(q)),
   );
+  const chip = (on: boolean) => `min-h-8 rounded-full px-3.5 text-[13px] font-semibold ${on ? "bg-surface shadow-sm" : "text-muted"}`;
 
   return (
     <>
       {searchable && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-line-soft px-5 py-3">
-          <label className="flex min-h-10 flex-[1_1_220px] items-center gap-2 rounded-full border border-line bg-surface px-4 text-muted">
-            <Search size={15} aria-hidden="true" />
-            <span className="sr-only">Zeitleiste durchsuchen</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="In Mails und Notizen suchen"
-              className="flex-1 bg-transparent text-sm text-ink outline-none"
-            />
-          </label>
-          <div role="group" aria-label="Filter" className="flex rounded-full bg-line p-1">
-            {Object.entries(FILTERS).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={filter === key}
-                onClick={() => setFilter(key as keyof typeof FILTERS)}
-                className={`min-h-8 rounded-full px-3.5 text-[13px] font-semibold ${filter === key ? "bg-surface shadow-sm" : "text-muted"}`}
-              >
-                {label}
-              </button>
-            ))}
+        <div className="flex flex-col gap-2 border-t border-line-soft px-5 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex min-h-10 flex-[1_1_220px] items-center gap-2 rounded-full border border-line bg-surface px-4 text-muted">
+              <Search size={15} aria-hidden="true" />
+              <span className="sr-only">Zeitleiste durchsuchen</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="In Mails und Notizen suchen"
+                className="flex-1 bg-transparent text-sm text-ink outline-none"
+              />
+            </label>
+            <div role="group" aria-label="Art" className="flex rounded-full bg-line p-1">
+              {Object.entries(FILTERS).map(([key, label]) => (
+                <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key as keyof typeof FILTERS)} className={chip(filter === key)}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-          {(q || filter !== "alle") && <span className="text-xs text-muted">{visible.length} von {merged.length}</span>}
+          {projectFilter && filterProjects.length > 0 && (
+            <div role="group" aria-label="Projekt" className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-xs text-muted">Projekt:</span>
+              {[
+                { key: "alle" as const, label: "Alle" },
+                ...filterProjects.map((p) => ({ key: p.id, label: p.title })),
+                { key: "ohne" as const, label: "Ohne Projekt" },
+              ].map((o) => (
+                <button
+                  key={String(o.key)}
+                  type="button"
+                  aria-pressed={project === o.key}
+                  onClick={() => setProject(o.key)}
+                  className={`min-h-8 rounded-full border px-3 text-[12px] font-semibold ${project === o.key ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted hover:text-ink"}`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {(q || filter !== "alle" || project !== "alle") && <span className="text-xs text-muted">{visible.length} von {merged.length}</span>}
         </div>
       )}
       {visible.length === 0 && <Empty>{merged.length ? "Nichts gefunden." : "Noch keine Einträge."}</Empty>}
       <ol>
         {visible.map((item) => {
-          if (item.kind === "email") return <MailEntry key={`m${item.email.id}`} mail={item.email} />;
+          if (item.kind === "email") return <MailEntry key={`m${item.email.id}`} mail={item.email} projects={projects} today={today} />;
           const a = item.activity;
           const Icon = ICON[a.type];
           return (
@@ -132,6 +318,14 @@ export function Timeline({ items, emails = [], searchable = false }: { items: Ac
                   {LABEL[a.type]} · {relativeTime(a.createdAt)}
                 </p>
                 <p className="whitespace-pre-line text-sm">{a.body}</p>
+                {a.type !== "phase" && (
+                  <EntryActions
+                    entry={{ kind: "activity", id: a.id, dealId: a.dealId, companyId: a.companyId, title: a.body.split("\n")[0] }}
+                    projects={projects}
+                    newDealHref={`/vorgaenge/neu?notiz=${a.id}`}
+                    today={today}
+                  />
+                )}
               </div>
             </li>
           );

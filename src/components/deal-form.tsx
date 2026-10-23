@@ -4,18 +4,20 @@ import { useActionState } from "react";
 import { createDealAction } from "@/app/(app)/actions";
 import { btnPrimary, Field, FormError, Input, Select, Textarea } from "./ui";
 
-export function DealForm({ companies, preset, quick, today, fromMail }: {
+export function DealForm({ companies, preset, quick, today, fromMail, fromNote }: {
   companies: { id: number; name: string }[];
   preset?: { id: number; name: string } | null;
   quick: boolean;
   today: string;
   fromMail?: { id: number; subject: string } | null;
+  fromNote?: { id: number; title: string } | null;
 }) {
   const [state, action, pending] = useActionState(createDealAction, undefined);
 
   return (
     <form action={action} className="flex max-w-xl flex-col gap-4 rounded-2xl bg-surface p-6">
       {fromMail && <input type="hidden" name="mailId" value={fromMail.id} />}
+      {fromNote && <input type="hidden" name="activityId" value={fromNote.id} />}
       {quick && <input type="hidden" name="quick" value="1" />}
       {quick && <input type="hidden" name="stage" value="beauftragt" />}
 
@@ -41,7 +43,7 @@ export function DealForm({ companies, preset, quick, today, fromMail }: {
           name="title"
           required
           autoFocus={!!preset}
-          defaultValue={fromMail?.subject.replace(/^(AW|WG|RE|FW|Fwd):\s*/i, "")}
+          defaultValue={fromMail?.subject.replace(/^(AW|WG|RE|FW|Fwd):\s*/i, "") ?? fromNote?.title}
           placeholder="z. B. Fotos vom neuen Lager"
         />
       </Field>

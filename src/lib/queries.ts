@@ -100,7 +100,27 @@ export async function getDeal(id: number) {
     db.select().from(activities).where(eq(activities.dealId, id)).orderBy(desc(activities.createdAt)),
     emailsFor({ dealId: id }),
   ]);
-  return { ...row, tasks: dealTasks, timeline, emails: dealEmails };
+  return { ...row, tasks: dealTasks, timeline, emails: dealEmails, projects: await projectsFor(row.deal.companyId) };
+}
+
+export const ACTIVE_STAGES = ["anfrage", "angebot", "beauftragt", "erledigt", "rechnung"] as const;
+
+export type ProjectOption = { id: number; title: string; number: string | null; active: boolean };
+
+// Alle Vorgänge einer Firma als Projekte; aktive zuerst, zuletzt bewegte vorn
+export async function projectsFor(companyId: number): Promise<ProjectOption[]> {
+  const rows = await db
+    .select({ id: deals.id, title: deals.title, number: deals.number, stage: deals.stage, moved: deals.stageChangedAt })
+    .from(deals)
+    .where(eq(deals.companyId, companyId))
+    .orderBy(desc(deals.stageChangedAt));
+  const list = rows.map((r) => ({ id: r.id, title: r.title, number: r.number, active: (ACTIVE_STAGES as readonly string[]).includes(r.stage) }));
+  return [...list.filter((p) => p.active), ...list.filter((p) => !p.active)];
+}
+
+export async function getActivity(id: number) {
+  const [row] = await db.select().from(activities).where(eq(activities.id, id));
+  return row ?? null;
 }
 
 export async function companyOptions() {
@@ -197,6 +217,7 @@ export async function getCompany(id: number) {
     timeline,
     emails: companyEmails,
     tasks: companyTasks,
+    projects: await projectsFor(id),
     stats: {
       requests: companyDeals.length,
       won: won.length,
@@ -232,9 +253,10 @@ export type InboxRow = Awaited<ReturnType<typeof listInbox>>[number];
 export async function listInbox(view: "offen" | "alle" | "ignoriert", query?: string) {
   const q = query?.trim();
   return db
-    .select({ mail: emails, companyName: companies.name })
+    .select({ mail: emails, companyName: companies.name, dealTitle: deals.title })
     .from(emails)
     .leftJoin(companies, eq(companies.id, emails.companyId))
+    .leftJoin(deals, eq(deals.id, emails.dealId))
     .where(
       and(
         view === "offen"

@@ -41,6 +41,28 @@ export function SyncButton() {
   );
 }
 
+// Laufende Projekte der erkannten Firma; das erste ist vorausgewählt
+function ProjectPicker({ projects, companyName }: { projects: { id: number; title: string }[]; companyName: string }) {
+  const [target, setTarget] = useState(String(projects[0].id));
+  const pill = (on: boolean) =>
+    `inline-flex min-h-8 cursor-pointer items-center rounded-full border px-3 text-[12px] font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
+      on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted"
+    }`;
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="mb-1 text-[13px] font-semibold text-muted">Projekt bei {companyName}</legend>
+      <div role="radiogroup" className="flex flex-wrap gap-1.5">
+        {[...projects.map((p) => ({ value: String(p.id), label: p.title })), { value: "", label: "Nur Firma" }].map((o) => (
+          <label key={o.value || "firma"} className={pill(target === o.value)}>
+            <input type="radio" name="dealId" value={o.value} checked={target === o.value} onChange={() => setTarget(o.value)} className="sr-only" />
+            {o.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 // Mail im Volltext lesen und Absender mit den Daten aus der Signatur übernehmen
 function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; companies: { id: number; name: string }[]; tagOptions: string[]; onClose: () => void }) {
   const [data, setData] = useState<MailForContact | { error: string } | null>(null);
@@ -76,6 +98,7 @@ function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; com
         <datalist id={`companies-${row.mail.id}`}>
           {companies.map((c) => <option key={c.id} value={c.name} />)}
         </datalist>
+        {data.projects.length > 0 && <ProjectPicker projects={data.projects} companyName={data.company?.name ?? ""} />}
         <div className="grid grid-cols-2 gap-2">
           <Input name="firstName" aria-label="Vorname" placeholder="Vorname" defaultValue={s.firstName} />
           <Input name="lastName" aria-label="Nachname" placeholder="Nachname" defaultValue={s.lastName} required />
@@ -131,6 +154,11 @@ export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; c
                 {row.companyName && (
                   <p className="mt-1 text-xs">
                     Zugeordnet: <Link href={`/firmen/${m.companyId}`} className="font-semibold hover:underline">{row.companyName}</Link>
+                    {row.dealTitle && (
+                      <Link href={`/vorgaenge/${m.dealId}`} className="ml-2 inline-flex min-h-6 items-center rounded-full bg-ink px-2.5 text-[11px] font-semibold text-surface">
+                        {row.dealTitle}
+                      </Link>
+                    )}
                   </p>
                 )}
               </div>
