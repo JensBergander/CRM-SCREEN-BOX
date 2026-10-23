@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState, useTransition } from "react";
-import { BellOff, CheckSquare, ExternalLink, FolderPlus, Link2, Paperclip, RefreshCw, X } from "lucide-react";
-import { assignMailAction, ignoreMailAction, ignoreSenderAction, syncMailAction, taskFromMailAction } from "@/app/(app)/actions";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { BellOff, CheckSquare, ExternalLink, FolderPlus, Paperclip, RefreshCw, UserPlus, X } from "lucide-react";
+import {
+  createContactFromMailAction,
+  ignoreMailAction,
+  ignoreSenderAction,
+  loadMailForContactAction,
+  syncMailAction,
+  taskFromMailAction,
+  type MailForContact,
+} from "@/app/(app)/actions";
 import { relativeTime } from "@/lib/format";
 import type { InboxRow } from "@/lib/queries";
 import type { SyncResult } from "@/lib/mail";
@@ -33,35 +41,70 @@ export function SyncButton() {
   );
 }
 
-function AssignForm({ row, companies, tagOptions, onClose }: { row: InboxRow; companies: { id: number; name: string }[]; tagOptions: string[]; onClose: () => void }) {
-  const [state, action, pending] = useActionState(assignMailAction.bind(null, row.mail.id), undefined);
-  const domain = row.mail.fromAddress?.split("@")[1];
-  return (
-    <form action={action} className="mt-3 flex flex-col gap-3 rounded-xl bg-bg p-4">
-      <KindFields options={tagOptions} />
-      <Field label="Firma oder Person" hint="Vorhandene wählen oder neuen Namen eingeben; Art und Gewerk gelten nur für neue">
+// Mail im Volltext lesen und Absender mit den Daten aus der Signatur übernehmen
+function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; companies: { id: number; name: string }[]; tagOptions: string[]; onClose: () => void }) {
+  const [data, setData] = useState<MailForContact | { error: string } | null>(null);
+  const [state, action, pending] = useActionState(createContactFromMailAction.bind(null, row.mail.id), undefined);
+  const [, startLoading] = useTransition();
+  useEffect(() => {
+    startLoading(async () => setData(await loadMailForContactAction(row.mail.id)));
+  }, [row.mail.id]);
 
-        <Input name="companyName" list="inbox-companies" required autoFocus autoComplete="off" placeholder="Firma wählen oder neu eingeben" />
-      </Field>
-      <datalist id="inbox-companies">
-        {companies.map((c) => <option key={c.id} value={c.name} />)}
-      </datalist>
-      <label className="flex items-center gap-3 text-sm">
-        <input type="checkbox" name="createContact" defaultChecked className="h-5 w-5 accent-ink" />
-        Absender als Kontakt anlegen
-      </label>
-      {domain && (
-        <label className="flex items-center gap-3 text-sm">
-          <input type="checkbox" name="learnDomain" defaultChecked className="h-5 w-5 accent-ink" />
-          Künftig alle Mails von @{domain} dieser Firma zuordnen
-        </label>
-      )}
-      <FormError message={state?.error} />
-      <div className="flex gap-2">
-        <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Zuordnen"}</button>
-        <button type="button" onClick={onClose} className={btnQuiet}>Abbrechen</button>
-      </div>
-    </form>
+  if (!data) return <p className="mt-3 rounded-xl bg-bg p-4 text-sm text-muted">Mail wird geladen und Signatur ausgelesen …</p>;
+  if ("error" in data) return <div className="mt-3"><FormError message={data.error} /></div>;
+  if (state && !state.error && !pending) {
+    return (
+      <p role="status" className="mt-3 flex items-center gap-3 rounded-xl bg-bg p-4 text-sm">
+        Übernommen und zugeordnet.
+        <button type="button" onClick={onClose} className={btnQuiet}>Schließen</button>
+      </p>
+    );
+  }
+  const s = data.suggestion;
+  const domain = s.email.split("@")[1];
+  return (
+    <div className="mt-3 grid gap-4 rounded-xl bg-bg p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <section aria-label="Mailtext" className="max-h-[560px] overflow-auto rounded-lg bg-surface p-4 text-[13px] leading-relaxed whitespace-pre-wrap">
+        {data.text || "(kein Text)"}
+      </section>
+      <form action={action} className="flex flex-col gap-3">
+        <p className="text-xs text-muted">Aus der Signatur vorausgefüllt, bitte kurz prüfen.</p>
+        <KindFields options={tagOptions} />
+        <Field label="Firma oder Person" hint="Vorhandene wählen oder neuen Namen eingeben">
+          <Input name="companyName" list={`companies-${row.mail.id}`} required autoComplete="off" defaultValue={data.company?.name ?? s.company} />
+        </Field>
+        <datalist id={`companies-${row.mail.id}`}>
+          {companies.map((c) => <option key={c.id} value={c.name} />)}
+        </datalist>
+        <div className="grid grid-cols-2 gap-2">
+          <Input name="firstName" aria-label="Vorname" placeholder="Vorname" defaultValue={s.firstName} />
+          <Input name="lastName" aria-label="Nachname" placeholder="Nachname" defaultValue={s.lastName} required />
+        </div>
+        <Input name="position" aria-label="Position" placeholder="Position / Tätigkeit" defaultValue={s.position} />
+        <Input name="email" type="email" aria-label="E-Mail" placeholder="E-Mail" defaultValue={s.email} />
+        <div className="grid grid-cols-2 gap-2">
+          <Input name="phone" aria-label="Telefon" placeholder="Telefon" defaultValue={s.phone} />
+          <Input name="mobile" aria-label="Mobil" placeholder="Mobil" defaultValue={s.mobile} />
+        </div>
+        <Input name="website" aria-label="Website" placeholder="Website" defaultValue={s.website} />
+        <Input name="street" aria-label="Straße" placeholder="Straße" defaultValue={s.street} />
+        <div className="grid grid-cols-[6rem_1fr] gap-2">
+          <Input name="zip" aria-label="PLZ" placeholder="PLZ" defaultValue={s.zip} />
+          <Input name="city" aria-label="Ort" placeholder="Ort" defaultValue={s.city} />
+        </div>
+        {domain && (
+          <label className="flex items-center gap-3 text-sm">
+            <input type="checkbox" name="learnDomain" defaultChecked className="h-5 w-5 accent-ink" />
+            Künftig alle Mails von @{domain} hier zuordnen
+          </label>
+        )}
+        <FormError message={state?.error} />
+        <div className="flex gap-2">
+          <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Übernehmen"}</button>
+          <button type="button" onClick={onClose} className={btnQuiet}>Schließen</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -97,11 +140,9 @@ export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; c
                     <ExternalLink size={14} aria-hidden="true" /> Öffnen
                   </a>
                 )}
-                {!m.companyId && (
-                  <button type="button" onClick={() => setOpen(open === m.id ? null : m.id)} className={btnQuiet}>
-                    <Link2 size={14} aria-hidden="true" /> Zuordnen
-                  </button>
-                )}
+                <button type="button" onClick={() => setOpen(open === m.id ? null : m.id)} className={btnQuiet} aria-expanded={open === m.id}>
+                  <UserPlus size={14} aria-hidden="true" /> {m.companyId ? "Lesen & Kontakt übernehmen" : "Lesen & zuordnen"}
+                </button>
                 <button type="button" onClick={() => startTransition(() => taskFromMailAction(m.id))} className={btnQuiet}>
                   <CheckSquare size={14} aria-hidden="true" /> Aufgabe daraus
                 </button>
@@ -125,7 +166,7 @@ export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; c
                 )}
               </div>
             </div>
-            {open === m.id && <AssignForm row={row} companies={companies} tagOptions={tagOptions} onClose={() => setOpen(null)} />}
+            {open === m.id && <MailPanel row={row} companies={companies} tagOptions={tagOptions} onClose={() => setOpen(null)} />}
           </li>
         );
       })}

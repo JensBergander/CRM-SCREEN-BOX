@@ -75,6 +75,15 @@ export async function graphPost(path: string, body: unknown): Promise<void> {
   }
 }
 
+// Volltext einer Mail: unique = nur die neue Nachricht ohne zitierten Verlauf
+export async function messageText(mailbox: string, graphId: string): Promise<{ full: string; unique: string }> {
+  const data = await graphGet<{ body?: { content?: string }; uniqueBody?: { content?: string } }>(
+    `/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(graphId)}?$select=body,uniqueBody`,
+  );
+  const full = data.body?.content ?? "";
+  return { full, unique: data.uniqueBody?.content || full };
+}
+
 export function mailboxes(): string[] {
   return (process.env.MAIL_MAILBOXES ?? "")
     .split(",")

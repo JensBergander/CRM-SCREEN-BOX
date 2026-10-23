@@ -37,10 +37,13 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
                   <td className="px-3 py-3">
                     {c.companyId ? <Link href={`/firmen/${c.companyId}`} className="hover:underline">{companyName}</Link> : "–"}
                   </td>
-                  <td className="px-3 py-3 whitespace-nowrap text-muted">{c.phone ?? "–"}</td>
+                  <td className="px-3 py-3 whitespace-nowrap text-muted">
+                    {c.phone ?? (c.mobile ? null : "–")}
+                    {c.mobile && <span className="block">mobil {c.mobile}</span>}
+                  </td>
                   <td className="px-3 py-3 text-muted">{c.email ?? "–"}</td>
                   <td className="px-5 py-2">
-                    <ContactActions name={name} phone={c.phone} email={c.email} />
+                    <ContactActions name={name} phone={c.mobile ?? c.phone} email={c.email} />
                   </td>
                 </tr>
               );

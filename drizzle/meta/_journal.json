@@ -64,6 +64,13 @@
       "when": 1792765129448,
       "tag": "0008_company_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1792766157381,
+      "tag": "0009_contact_mobile",
+      "breakpoints": true
     }
   ]
 }

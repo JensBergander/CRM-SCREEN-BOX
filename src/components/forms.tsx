@@ -174,7 +174,8 @@ export function ContactForm({ companyId }: { companyId: number }) {
       <Input name="lastName" placeholder="Nachname" aria-label="Nachname" required />
       <Input name="email" type="email" placeholder="E-Mail" aria-label="E-Mail" className="col-span-2" />
       <Input name="phone" placeholder="Telefon" aria-label="Telefon" />
-      <Input name="position" placeholder="Position" aria-label="Position" />
+      <Input name="mobile" placeholder="Mobil" aria-label="Mobil" />
+      <Input name="position" placeholder="Position" aria-label="Position" className="col-span-2" />
       <div className="col-span-2 flex items-center gap-2">
         <button type="submit" disabled={pending} className={btnQuiet}>Speichern</button>
         <button type="button" onClick={() => setOpen(false)} className="text-[13px] text-muted">Schließen</button>

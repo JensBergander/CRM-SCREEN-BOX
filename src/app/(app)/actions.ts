@@ -9,7 +9,9 @@ import { activities, appState, companies, contacts, deals, emails, LOST_REASONS,
 import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, todayIso } from "@/lib/format";
 import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
-import { rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
+import { matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
+import { messageText } from "@/lib/graph";
+import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
 import { linkVoucher, quickReconcile, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
@@ -207,6 +209,7 @@ export async function createContactAction(companyId: number | null, _: FormState
     lastName,
     email,
     phone: text(form, "phone")?.trim() || null,
+    mobile: text(form, "mobile")?.trim() || null,
     position: text(form, "position")?.trim() || null,
   });
   // Erste bekannte Firmen-Domain gleich mitlernen
@@ -265,35 +268,68 @@ export async function syncMailAction(): Promise<SyncResult | { error: string }> 
   }
 }
 
-// Mail einer Firma zuordnen; optional Absender als Kontakt anlegen und Domain merken
-export async function assignMailAction(mailId: number, _: FormState, form: FormData): Promise<FormState> {
+export type MailForContact = {
+  text: string;
+  suggestion: SignatureData & { email: string };
+  company: { id: number; name: string } | null;
+};
+
+// Volltext der Mail holen und Kontaktdaten aus der Signatur vorschlagen
+export async function loadMailForContactAction(mailId: number): Promise<MailForContact | { error: string }> {
   await getCurrentUser();
-  const companyId = await resolveCompany(form);
-  if (!companyId) return { error: "Bitte eine Firma auswählen oder neu eingeben." };
   const [mail] = await db.select().from(emails).where(eq(emails.id, mailId));
   if (!mail) return { error: "Mail nicht gefunden." };
+  try {
+    const { full, unique } = await messageText(mail.mailbox, mail.graphId);
+    const address = mail.outgoing ? mail.toAddresses?.split(",")[0]?.trim() ?? "" : mail.fromAddress ?? "";
+    const suggestion = parseSignature(unique, { name: mail.outgoing ? null : mail.fromName, address });
+    const match = await matchAddress(address);
+    const [company] = match
+      ? await db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.id, match.companyId))
+      : [];
+    return { text: full, suggestion: { ...suggestion, email: address }, company: company ?? null };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Mail konnte nicht geladen werden." };
+  }
+}
 
-  const address = mail.outgoing ? mail.toAddresses?.split(",")[0]?.trim() : mail.fromAddress;
-  let contactId: number | null = null;
-  if (address && form.get("createContact") === "on") {
-    const [known] = await db.select({ id: contacts.id }).from(contacts).where(eq(contacts.email, address));
-    if (known) {
-      contactId = known.id;
-    } else {
-      const parts = (mail.outgoing ? "" : mail.fromName ?? "").trim().split(/\s+/).filter(Boolean);
-      const [inserted] = await db.insert(contacts).values({
-        companyId,
-        firstName: parts.length > 1 ? parts.slice(0, -1).join(" ") : null,
-        lastName: parts.at(-1) ?? address.split("@")[0],
-        email: address,
-      });
-      contactId = inserted.insertId;
-    }
+// Kontakt (und bei Bedarf Firma oder Dienstleister) aus einer Mail anlegen und die Mail zuordnen.
+// Vorhandene Einträge werden nur ergänzt, nie überschrieben.
+export async function createContactFromMailAction(mailId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const lastName = text(form, "lastName")?.trim();
+  if (!lastName) return { error: "Der Nachname fehlt." };
+  const companyId = await resolveCompany(form);
+  if (!companyId) return { error: "Bitte eine Firma bzw. den Namen des Dienstleisters angeben." };
+  const value = (key: string) => text(form, key)?.trim() || null;
+  const email = value("email")?.toLowerCase() ?? null;
+
+  const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+  const fill: Partial<typeof companies.$inferInsert> = {};
+  for (const key of ["website", "street", "zip", "city"] as const) if (!company[key] && value(key)) fill[key] = value(key);
+  if (form.get("learnDomain") === "on" && !company.emailDomain && domainOf(email)) fill.emailDomain = domainOf(email);
+  if (Object.keys(fill).length) await db.update(companies).set(fill).where(eq(companies.id, companyId));
+
+  const person = {
+    firstName: value("firstName"),
+    lastName,
+    position: value("position"),
+    phone: value("phone"),
+    mobile: value("mobile"),
+  };
+  const [known] = email ? await db.select().from(contacts).where(eq(contacts.email, email)) : [];
+  let contactId: number;
+  if (known) {
+    contactId = known.id;
+    const update: Partial<typeof contacts.$inferInsert> = {};
+    for (const key of ["firstName", "position", "phone", "mobile"] as const) if (!known[key] && person[key]) update[key] = person[key];
+    if (!known.companyId) update.companyId = companyId;
+    if (Object.keys(update).length) await db.update(contacts).set(update).where(eq(contacts.id, known.id));
+  } else {
+    const [inserted] = await db.insert(contacts).values({ ...person, companyId, email });
+    contactId = inserted.insertId;
   }
-  if (form.get("learnDomain") === "on" && domainOf(address)) {
-    const [company] = await db.select({ d: companies.emailDomain }).from(companies).where(eq(companies.id, companyId));
-    if (!company?.d) await db.update(companies).set({ emailDomain: domainOf(address) }).where(eq(companies.id, companyId));
-  }
+
   await db.update(emails).set({ companyId, contactId, status: "zugeordnet" }).where(eq(emails.id, mailId));
   await rematchOpenMails();
   refresh();

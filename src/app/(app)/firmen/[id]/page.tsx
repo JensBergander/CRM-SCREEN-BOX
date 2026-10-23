@@ -101,10 +101,10 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">{name}</p>
                     <p className="truncate text-xs text-muted">
-                      {[c.position, c.phone, c.email].filter(Boolean).join(" · ") || "–"}
+                      {[c.position, c.phone, c.mobile && `mobil ${c.mobile}`, c.email].filter(Boolean).join(" · ") || "–"}
                     </p>
                   </div>
-                  <ContactActions name={name} phone={c.phone} email={c.email} />
+                  <ContactActions name={name} phone={c.mobile ?? c.phone} email={c.email} />
                 </Row>
               );
             })}
