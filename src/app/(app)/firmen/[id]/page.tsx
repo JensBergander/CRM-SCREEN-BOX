@@ -63,7 +63,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         <div className="flex flex-col gap-5">
           <Card title="Zeitleiste">
             <ActivityForm companyId={company.id} dealId={null} />
-            <Timeline items={data.timeline} />
+            <Timeline items={data.timeline} emails={data.emails} />
           </Card>
         </div>
 

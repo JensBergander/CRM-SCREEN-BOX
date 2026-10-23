@@ -9,6 +9,7 @@ import {
   mysqlTable,
   text,
   timestamp,
+  uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
 
@@ -139,6 +140,50 @@ export const activities = mysqlTable(
   (t) => [index("activities_company_idx").on(t.companyId, t.createdAt)],
 );
 
+export const MAIL_STATUS = ["neu", "zugeordnet", "ignoriert"] as const;
+
+export const emails = mysqlTable(
+  "emails",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    // ID der Nachricht in Microsoft Graph, je Postfach eindeutig
+    graphId: varchar("graph_id", { length: 255 }).notNull(),
+    mailbox: varchar("mailbox", { length: 120 }).notNull(),
+    internetMessageId: varchar("internet_message_id", { length: 255 }),
+    conversationId: varchar("conversation_id", { length: 255 }),
+    outgoing: boolean("outgoing").notNull().default(false),
+    fromAddress: varchar("from_address", { length: 255 }),
+    fromName: varchar("from_name", { length: 255 }),
+    // Empfänger kommagetrennt
+    toAddresses: text("to_addresses"),
+    subject: varchar("subject", { length: 500 }),
+    preview: text("preview"),
+    webLink: text("web_link"),
+    hasAttachments: boolean("has_attachments").notNull().default(false),
+    receivedAt: timestamp("received_at").notNull(),
+    companyId: int("company_id").references(() => companies.id, { onDelete: "set null" }),
+    contactId: int("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    dealId: int("deal_id").references(() => deals.id, { onDelete: "set null" }),
+    status: mysqlEnum("status", MAIL_STATUS).notNull().default("neu"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("emails_graph_idx").on(t.mailbox, t.graphId),
+    index("emails_company_idx").on(t.companyId, t.receivedAt),
+    index("emails_status_idx").on(t.status, t.receivedAt),
+    index("emails_from_idx").on(t.fromAddress),
+  ],
+);
+
+// Stand des Abrufs je Postfach
+export const mailSync = mysqlTable("mail_sync", {
+  mailbox: varchar("mailbox", { length: 120 }).primaryKey(),
+  lastReceivedAt: timestamp("last_received_at"),
+  lastRunAt: timestamp("last_run_at"),
+  lastError: text("last_error"),
+});
+
+export type Email = typeof emails.$inferSelect;
 export type Company = typeof companies.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type Deal = typeof deals.$inferSelect;

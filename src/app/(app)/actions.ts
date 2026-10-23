@@ -5,10 +5,11 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { activities, companies, contacts, deals, LOST_REASONS, STAGES, tasks } from "@/db/schema";
+import { activities, companies, contacts, deals, emails, LOST_REASONS, STAGES, tasks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { suggestFolderName } from "@/lib/format";
+import { suggestFolderName, todayIso } from "@/lib/format";
 import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
+import { rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { changeStage, createDeal } from "@/lib/pipeline";
 
 export type FormState = { error?: string } | undefined;
@@ -65,13 +66,19 @@ export async function createDealAction(_: FormState, form: FormData): Promise<Fo
   if (!companyId) return { error: "Bitte eine Firma auswählen oder neu eingeben." };
 
   const quick = form.get("quick") === "1";
+  const mailId = Number(text(form, "mailId")) || null;
+  const [mail] = mailId ? await db.select().from(emails).where(eq(emails.id, mailId)) : [];
   const id = await createDeal({
     ...parsed.data,
     companyId,
-    contactId: Number(text(form, "contactId")) || null,
+    contactId: Number(text(form, "contactId")) || mail?.contactId || null,
     compareOnly: form.get("compareOnly") === "on",
     quick,
   });
+  // Vorgang aus einer Mail: die Mail hängt danach am Vorgang
+  if (mail) {
+    await db.update(emails).set({ dealId: id, companyId, status: "zugeordnet" }).where(eq(emails.id, mail.id));
+  }
   redirect(quick ? "/" : `/vorgaenge/${id}`);
 }
 
@@ -220,6 +227,74 @@ export async function createTaskAction(_: FormState, form: FormData): Promise<Fo
 export async function toggleTaskAction(taskId: number, done: boolean) {
   await getCurrentUser();
   await db.update(tasks).set({ doneAt: done ? new Date() : null }).where(eq(tasks.id, taskId));
+  refresh();
+}
+
+export async function syncMailAction(): Promise<SyncResult | { error: string }> {
+  await getCurrentUser();
+  try {
+    const result = await syncMailboxes();
+    refresh();
+    return result;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Abruf fehlgeschlagen" };
+  }
+}
+
+// Mail einer Firma zuordnen; optional Absender als Kontakt anlegen und Domain merken
+export async function assignMailAction(mailId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const companyId = await resolveCompany(form);
+  if (!companyId) return { error: "Bitte eine Firma auswählen oder neu eingeben." };
+  const [mail] = await db.select().from(emails).where(eq(emails.id, mailId));
+  if (!mail) return { error: "Mail nicht gefunden." };
+
+  const address = mail.outgoing ? mail.toAddresses?.split(",")[0]?.trim() : mail.fromAddress;
+  let contactId: number | null = null;
+  if (address && form.get("createContact") === "on") {
+    const [known] = await db.select({ id: contacts.id }).from(contacts).where(eq(contacts.email, address));
+    if (known) {
+      contactId = known.id;
+    } else {
+      const parts = (mail.outgoing ? "" : mail.fromName ?? "").trim().split(/\s+/).filter(Boolean);
+      const [inserted] = await db.insert(contacts).values({
+        companyId,
+        firstName: parts.length > 1 ? parts.slice(0, -1).join(" ") : null,
+        lastName: parts.at(-1) ?? address.split("@")[0],
+        email: address,
+      });
+      contactId = inserted.insertId;
+    }
+  }
+  if (form.get("learnDomain") === "on" && domainOf(address)) {
+    const [company] = await db.select({ d: companies.emailDomain }).from(companies).where(eq(companies.id, companyId));
+    if (!company?.d) await db.update(companies).set({ emailDomain: domainOf(address) }).where(eq(companies.id, companyId));
+  }
+  await db.update(emails).set({ companyId, contactId, status: "zugeordnet" }).where(eq(emails.id, mailId));
+  await rematchOpenMails();
+  refresh();
+  return {};
+}
+
+export async function ignoreMailAction(mailId: number) {
+  await getCurrentUser();
+  await db.update(emails).set({ status: "ignoriert" }).where(eq(emails.id, mailId));
+  refresh();
+}
+
+export async function taskFromMailAction(mailId: number) {
+  await getCurrentUser();
+  const [mail] = await db.select().from(emails).where(eq(emails.id, mailId));
+  if (!mail) return;
+  await db.insert(tasks).values({
+    title: `Mail bearbeiten: ${mail.subject ?? "(ohne Betreff)"}`.slice(0, 255),
+    dueDate: todayIso(),
+    companyId: mail.companyId,
+    dealId: mail.dealId,
+  });
+  if (mail.status === "neu" && mail.companyId) {
+    await db.update(emails).set({ status: "zugeordnet" }).where(eq(emails.id, mailId));
+  }
   refresh();
 }
 

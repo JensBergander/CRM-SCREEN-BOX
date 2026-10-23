@@ -105,8 +105,22 @@ export default async function StartPage() {
           ))}
         </Card>
 
-        <Card title="Neue Mails ohne Zuordnung">
-          <Empty>Die Mail-Anbindung folgt in Stufe 2.</Empty>
+        <Card
+          title="Neue Mails ohne Zuordnung"
+          aside={<Link href="/posteingang" className="text-[13px] text-muted">Posteingang</Link>}
+        >
+          {data.mails.length === 0 && <Empty>Keine offenen Mails.</Empty>}
+          {data.mails.map(({ mail }) => (
+            <Row key={mail.id} href="/posteingang">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg text-[13px] font-semibold text-muted">
+                {(mail.fromName ?? mail.fromAddress ?? "?").slice(0, 2).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{mail.fromName ?? mail.fromAddress}</p>
+                <p className="truncate text-[13px] text-muted">{mail.subject || "(ohne Betreff)"}</p>
+              </div>
+            </Row>
+          ))}
         </Card>
       </div>
     </div>

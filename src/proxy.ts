@@ -10,5 +10,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|api/auth|_next|favicon.ico|robots.txt).*)"],
+  // api/cron prüft selbst einen geheimen Schlüssel
+  matcher: ["/((?!login|api/auth|api/cron|_next|favicon.ico|robots.txt).*)"],
 };

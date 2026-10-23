@@ -4,16 +4,18 @@ import { useActionState } from "react";
 import { createDealAction } from "@/app/(app)/actions";
 import { btnPrimary, Field, FormError, Input, Select, Textarea } from "./ui";
 
-export function DealForm({ companies, preset, quick, today }: {
+export function DealForm({ companies, preset, quick, today, fromMail }: {
   companies: { id: number; name: string }[];
   preset?: { id: number; name: string } | null;
   quick: boolean;
   today: string;
+  fromMail?: { id: number; subject: string } | null;
 }) {
   const [state, action, pending] = useActionState(createDealAction, undefined);
 
   return (
     <form action={action} className="flex max-w-xl flex-col gap-4 rounded-2xl bg-surface p-6">
+      {fromMail && <input type="hidden" name="mailId" value={fromMail.id} />}
       {quick && <input type="hidden" name="quick" value="1" />}
       {quick && <input type="hidden" name="stage" value="beauftragt" />}
 
@@ -35,7 +37,13 @@ export function DealForm({ companies, preset, quick, today }: {
       </Field>
 
       <Field label={quick ? "Was ist zu tun?" : "Vorgang"}>
-        <Input name="title" required autoFocus={!!preset} placeholder="z. B. Fotos vom neuen Lager" />
+        <Input
+          name="title"
+          required
+          autoFocus={!!preset}
+          defaultValue={fromMail?.subject.replace(/^(AW|WG|RE|FW|Fwd):\s*/i, "")}
+          placeholder="z. B. Fotos vom neuen Lager"
+        />
       </Field>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">

@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lt, lte, max, ne, or, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, companies, contacts, deals, tasks } from "@/db/schema";
+import { activities, companies, contacts, deals, emails, mailSync, tasks } from "@/db/schema";
 import { addDaysIso, todayIso } from "./format";
 
 const dealWithCompany = {
@@ -64,7 +64,7 @@ export async function getDashboard() {
   const today = todayIso();
   const followUpBefore = new Date(`${addDaysIso(today, -10)}T00:00:00Z`);
 
-  const [billing, followUps, todayTasks, [beauftragt], [offers]] = await Promise.all([
+  const [billing, followUps, todayTasks, [beauftragt], [offers], mails] = await Promise.all([
     db
       .select(dealWithCompany)
       .from(deals)
@@ -80,9 +80,10 @@ export async function getDashboard() {
     listTasks({ open: true, dueUntil: today }),
     db.select({ n: count() }).from(deals).where(eq(deals.stage, "beauftragt")),
     db.select({ n: count(), total: sum(deals.amountNet) }).from(deals).where(eq(deals.stage, "angebot")),
+    listInbox("offen").then((rows) => rows.slice(0, 5)),
   ]);
 
-  return { billing, followUps, todayTasks, beauftragt: beauftragt.n, offers };
+  return { billing, followUps, todayTasks, beauftragt: beauftragt.n, offers, mails };
 }
 
 export async function getDeal(id: number) {
@@ -93,11 +94,12 @@ export async function getDeal(id: number) {
     .leftJoin(contacts, eq(contacts.id, deals.contactId))
     .where(eq(deals.id, id));
   if (!row) return null;
-  const [dealTasks, timeline] = await Promise.all([
+  const [dealTasks, timeline, dealEmails] = await Promise.all([
     listTasks({ dealId: id }),
     db.select().from(activities).where(eq(activities.dealId, id)).orderBy(desc(activities.createdAt)),
+    emailsFor({ dealId: id }),
   ]);
-  return { ...row, tasks: dealTasks, timeline };
+  return { ...row, tasks: dealTasks, timeline, emails: dealEmails };
 }
 
 export async function companyOptions() {
@@ -132,13 +134,17 @@ export async function listCompanies(query?: string) {
 export async function getCompany(id: number) {
   const [company] = await db.select().from(companies).where(eq(companies.id, id));
   if (!company) return null;
-  const [companyContacts, companyDeals, timeline, companyTasks, [lastActivity]] = await Promise.all([
+  const [companyContacts, companyDeals, timeline, companyTasks, [lastActivity], companyEmails] = await Promise.all([
     db.select().from(contacts).where(eq(contacts.companyId, id)).orderBy(asc(contacts.lastName)),
     db.select().from(deals).where(eq(deals.companyId, id)).orderBy(desc(deals.createdAt)),
     db.select().from(activities).where(eq(activities.companyId, id)).orderBy(desc(activities.createdAt)).limit(100),
     listTasks({ open: true, companyId: id }),
     db.select({ at: max(activities.createdAt) }).from(activities).where(eq(activities.companyId, id)),
+    emailsFor({ companyId: id }),
   ]);
+  const lastMail = companyEmails[0]?.receivedAt ?? null;
+  const lastContact =
+    lastActivity?.at && lastMail ? (lastActivity.at > lastMail ? lastActivity.at : lastMail) : lastActivity?.at ?? lastMail;
 
   const won = companyDeals.filter((d) => d.number !== null);
   const revenue = companyDeals
@@ -153,13 +159,14 @@ export async function getCompany(id: number) {
     contacts: companyContacts,
     deals: companyDeals,
     timeline,
+    emails: companyEmails,
     tasks: companyTasks,
     stats: {
       requests: companyDeals.length,
       won: won.length,
       revenue,
       compare,
-      lastContact: lastActivity?.at ?? null,
+      lastContact,
     },
   };
 }
@@ -182,6 +189,56 @@ export async function listContacts(query?: string) {
     )
     .orderBy(asc(contacts.lastName))
     .limit(500);
+}
+
+export type InboxRow = Awaited<ReturnType<typeof listInbox>>[number];
+
+export async function listInbox(view: "offen" | "alle" | "ignoriert") {
+  return db
+    .select({ mail: emails, companyName: companies.name })
+    .from(emails)
+    .leftJoin(companies, eq(companies.id, emails.companyId))
+    .where(
+      view === "offen"
+        ? and(eq(emails.status, "neu"), eq(emails.outgoing, false))
+        : view === "ignoriert"
+          ? eq(emails.status, "ignoriert")
+          : undefined,
+    )
+    .orderBy(desc(emails.receivedAt))
+    .limit(200);
+}
+
+export async function getMail(id: number) {
+  const [row] = await db
+    .select({ mail: emails, companyName: companies.name })
+    .from(emails)
+    .leftJoin(companies, eq(companies.id, emails.companyId))
+    .where(eq(emails.id, id));
+  return row ?? null;
+}
+
+export async function mailState() {
+  const [[open], syncs] = await Promise.all([
+    db.select({ n: count() }).from(emails).where(and(eq(emails.status, "neu"), eq(emails.outgoing, false))),
+    db.select().from(mailSync),
+  ]);
+  return { open: open.n, syncs };
+}
+
+export async function emailsFor(filter: { companyId?: number; dealId?: number }) {
+  return db
+    .select()
+    .from(emails)
+    .where(
+      and(
+        filter.companyId ? eq(emails.companyId, filter.companyId) : undefined,
+        filter.dealId ? eq(emails.dealId, filter.dealId) : undefined,
+        ne(emails.status, "ignoriert"),
+      ),
+    )
+    .orderBy(desc(emails.receivedAt))
+    .limit(100);
 }
 
 export async function contactsForCompanies(ids: number[]) {
