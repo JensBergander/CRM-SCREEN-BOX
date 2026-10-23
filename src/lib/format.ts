@@ -58,6 +58,20 @@ export function relativeTime(date: Date): string {
   }).format(date);
 }
 
+// Mailtext lesbar machen: Bildplatzhalter und Link-Anhängsel entfernen, Leerzeilen zusammenfassen
+export function tidyMailText(text: string): string {
+  let t = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\[cid:[^\]]*\]/gi, "")
+    .replace(/<(tel|mailto):[^>]*>/gi, "")
+    .replace(/[ \t ]+$/gm, "");
+  // Outlook setzt oft nach jeder Zeile eine Leerzeile. Ist das überwiegend so, die Leerzeilen weglassen.
+  const lines = t.split("\n");
+  const blankAfterText = lines.filter((l, i) => l && lines[i + 1] === "").length;
+  if (blankAfterText > lines.filter(Boolean).length * 0.6) t = t.replace(/\n\n(?!\n)/g, "\n");
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // Vorschlag für den Ordnernamen: ohne Rechtsform, in Großbuchstaben
 export function suggestFolderName(companyName: string): string {
   return companyName

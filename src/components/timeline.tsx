@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { ArrowRightLeft, ChevronDown, ExternalLink, Mail, MailOpen, MessageSquare, Paperclip, Phone, Search } from "lucide-react";
 import { mailTextAction } from "@/app/(app)/actions";
 import type { Activity, Email } from "@/db/schema";
-import { relativeTime } from "@/lib/format";
+import { relativeTime, tidyMailText } from "@/lib/format";
 import { Empty, FormError } from "./ui";
 
 const ICON = { notiz: MessageSquare, anruf: Phone, phase: ArrowRightLeft, mail: Mail };
@@ -37,7 +37,7 @@ function MailEntry({ mail }: { mail: Email }) {
           {mail.hasAttachments && <Paperclip size={12} className="ml-1 inline" aria-label="mit Anhang" />}
         </p>
         <p className="text-sm font-semibold">{mail.subject || "(ohne Betreff)"}</p>
-        {!open && mail.preview && <p className="mt-1 line-clamp-6 whitespace-pre-line text-[13px] text-muted">{mail.preview}</p>}
+        {!open && mail.preview && <p className="mt-1 line-clamp-6 whitespace-pre-line text-[13px] text-muted">{tidyMailText(mail.preview)}</p>}
         {open && (
           <div className="mt-2 max-h-[480px] overflow-auto whitespace-pre-wrap rounded-lg bg-bg p-3 text-[13px] leading-relaxed">
             {pending || !full ? "Wird geladen …" : "error" in full ? <FormError message={full.error} /> : full.text || "(kein Text)"}

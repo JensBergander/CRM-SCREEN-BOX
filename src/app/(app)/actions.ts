@@ -7,7 +7,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { activities, appState, companies, contacts, deals, emails, LOST_REASONS, mailIgnore, STAGES, tasks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { suggestFolderName, todayIso } from "@/lib/format";
+import { suggestFolderName, tidyMailText, todayIso } from "@/lib/format";
 import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
 import { matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { messageText } from "@/lib/graph";
@@ -275,7 +275,7 @@ export async function mailTextAction(mailId: number): Promise<{ text: string } |
   if (!mail) return { error: "Mail nicht gefunden." };
   try {
     const { unique, full } = await messageText(mail.mailbox, mail.graphId);
-    return { text: unique || full };
+    return { text: tidyMailText(unique || full) };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Mail konnte nicht geladen werden." };
   }
@@ -300,7 +300,7 @@ export async function loadMailForContactAction(mailId: number): Promise<MailForC
     const [company] = match
       ? await db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.id, match.companyId))
       : [];
-    return { text: full, suggestion: { ...suggestion, email: address }, company: company ?? null };
+    return { text: tidyMailText(full), suggestion: { ...suggestion, email: address }, company: company ?? null };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Mail konnte nicht geladen werden." };
   }
