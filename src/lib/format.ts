@@ -75,9 +75,10 @@ export function tidyMailText(text: string): string {
 // Vorschlag für den Ordnernamen: ohne Rechtsform, in Großbuchstaben
 export function suggestFolderName(companyName: string): string {
   return companyName
-    .replace(/\b(GmbH|mbH|AG|KG|OHG|UG|e\.?\s?V\.?|e\.?\s?K\.?|GbR|Co\.?|&|haftungsbeschränkt|Ltd\.?|Inc\.?)\b/gi, " ")
-    .replace(/[()]/g, " ")
+    .replace(/\b(GmbH|mbH|AG|KG|OHG|UG|e\.?\s?V\.?|e\.?\s?K\.?|GbR|Co\.?|haftungsbeschränkt|Ltd\.?|Inc\.?)(?=[\s.,)&]|$)/gi, " ")
+    .replace(/[()&+,]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
+    .replace(/[\s.-]+$/, "")
     .toUpperCase();
 }
