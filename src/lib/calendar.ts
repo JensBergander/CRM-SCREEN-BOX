@@ -20,10 +20,6 @@ function reminderMinutes(startTime: string) {
 
 const crmLink = (dealId: number) => `${process.env.APP_URL ?? "https://crm.screen-box.de"}/vorgaenge/${dealId}`;
 
-function escape(s: string) {
-  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-}
-
 type Context = {
   deal: typeof deals.$inferSelect;
   companyName: string;
@@ -47,21 +43,23 @@ function eventLocation(deal: typeof deals.$inferSelect) {
   };
 }
 
+// Reiner Text mit Leerzeilen und ausgeschriebenen Links: Outlook, Apple Kalender und iPhone
+// zeigen das gleich an (Apple setzt bei HTML-Links die ganze Adresse hinter den Linktext)
 function eventBody(ctx: Context, start: string, end: string, startTime: string) {
   const { deal } = ctx;
-  const lines = [
-    deal.number && `<b>Projekt:</b> ${escape(deal.number)}`,
-    // kurzer Link über die Koordinaten: Apple Kalender zeigt Links als Text mit der ganzen Adresse dahinter
-    deal.location && deal.locationLat !== null && deal.locationLng !== null &&
-      `<b>Drehort:</b> ${escape(deal.location)} · <a href="https://maps.google.com/?q=${deal.locationLat.toFixed(6)},${deal.locationLng.toFixed(6)}">Route in Google Maps</a>`,
-    ctx.contact && `<b>Ansprechpartner:</b> ${escape(ctx.contact.name)}${ctx.contact.phone ? `, ${escape(ctx.contact.phone)}` : ""}${ctx.contact.email ? `, ${escape(ctx.contact.email)}` : ""}`,
-    deal.notes && `<b>Notiz:</b> ${escape(deal.notes).replace(/\n/g, "<br>")}`,
-    `<a href="${crmLink(deal.id)}">Vorgang im CRM öffnen</a>`,
-    `<span style="color:#6e6e73">Bitte Termine im CRM ändern, nicht hier. Änderungen in Outlook werden überschrieben.</span>`,
-  ].filter(Boolean);
+  const blocks = [
+    deal.number && `Projekt ${deal.number}`,
+    deal.location &&
+      ["Drehort", deal.location, deal.locationLat !== null && deal.locationLng !== null && `Route: https://maps.google.com/?q=${deal.locationLat.toFixed(6)},${deal.locationLng.toFixed(6)}`],
+    ctx.contact && ["Ansprechpartner", ctx.contact.name, ctx.contact.phone && `Telefon ${ctx.contact.phone}`, ctx.contact.email],
+    deal.notes && ["Notiz", deal.notes],
+    [`Vorgang im CRM: ${crmLink(deal.id)}`, "Bitte Termine im CRM ändern, nicht hier. Änderungen im Kalender werden überschrieben."],
+  ]
+    .filter(Boolean)
+    .map((b) => (Array.isArray(b) ? b.filter(Boolean).join("\n") : b));
   return {
     subject: `Produktion: ${deal.title} · ${ctx.companyName}`,
-    body: { contentType: "HTML", content: lines.join("<br>") },
+    body: { contentType: "text", content: blocks.join("\n\n") },
     start: { dateTime: start, timeZone: TZ },
     end: { dateTime: end, timeZone: TZ },
     location: eventLocation(deal),
