@@ -13,6 +13,7 @@ import {
 import type { Company, Deal, LostReason, Stage } from "@/db/schema";
 import { STAGE_LABEL } from "@/lib/labels";
 import { LostDialog } from "./deal-board";
+import { PlanningDialog } from "./planning";
 import { RunningDot } from "./timeline";
 import { btnPrimary, btnQuiet, Field, FormError, Input, Textarea } from "./ui";
 
@@ -32,8 +33,12 @@ const FLOW: Stage[] = ["anfrage", "angebot", "beauftragt", "erledigt", "rechnung
 export function StageControl({ deal, competitors = [] }: { deal: Pick<Deal, "id" | "stage" | "title" | "compareOnly">; competitors?: string[] }) {
   const [pending, startTransition] = useTransition();
   const [lost, setLost] = useState(false);
-  const go = (stage: Stage, l?: { reason: LostReason; note: string; competitor: string }) =>
+  const [plan, setPlan] = useState(false);
+  const go = (stage: Stage, l?: { reason: LostReason; note: string; competitor: string }) => {
     startTransition(() => moveDealAction(deal.id, stage, l));
+    // Beim Beauftragen gleich die Produktion planen
+    if (stage === "beauftragt") setPlan(true);
+  };
   const index = FLOW.indexOf(deal.stage);
   const next = index >= 0 && index < FLOW.length - 1 ? FLOW[index + 1] : null;
 
@@ -72,6 +77,7 @@ export function StageControl({ deal, competitors = [] }: { deal: Pick<Deal, "id"
           </button>
         )}
       </div>
+      {plan && <PlanningDialog dealId={deal.id} title={deal.title} onClose={() => setPlan(false)} />}
       {lost && (
         <LostDialog
           deal={deal}

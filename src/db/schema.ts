@@ -119,12 +119,36 @@ export const deals = mysqlTable(
     lostReason: mysqlEnum("lost_reason", LOST_REASONS),
     // wer den Auftrag stattdessen bekommen hat (Firma der Art „wettbewerber“)
     competitorId: int("competitor_id"),
+    // Planung: Drehort, Postproduktion (nur Daten), Produktion durchgehend im Kalender blocken
+    location: varchar("location", { length: 500 }),
+    postStart: date("post_start", { mode: "string" }),
+    postEnd: date("post_end", { mode: "string" }),
+    blockContinuous: boolean("block_continuous").notNull().default(false),
+    // ein durchgehender Kalendertermin (bei blockContinuous)
+    calendarEventId: varchar("calendar_event_id", { length: 255 }),
+    calendarError: text("calendar_error"),
     lostNote: text("lost_note"),
     notes: text("notes"),
     stageChangedAt: timestamp("stage_changed_at").notNull().defaultNow(),
     ...timestamps,
   },
   (t) => [index("deals_company_idx").on(t.companyId), index("deals_stage_idx").on(t.stage)],
+);
+
+// Produktionstage eines Vorgangs; jeder Tag hat (ohne „durchgehend blocken“) seinen eigenen Kalendertermin
+export const productionDays = mysqlTable(
+  "production_days",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    dealId: int("deal_id")
+      .notNull()
+      .references(() => deals.id, { onDelete: "cascade" }),
+    day: date("day", { mode: "string" }).notNull(),
+    startTime: varchar("start_time", { length: 5 }).notNull(),
+    endTime: varchar("end_time", { length: 5 }).notNull(),
+    eventId: varchar("event_id", { length: 255 }),
+  },
+  (t) => [index("production_days_deal_idx").on(t.dealId), index("production_days_day_idx").on(t.day)],
 );
 
 export const tasks = mysqlTable(
@@ -256,4 +280,5 @@ export type Company = typeof companies.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type Deal = typeof deals.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
+export type ProductionDay = typeof productionDays.$inferSelect;
 export type Activity = typeof activities.$inferSelect;

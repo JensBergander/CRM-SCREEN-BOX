@@ -78,6 +78,13 @@
       "when": 1792780956676,
       "tag": "0010_rating_competitor",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1792785570538,
+      "tag": "0011_production_planning",
+      "breakpoints": true
     }
   ]
 }

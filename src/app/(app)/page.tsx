@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { ageLabel, daysSince, euro, todayIso } from "@/lib/format";
+import { addDaysIso, ageLabel, daysSince, euro, todayIso } from "@/lib/format";
+import { upcomingProductionDays } from "@/lib/schedule";
 import { getDashboard } from "@/lib/queries";
 import { TaskList } from "@/components/task-list";
 import { Badge, btnQuiet, Card, Empty, PageHeader, Row } from "@/components/ui";
@@ -16,7 +17,7 @@ function greeting(date: Date) {
 }
 
 export default async function StartPage() {
-  const [user, data] = await Promise.all([getCurrentUser(), getDashboard()]);
+  const [user, data, upcoming] = await Promise.all([getCurrentUser(), getDashboard(), upcomingProductionDays(todayIso(), addDaysIso(todayIso(), 14))]);
   const now = new Date();
   const today = new Intl.DateTimeFormat("de-DE", {
     weekday: "long",
@@ -85,6 +86,24 @@ export default async function StartPage() {
               </div>
             );
           })}
+        </Card>
+
+        <Card title="Nächste Produktionstage" aside={<Link href="/planung" className="text-[13px] text-muted">Planung</Link>}>
+          {upcoming.length === 0 && <Empty>In den nächsten 14 Tagen ist keine Produktion geplant.</Empty>}
+          {upcoming.map((p, i) => (
+            <Row key={`${p.dealId}-${p.day}-${i}`} href={`/vorgaenge/${p.dealId}`}>
+              <div className="w-14 shrink-0 text-center">
+                <p className="text-[11px] font-semibold uppercase text-muted">
+                  {new Intl.DateTimeFormat("de-DE", { weekday: "short", timeZone: "UTC" }).format(new Date(`${p.day}T12:00:00Z`))}
+                </p>
+                <p className="text-lg font-bold leading-tight">{p.day.slice(8)}.{p.day.slice(5, 7)}.</p>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{p.company} · {p.title}</p>
+                <p className="truncate text-[13px] text-muted">{p.startTime}–{p.endTime}{p.location && ` · ${p.location}`}</p>
+              </div>
+            </Row>
+          ))}
         </Card>
 
         <Card title="Heute zu tun" aside={<Link href="/aufgaben" className="text-[13px] text-muted">Alle Aufgaben</Link>}>

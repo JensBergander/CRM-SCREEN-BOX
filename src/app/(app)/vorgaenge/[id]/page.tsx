@@ -7,7 +7,8 @@ import { folderLink } from "@/lib/folders";
 import { companyName, competitorNames, getDeal, vouchersForDeal } from "@/lib/queries";
 import { RatingHint } from "@/components/rating-hint";
 import { InlineTitle } from "@/components/inline-title";
-import { renameDealAction } from "../../actions";
+import { loadPlanningAction, renameDealAction } from "../../actions";
+import { AutoPlanningDialog, PlanningForm } from "@/components/planning";
 import { LexwareVouchers } from "@/components/lexware-vouchers";
 import { QuotationDraft } from "@/components/quotation-draft";
 import { ActivityForm, CompetitorForm, EditDealForm, StageControl, TaskForm } from "@/components/forms";
@@ -15,18 +16,21 @@ import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
 import { Badge, btnSecondary, Card } from "@/components/ui";
 
-export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">) {
+export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
   const { id } = await params;
+  const { planen } = await searchParams;
   const data = await getDeal(Number(id));
   if (!data) notFound();
   const { deal } = data;
   const vouchers = await vouchersForDeal(deal);
+  const planning = await loadPlanningAction(deal.id);
   const competitors = await competitorNames();
   const competitor = deal.competitorId ? await companyName(deal.competitorId) : null;
   const folder = data.folderName ? await folderLink(deal, data.folderName) : null;
 
   return (
     <div className="flex flex-col gap-6">
+      {planen === "1" && <AutoPlanningDialog dealId={deal.id} title={`${data.companyName} · ${deal.title}`} />}
       {!["verloren", "bezahlt"].includes(deal.stage) && <RatingHint companyId={deal.companyId} />}
       <header className="flex flex-col gap-2">
         <p className="text-[13px] text-muted">
@@ -86,6 +90,13 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
           </Card>
         </div>
         <div className="flex flex-col gap-5">
+          {planning && ["beauftragt", "erledigt", "rechnung", "bezahlt"].includes(deal.stage) && (
+            <Card title="Termine">
+              <div className="px-5 pb-5 pt-2">
+                <PlanningForm key={JSON.stringify(planning)} dealId={deal.id} initial={planning} />
+              </div>
+            </Card>
+          )}
           <Card title="Lexware">
             <LexwareVouchers dealId={deal.id} {...vouchers} />
             {vouchers.hasLexware && !deal.offerNumber && ["anfrage", "angebot"].includes(deal.stage) && (

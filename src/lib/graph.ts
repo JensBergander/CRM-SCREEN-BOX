@@ -75,6 +75,27 @@ export async function graphPost(path: string, body: unknown): Promise<void> {
   }
 }
 
+// Schreibende Anfrage mit Antwort (z. B. angelegter Kalendertermin); DELETE auf bereits Gelöschtes ist kein Fehler
+export async function graphSend<T = unknown>(method: "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T | null> {
+  const response = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${await getToken()}`, "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (method === "DELETE" && response.status === 404) return null;
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new GraphError(
+      response.status,
+      response.status === 403
+        ? `Keine Berechtigung für den Kalender (403). Ist Calendars.ReadWrite für die App freigegeben? ${data?.error?.message ?? ""}`
+        : `Microsoft Graph: ${data?.error?.message ?? response.statusText}`,
+    );
+  }
+  return response.status === 204 ? null : ((await response.json()) as T);
+}
+
 // Volltext einer Mail: unique = nur die neue Nachricht ohne zitierten Verlauf
 export async function messageText(mailbox: string, graphId: string): Promise<{ full: string; unique: string }> {
   const data = await graphGet<{ body?: { content?: string }; uniqueBody?: { content?: string } }>(

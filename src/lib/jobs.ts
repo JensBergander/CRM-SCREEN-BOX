@@ -1,5 +1,6 @@
 import "server-only";
 import { sendAutoReplies } from "./autoreply";
+import { retryCalendarSync } from "./calendar";
 import { sendDigestIfDue } from "./digest";
 import { cleanupPdfs, reconcileDeals, syncVouchers } from "./lexware-sync";
 import { mailboxes } from "./graph";
@@ -24,6 +25,9 @@ export async function runJobs() {
     await step("abgleich", reconcileDeals);
     await step("pdf-aufraeumen", cleanupPdfs);
   }
-  if (mailboxes().length) await step("montagsmail", sendDigestIfDue);
+  if (mailboxes().length) {
+    await step("montagsmail", sendDigestIfDue);
+    await step("kalender", retryCalendarSync);
+  }
   return result;
 }

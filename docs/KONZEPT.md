@@ -107,6 +107,14 @@ Ein kleiner Helfer auf dem Mac legt auf Knopfdruck aus der App die Ordner an. Zi
 
 Die Vorlage ist in der App einstellbar. Bestehende Ordner werden nie verändert.
 
+## Produktionsplanung und Kalender
+
+- Beim Verschieben auf „Beauftragt“ (und nach einem Schnellauftrag) öffnet sich „Produktion planen“, mit „Später“ überspringbar; danach Karte „Termine“ im Vorgang.
+- Produktion: Drehort (vorausgefüllt mit der Firmenadresse), pro Tag Datum und Uhrzeit, „+“ für den Folgetag, optional „durchgehend blocken“.
+- Postproduktion: Start- und Zieltag ohne Uhrzeit, Vorschlag nächster Arbeitstag nach dem letzten Drehtag. Nicht im Kalender.
+- Kalender von office@ (Microsoft Graph, Exchange-RBAC „Application Calendars.ReadWrite“ nur für office@): je Drehtag ein Termin bzw. ein durchgehender, Erinnerung am Vortag 18 Uhr, als „Gebucht“. Das CRM führt; Verlieren oder Entfernen löscht Termine. Fehlgeschlagene Abgleiche wiederholt der Cronjob.
+- Projektdatum folgt dem ersten Drehtag. Seite „Planung“ (Zeitleiste über 8 Wochen) und „Nächste Produktionstage“ auf der Startseite.
+
 ## Kundeneinschätzung und Wettbewerber
 
 - Firmen haben eine Art: Kunde, Dienstleister oder Wettbewerber.

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  CalendarRange,
   Building2,
   CheckSquare,
   Columns3,
@@ -20,6 +21,7 @@ import {
 const NAV = [
   { href: "/", label: "Start", icon: Home },
   { href: "/vorgaenge", label: "Vorgänge", icon: Columns3 },
+  { href: "/planung", label: "Planung", icon: CalendarRange },
   { href: "/firmen", label: "Firmen", icon: Building2 },
   { href: "/kontakte", label: "Kontakte", icon: Users },
   { href: "/dienstleister", label: "Dienstleister", icon: Handshake },

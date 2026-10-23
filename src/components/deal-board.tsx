@@ -7,6 +7,7 @@ import { LOST_REASONS, type LostReason, type Stage } from "@/db/schema";
 import { daysSince, euro } from "@/lib/format";
 import { BOARD_STAGES, LOST_REASON_LABEL, STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import type { DealRow } from "@/lib/queries";
+import { PlanningDialog } from "./planning";
 import { Badge, btnPrimary, btnQuiet, Field, Input, Select, Textarea } from "./ui";
 
 // Ab wann eine Karte in ihrer Phase als „hängt“ markiert wird (Tage)
@@ -16,6 +17,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
   const [, startTransition] = useTransition();
   const [dragging, setDragging] = useState<number | null>(null);
   const [lostFor, setLostFor] = useState<DealRow | null>(null);
+  const [planFor, setPlanFor] = useState<DealRow | null>(null);
   const [optimistic, move] = useOptimistic(deals, (state, { id, stage }: { id: number; stage: Stage }) =>
     state.map((d) => (d.id === id ? { ...d, stage, stageChangedAt: new Date() } : d)),
   );
@@ -32,6 +34,8 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
       move({ id: deal.id, stage });
       await moveDealAction(deal.id, stage);
     });
+    // Beim Beauftragen gleich die Produktion planen
+    if (stage === "beauftragt") setPlanFor(deal);
   }
 
   function confirmLost(reason: LostReason, note: string, competitor: string) {
@@ -109,6 +113,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
       </div>
 
       {lostFor && <LostDialog deal={lostFor} competitors={competitors} onCancel={() => setLostFor(null)} onConfirm={confirmLost} />}
+      {planFor && <PlanningDialog dealId={planFor.id} title={`${planFor.companyName} · ${planFor.title}`} onClose={() => setPlanFor(null)} />}
     </>
   );
 }

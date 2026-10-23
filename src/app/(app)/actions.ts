@@ -1,16 +1,17 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { activities, appState, companies, contacts, deals, emails, LOST_REASONS, mailIgnore, STAGES, tasks } from "@/db/schema";
+import { activities, appState, companies, contacts, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, tidyMailText, todayIso } from "@/lib/format";
 import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
 import { matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
-import { messageText } from "@/lib/graph";
+import { graphSend, mailboxes, messageText } from "@/lib/graph";
+import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
 import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
 import { linkVoucher, quickReconcile, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
@@ -101,7 +102,8 @@ export async function createDealAction(_: FormState, form: FormData): Promise<Fo
   if (activityId) {
     await db.update(activities).set({ dealId: id }).where(and(eq(activities.id, activityId), eq(activities.companyId, companyId)));
   }
-  redirect(quick ? "/" : `/vorgaenge/${id}`);
+  // Schnellauftrag ist sofort beauftragt: gleich die Produktion planen
+  redirect(quick ? `/vorgaenge/${id}?planen=1` : `/vorgaenge/${id}`);
 }
 
 export async function updateDealAction(dealId: number, _: FormState, form: FormData): Promise<FormState> {
@@ -138,6 +140,7 @@ export async function moveDealAction(
   if (stage === "verloren" && lost?.competitor?.trim()) {
     await db.update(deals).set({ competitorId: await resolveCompetitor(lost.competitor) }).where(eq(deals.id, dealId));
   }
+  if (stage === "verloren") await syncDealCalendar(dealId);
   // Gleich in Lexware nach passendem Angebot bzw. Rechnung schauen, statt auf den nächsten Cronjob zu warten
   if (["angebot", "beauftragt", "erledigt"].includes(stage)) {
     try {
@@ -196,6 +199,97 @@ export async function renameCompanyAction(companyId: number, name: string): Prom
   return {};
 }
 
+export type Planning = {
+  location: string;
+  days: { id?: number; day: string; startTime: string; endTime: string }[];
+  postStart: string | null;
+  postEnd: string | null;
+  blockContinuous: boolean;
+  calendarError?: string | null;
+};
+
+// Planung eines Vorgangs; der Drehort ist anfangs die Firmenadresse
+export async function loadPlanningAction(dealId: number): Promise<Planning | null> {
+  await getCurrentUser();
+  const [row] = await db
+    .select({ deal: deals, street: companies.street, zip: companies.zip, city: companies.city })
+    .from(deals)
+    .innerJoin(companies, eq(companies.id, deals.companyId))
+    .where(eq(deals.id, dealId));
+  if (!row) return null;
+  const days = await db.select().from(productionDays).where(eq(productionDays.dealId, dealId)).orderBy(asc(productionDays.day), asc(productionDays.startTime));
+  return {
+    location: row.deal.location ?? [row.street, [row.zip, row.city].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+    days: days.map((d) => ({ id: d.id, day: d.day, startTime: d.startTime, endTime: d.endTime })),
+    postStart: row.deal.postStart,
+    postEnd: row.deal.postEnd,
+    blockContinuous: row.deal.blockContinuous,
+    calendarError: row.deal.calendarError,
+  };
+}
+
+const planningSchema = z.object({
+  location: z.string().trim().max(500),
+  days: z
+    .array(
+      z
+        .object({
+          id: z.number().optional(),
+          day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Bitte für jeden Produktionstag ein Datum angeben."),
+          startTime: z.string().regex(/^\d{2}:\d{2}$/, "Bitte Uhrzeiten angeben."),
+          endTime: z.string().regex(/^\d{2}:\d{2}$/, "Bitte Uhrzeiten angeben."),
+        })
+        .refine((d) => d.endTime > d.startTime, "Das Ende muss nach dem Beginn liegen."),
+    )
+    .max(60),
+  postStart: z.string().nullable(),
+  postEnd: z.string().nullable(),
+  blockContinuous: z.boolean(),
+});
+
+export async function savePlanningAction(dealId: number, input: Planning): Promise<{ error?: string; calendarError?: string | null }> {
+  await getCurrentUser();
+  const parsed = planningSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const data = parsed.data;
+  if (data.postStart && data.postEnd && data.postEnd < data.postStart) return { error: "Der Zieltag der Postproduktion liegt vor dem Starttag." };
+
+  const existing = await db.select().from(productionDays).where(eq(productionDays.dealId, dealId));
+  const keep = new Set(data.days.map((d) => d.id).filter(Boolean));
+  // Entfernte Tage: Termin löschen, dann Zeile löschen
+  for (const old of existing.filter((e) => !keep.has(e.id))) {
+    if (old.eventId) {
+      try {
+        await graphSend("DELETE", `/users/${encodeURIComponent(mailboxes()[0])}/events/${encodeURIComponent(old.eventId)}`);
+      } catch (e) {
+        console.error("Kalendertermin konnte nicht gelöscht werden:", e);
+      }
+    }
+    await db.delete(productionDays).where(eq(productionDays.id, old.id));
+  }
+  for (const d of data.days) {
+    const values = { day: d.day, startTime: d.startTime, endTime: d.endTime };
+    if (d.id && existing.some((e) => e.id === d.id)) await db.update(productionDays).set(values).where(eq(productionDays.id, d.id));
+    else await db.insert(productionDays).values({ ...values, dealId });
+  }
+  const firstDay = [...data.days].sort((a, b) => a.day.localeCompare(b.day))[0]?.day;
+  await db
+    .update(deals)
+    .set({
+      location: data.location || null,
+      postStart: data.postStart || null,
+      postEnd: data.postEnd || null,
+      blockContinuous: data.blockContinuous,
+      // Projektdatum (und Ordnername) folgen dem ersten Produktionstag
+      ...(firstDay && { projectDate: firstDay }),
+    })
+    .where(eq(deals.id, dealId));
+  await syncDealCalendar(dealId);
+  const [after] = await db.select({ e: deals.calendarError }).from(deals).where(eq(deals.id, dealId));
+  refresh();
+  return { calendarError: after?.e ?? null };
+}
+
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)
 export async function advanceDealAction(dealId: number, stage: "angebot" | "beauftragt" | "erledigt" | "rechnung" | "bezahlt") {
   await moveDealAction(dealId, stage);
@@ -203,6 +297,7 @@ export async function advanceDealAction(dealId: number, stage: "angebot" | "beau
 
 export async function deleteDealAction(dealId: number) {
   await getCurrentUser();
+  await deleteDealEvents(dealId);
   await db.delete(deals).where(eq(deals.id, dealId));
   redirect("/vorgaenge");
 }
