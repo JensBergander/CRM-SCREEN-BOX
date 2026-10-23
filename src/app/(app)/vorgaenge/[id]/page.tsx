@@ -2,12 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_LABEL } from "@/lib/labels";
+import { FolderPlus } from "lucide-react";
+import { folderLink } from "@/lib/folders";
 import { getDeal, vouchersForDeal } from "@/lib/queries";
 import { LexwareVouchers } from "@/components/lexware-vouchers";
 import { ActivityForm, EditDealForm, StageControl, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
-import { Badge, Card } from "@/components/ui";
+import { Badge, btnSecondary, Card } from "@/components/ui";
 
 export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">) {
   const { id } = await params;
@@ -15,6 +17,7 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
   if (!data) notFound();
   const { deal } = data;
   const vouchers = await vouchersForDeal(deal);
+  const folder = data.folderName ? await folderLink(deal, data.folderName) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,8 +41,21 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
         </div>
       </header>
 
-      <Card className="px-5 py-5">
+      <Card className="flex flex-wrap items-start justify-between gap-4 px-5 py-5">
         <StageControl deal={deal} />
+        {folder ? (
+          <div className="flex flex-col items-start gap-1">
+            <a href={folder.href} className={btnSecondary}>
+              <FolderPlus size={16} aria-hidden="true" />
+              Projektordner anlegen
+            </a>
+            <span className="text-xs text-muted">{data.folderName}/{folder.project}</span>
+          </div>
+        ) : (
+          <Link href={`/firmen/${deal.companyId}`} className="text-[13px] text-muted underline">
+            Für Projektordner zuerst den Ordnernamen der Firma eintragen
+          </Link>
+        )}
       </Card>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(420px,100%),1fr))] items-start gap-5">

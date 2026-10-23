@@ -88,7 +88,7 @@ export async function getDashboard() {
 
 export async function getDeal(id: number) {
   const [row] = await db
-    .select({ deal: deals, companyName: companies.name, contact: contacts })
+    .select({ deal: deals, companyName: companies.name, folderName: companies.folderName, contact: contacts })
     .from(deals)
     .innerJoin(companies, eq(companies.id, deals.companyId))
     .leftJoin(contacts, eq(contacts.id, deals.contactId))

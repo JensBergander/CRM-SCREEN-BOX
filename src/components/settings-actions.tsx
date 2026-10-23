@@ -1,8 +1,28 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { sendDigestAction, syncLexwareAction } from "@/app/(app)/actions";
-import { btnQuiet, FormError } from "./ui";
+import { useActionState, useState, useTransition } from "react";
+import { saveFolderTemplateAction, sendDigestAction, syncLexwareAction } from "@/app/(app)/actions";
+import { btnPrimary, btnQuiet, FormError, Textarea } from "./ui";
+
+export function FolderTemplateForm({ template }: { template: string }) {
+  const [state, action, pending] = useActionState(saveFolderTemplateAction, undefined);
+  return (
+    <form action={action} className="flex flex-col gap-3 px-5 pb-5">
+      <p className="text-sm text-muted">
+        Eine Zeile pro Ordner, Unterordner mit „/“. Gilt für neue Projektordner; bestehende Ordner werden nie verändert.
+        Für den Knopf „Projektordner anlegen“ muss auf dem Mac der Helfer „CRM Ordner“ installiert sein
+        (<code>tools/ordner-helfer/install.sh</code>).
+      </p>
+      <label className="sr-only" htmlFor="template">Ordnervorlage</label>
+      <Textarea id="template" name="template" rows={14} defaultValue={template} className="font-mono text-[13px]" />
+      <FormError message={state?.error} />
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Vorlage speichern"}</button>
+        {state && !state.error && !pending && <span className="text-sm text-muted">Gespeichert</span>}
+      </div>
+    </form>
+  );
+}
 
 export function LexwareSyncButton() {
   const [pending, startTransition] = useTransition();

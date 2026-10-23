@@ -5,7 +5,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { activities, companies, contacts, deals, emails, LOST_REASONS, mailIgnore, STAGES, tasks } from "@/db/schema";
+import { activities, appState, companies, contacts, deals, emails, LOST_REASONS, mailIgnore, STAGES, tasks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, todayIso } from "@/lib/format";
 import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
@@ -344,6 +344,18 @@ export async function sendDigestAction(): Promise<{ message: string } | { error:
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Versand fehlgeschlagen" };
   }
+}
+
+export async function saveFolderTemplateAction(_: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const value = (text(form, "template") ?? "")
+    .split("\n")
+    .map((l) => l.trim().replace(/^\/+|\/+$/g, ""))
+    .filter((l) => l && !l.split("/").some((p) => p.trim() === ".." || p.trim() === "."))
+    .join("\n");
+  await db.insert(appState).values({ key: "folder_template", value }).onDuplicateKeyUpdate({ set: { value } });
+  refresh();
+  return {};
 }
 
 export async function importLexwareAction(): Promise<ImportResult | { error: string }> {
