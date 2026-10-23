@@ -8,6 +8,12 @@ import type { NextConfig } from "next";
 // package.json) und ohne zusätzliche Build-Worker. Ohne diese Grenzen bricht
 // der Build ab oder hängt und blockiert das ganze Hosting-Konto.
 const nextConfig: NextConfig = {
+  // Hostinger startet die App aus dem Standalone-Paket. Die Migrationen werden
+  // nur zur Laufzeit gelesen und müssen deshalb ausdrücklich mitkopiert werden.
+  output: "standalone",
+  outputFileTracingIncludes: {
+    "/*": ["./drizzle/**/*"],
+  },
   experimental: {
     cpus: 1,
     webpackBuildWorker: false,

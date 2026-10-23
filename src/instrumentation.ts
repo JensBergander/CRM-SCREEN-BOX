@@ -18,6 +18,9 @@ export async function register() {
     await migrate(drizzle(connection), {
       migrationsFolder: path.join(process.cwd(), "drizzle"),
     });
+  } catch (error) {
+    // Nicht den ganzen Server blockieren: Login und Fehlermeldungen sollen erreichbar bleiben.
+    console.error("Datenbank-Migration fehlgeschlagen:", error);
   } finally {
     await connection.end();
   }
