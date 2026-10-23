@@ -193,17 +193,30 @@ export async function listContacts(query?: string) {
 
 export type InboxRow = Awaited<ReturnType<typeof listInbox>>[number];
 
-export async function listInbox(view: "offen" | "alle" | "ignoriert") {
+export async function listInbox(view: "offen" | "alle" | "ignoriert", query?: string) {
+  const q = query?.trim();
   return db
     .select({ mail: emails, companyName: companies.name })
     .from(emails)
     .leftJoin(companies, eq(companies.id, emails.companyId))
     .where(
-      view === "offen"
-        ? and(eq(emails.status, "neu"), eq(emails.outgoing, false))
-        : view === "ignoriert"
-          ? eq(emails.status, "ignoriert")
+      and(
+        view === "offen"
+          ? and(eq(emails.status, "neu"), eq(emails.outgoing, false))
+          : view === "ignoriert"
+            ? eq(emails.status, "ignoriert")
+            : undefined,
+        q
+          ? or(
+              like(emails.subject, `%${q}%`),
+              like(emails.fromAddress, `%${q}%`),
+              like(emails.fromName, `%${q}%`),
+              like(emails.toAddresses, `%${q}%`),
+              like(emails.preview, `%${q}%`),
+              like(companies.name, `%${q}%`),
+            )
           : undefined,
+      ),
     )
     .orderBy(desc(emails.receivedAt))
     .limit(200);
