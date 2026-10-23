@@ -5,7 +5,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { activities, companies, contacts, deals, emails, LOST_REASONS, STAGES, tasks } from "@/db/schema";
+import { activities, companies, contacts, deals, emails, LOST_REASONS, mailIgnore, STAGES, tasks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, todayIso } from "@/lib/format";
 import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
@@ -279,6 +279,24 @@ export async function assignMailAction(mailId: number, _: FormState, form: FormD
 export async function ignoreMailAction(mailId: number) {
   await getCurrentUser();
   await db.update(emails).set({ status: "ignoriert" }).where(eq(emails.id, mailId));
+  refresh();
+}
+
+// Absender künftig ignorieren: bei Firmen-Domains die ganze Domain, sonst nur die Adresse
+export async function ignoreSenderAction(mailId: number) {
+  await getCurrentUser();
+  const [mail] = await db.select().from(emails).where(eq(emails.id, mailId));
+  if (!mail?.fromAddress) return;
+  const pattern = domainOf(mail.fromAddress) ?? mail.fromAddress.toLowerCase();
+  await db.insert(mailIgnore).values({ pattern }).onDuplicateKeyUpdate({ set: { pattern } });
+  await db.update(emails).set({ status: "ignoriert" }).where(eq(emails.id, mailId));
+  await rematchOpenMails();
+  refresh();
+}
+
+export async function removeIgnoreAction(id: number) {
+  await getCurrentUser();
+  await db.delete(mailIgnore).where(eq(mailIgnore.id, id));
   refresh();
 }
 

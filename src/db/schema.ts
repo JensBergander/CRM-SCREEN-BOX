@@ -175,6 +175,13 @@ export const emails = mysqlTable(
   ],
 );
 
+// Absender (ganze Adresse oder Domain), deren Mails automatisch ignoriert werden
+export const mailIgnore = mysqlTable("mail_ignore", {
+  id: int("id").autoincrement().primaryKey(),
+  pattern: varchar("pattern", { length: 255 }).notNull().unique(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Stand des Abrufs je Postfach
 export const mailSync = mysqlTable("mail_sync", {
   mailbox: varchar("mailbox", { length: 120 }).primaryKey(),

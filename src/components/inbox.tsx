@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useActionState, useState, useTransition } from "react";
-import { CheckSquare, ExternalLink, FolderPlus, Link2, Paperclip, RefreshCw, X } from "lucide-react";
-import { assignMailAction, ignoreMailAction, syncMailAction, taskFromMailAction } from "@/app/(app)/actions";
+import { BellOff, CheckSquare, ExternalLink, FolderPlus, Link2, Paperclip, RefreshCw, X } from "lucide-react";
+import { assignMailAction, ignoreMailAction, ignoreSenderAction, syncMailAction, taskFromMailAction } from "@/app/(app)/actions";
 import { relativeTime } from "@/lib/format";
 import type { InboxRow } from "@/lib/queries";
 import type { SyncResult } from "@/lib/mail";
@@ -76,7 +76,8 @@ export function InboxList({ rows, companies }: { rows: InboxRow[]; companies: { 
             <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
               <div className="min-w-0 flex-[1_1_380px]">
                 <p className="text-xs text-muted">
-                  {m.outgoing ? `an ${m.toAddresses}` : `${m.fromName ?? ""} <${m.fromAddress}>`} · {relativeTime(m.receivedAt)} · {m.mailbox}
+                  {m.outgoing ? `an ${m.toAddresses}` : `${m.fromName ?? ""} <${m.fromAddress}> an ${m.toAddresses?.split(",")[0] ?? m.mailbox}`} ·{" "}
+                  {relativeTime(m.receivedAt)}
                   {m.hasAttachments && <Paperclip size={12} className="ml-1 inline" aria-label="mit Anhang" />}
                 </p>
                 <p className="mt-0.5 text-sm font-semibold">{m.subject || "(ohne Betreff)"}</p>
@@ -105,9 +106,19 @@ export function InboxList({ rows, companies }: { rows: InboxRow[]; companies: { 
                   <FolderPlus size={14} aria-hidden="true" /> Vorgang daraus
                 </Link>
                 {m.status === "neu" && (
-                  <button type="button" onClick={() => startTransition(() => ignoreMailAction(m.id))} className={btnQuiet} aria-label="Ignorieren">
-                    <X size={14} aria-hidden="true" /> Ignorieren
-                  </button>
+                  <>
+                    <button type="button" onClick={() => startTransition(() => ignoreMailAction(m.id))} className={btnQuiet}>
+                      <X size={14} aria-hidden="true" /> Ignorieren
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startTransition(() => ignoreSenderAction(m.id))}
+                      className={btnQuiet}
+                      title={`Alle Mails von ${m.fromAddress?.split("@")[1]} künftig ignorieren (bei Gmail, GMX usw. nur diese Adresse)`}
+                    >
+                      <BellOff size={14} aria-hidden="true" /> Absender immer ignorieren
+                    </button>
+                  </>
                 )}
               </div>
             </div>
