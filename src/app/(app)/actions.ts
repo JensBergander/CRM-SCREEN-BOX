@@ -178,6 +178,24 @@ export async function setRatingAction(companyId: number, rating: number | null, 
   refresh();
 }
 
+export async function renameDealAction(dealId: number, title: string): Promise<{ error?: string }> {
+  await getCurrentUser();
+  const clean = title.trim().slice(0, 255);
+  if (!clean) return { error: "Der Name darf nicht leer sein." };
+  await db.update(deals).set({ title: clean }).where(eq(deals.id, dealId));
+  refresh();
+  return {};
+}
+
+export async function renameCompanyAction(companyId: number, name: string): Promise<{ error?: string }> {
+  await getCurrentUser();
+  const clean = name.trim().slice(0, 255);
+  if (!clean) return { error: "Der Name darf nicht leer sein." };
+  await db.update(companies).set({ name: clean }).where(eq(companies.id, companyId));
+  refresh();
+  return {};
+}
+
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)
 export async function advanceDealAction(dealId: number, stage: "angebot" | "beauftragt" | "erledigt" | "rechnung" | "bezahlt") {
   await moveDealAction(dealId, stage);

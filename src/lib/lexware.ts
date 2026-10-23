@@ -91,6 +91,8 @@ export async function importLexwareCustomers(): Promise<ImportResult> {
           .update(companies)
           .set({
             ...values,
+            // Den Namen im CRM nicht überschreiben, er kann bewusst geändert worden sein
+            name: existing.name,
             emailDomain: existing.emailDomain ?? emailDomain,
             phone: existing.phone ?? phones[0] ?? null,
             email: existing.email ?? emails[0] ?? null,

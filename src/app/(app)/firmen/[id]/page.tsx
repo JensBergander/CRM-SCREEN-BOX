@@ -5,6 +5,8 @@ import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import { MIN_OFFERS, ratingFor } from "@/lib/rating";
 import { AssessmentCard } from "@/components/rating";
+import { InlineTitle } from "@/components/inline-title";
+import { renameCompanyAction } from "../../actions";
 import { companyName, dealsWonBy, getCompany } from "@/lib/queries";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
@@ -41,7 +43,9 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
               .filter(Boolean)
               .join(" · ") || "Firma"}
           </p>
-          <h1 className="mt-1 text-[28px] font-bold tracking-tight">{company.name}</h1>
+          <div className="mt-1">
+            <InlineTitle value={company.name} label="Firmenname" onSave={renameCompanyAction.bind(null, company.id)} />
+          </div>
           {company.kind === "dienstleister" && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               <Link href="/dienstleister" className="rounded-md bg-line-soft px-2 py-0.5 text-[11px] font-semibold">Dienstleister</Link>
@@ -91,7 +95,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           </span>
         </summary>
         <div className="border-t border-line-soft pt-2">
-          <EditCompanyForm company={company} tagOptions={await serviceTagOptions()} />
+          <EditCompanyForm key={company.name} company={company} tagOptions={await serviceTagOptions()} />
         </div>
       </details>
 

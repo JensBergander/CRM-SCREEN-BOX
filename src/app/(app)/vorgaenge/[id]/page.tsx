@@ -6,6 +6,8 @@ import { FolderPlus } from "lucide-react";
 import { folderLink } from "@/lib/folders";
 import { companyName, competitorNames, getDeal, vouchersForDeal } from "@/lib/queries";
 import { RatingHint } from "@/components/rating-hint";
+import { InlineTitle } from "@/components/inline-title";
+import { renameDealAction } from "../../actions";
 import { LexwareVouchers } from "@/components/lexware-vouchers";
 import { QuotationDraft } from "@/components/quotation-draft";
 import { ActivityForm, CompetitorForm, EditDealForm, StageControl, TaskForm } from "@/components/forms";
@@ -32,7 +34,7 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
           {deal.number && <> · Nr. {deal.number}</>}
           {deal.projectDate && <> · {dateDe(deal.projectDate)}</>}
         </p>
-        <h1 className="text-[28px] font-bold tracking-tight">{deal.title}</h1>
+        <InlineTitle value={deal.title} label="Projektname" onSave={renameDealAction.bind(null, deal.id)} />
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={deal.stage === "erledigt" ? "accent" : "neutral"}>
             {STAGE_LABEL[deal.stage]}
@@ -91,7 +93,7 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
             )}
           </Card>
           <Card title="Details">
-            <EditDealForm deal={deal} />
+            <EditDealForm key={deal.title} deal={deal} />
           </Card>
         </div>
       </div>
