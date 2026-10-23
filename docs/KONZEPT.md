@@ -1,0 +1,118 @@
+# CRM SCREEN-BOX – Konzept
+
+Stand: 23.10.2026
+
+Internes CRM für SCREEN-BOX (Foto und Video für Unternehmen). Vorbild ist HubSpot, aber nur mit den Teilen, die im Alltag gebraucht werden. Hauptziele: Kein Auftrag bleibt unabgerechnet, und es wird sichtbar, welche Firmen nur Vergleichsangebote einholen.
+
+## Plattform
+
+- Web-App unter `crm.screen-box.de`, für Suchmaschinen gesperrt (`noindex`, `robots.txt`).
+- Next.js, Tailwind CSS, shadcn/ui. Datenbank MySQL auf Hostinger.
+- Hosting auf dem bestehenden Hostinger-Konto (Node.js-App, Deployment aus diesem GitHub-Repo). Auf dem Konto liegen auch screen-box.de und jetztfotoboxmieten.de; die App bleibt in ihrem eigenen Ordner.
+- Ein Nutzer, mehrere Geräte (Mac, Handy).
+- Login mit Microsoft (Entra ID), nur Konten aus dem eigenen Tenant, die ausdrücklich freigegeben sind.
+- Zugangsdaten (Lexware-Schlüssel, Microsoft-Secret, Datenbank) nur als Umgebungsvariablen auf dem Server, nie im Repo.
+
+## Datenmodell
+
+**Firma**: Name (wie in Lexware), Ordnername für die Projektordner (z. B. `EUROWINGS` für Eurowings GmbH), Adresse, Website, Branche, Lexware-Kontakt-ID, Notiz.
+
+**Kontakt**: Name, E-Mail, Telefon, Position, Firma.
+
+**Vorgang**: eine Anfrage bzw. ein Auftrag einer Firma.
+
+- Interne Nummer `JJJJ-NNN`, vergeben beim Wechsel auf „Beauftragt“. Sie kommt in Lexware ins Referenzfeld von Angebot und Rechnung.
+- Projektname, Projektdatum, Betrag netto, Angebotsnummer, Rechnungsnummer, PDF-Anhänge.
+- Markierung „vermutlich nur Vergleichsangebot“.
+- Phasen:
+
+  ```
+  Anfrage → Angebot verschickt → Beauftragt → Erledigt → Rechnung gestellt → Bezahlt
+                                                      ↘ Abgelehnt / Verloren
+  ```
+
+- Beim Abschluss als „Abgelehnt / Verloren“ ist ein Grund Pflicht (Preis, nur Vergleichsangebot, Timing, Wettbewerber, keine Rückmeldung, Sonstiges) plus Notiz.
+- Schnellauftrag: Vorgang startet direkt bei „Beauftragt“ (Firma, Beschreibung, Datum), gedacht fürs Handy direkt nach einem Anruf.
+
+**Aufgabe**: Titel, Fälligkeit, optional Firma oder Vorgang, erledigt ja/nein. Automatisch angelegt werden:
+
+- Angebot verschickt → nach 10 Tagen „Nachfassen“
+- Vorgang auf „Erledigt“ → sofort „Rechnung stellen“
+- Rechnung gestellt → nach 14 Tagen ohne Zahlung „Zahlung prüfen“
+
+**Aktivität**: Einträge der Zeitleiste (Mail, Notiz, Anruf, Phasenwechsel).
+
+## Ansichten
+
+- **Start**: Heute zu tun, Offen zur Abrechnung, Angebote nachfassen, neue nicht zugeordnete Mails.
+- **Vorgänge**: Kanban-Board nach Phasen (Drag & Drop), umschaltbar auf Tabelle.
+- **Firma**: Kennzahlen oben (Anfragen gesamt, davon beauftragt, Umsatz, Anteil Vergleichsangebote, letzter Kontakt), Stammdaten, Zeitleiste, Vorgänge, Kontakte. Anrufnotiz mit einem Klick, daraus direkt ein Schnellauftrag.
+- **Kontakte**, **Posteingang**, **Aufgaben**, **Auswertungen**.
+- Am Handy: untere Leiste mit „+“ für den Schnellauftrag.
+
+## Design
+
+Angelehnt an screen-box.de: Schrift Inter, Hintergrund `#F5F5F7`, fast schwarze runde Buttons (`#1D1D1F`), Akzent Orange `#E84A14`. Orange nur für Dinge, die Handeln verlangen (überfällig, nicht abgerechnet). Aufbau wie HubSpot mit linker Seitenleiste. Heller und dunkler Modus.
+
+## E-Mail (Microsoft 365)
+
+- Postfächer: `office@screen-box.de` (Benutzerpostfach) und `hello@screen-box.de` (freigegebenes Postfach).
+- Zugriff über Microsoft Graph, App-Registrierung mit `Mail.Read`, per Zugriffsrichtlinie auf diese zwei Postfächer beschränkt.
+- Nur lesen. Gesendet wird weiter aus Outlook.
+- Zuordnung über Absenderadresse (Kontakt) und Absender-Domain (Firma). Unbekannte Absender landen im Posteingang und werden mit einem Klick zugeordnet. Neue Personen einer bekannten Domain werden als Kontakt vorgeschlagen.
+- Beim Start werden die letzten 12 Monate eingelesen.
+
+## Lexware Office
+
+- Public API (`api.lexware.io`), Schlüssel mit vollen Rechten.
+- Version 1 liest nur: Kontakte (Import), Angebote, Rechnungen, Zahlungsstatus.
+- Später schreibend, aber nur auf Klick und nur als Entwurf: Angebote anlegen, Belege hochladen. Abschließen und Versenden passiert immer in Lexware.
+
+## Erinnerungen
+
+Jeden Montagmorgen eine Mail an office@, nur wenn etwas offen ist:
+
+- erledigt, aber nicht abgerechnet
+- seit mehr als 14 Tagen in „Beauftragt“
+- Angebot seit mehr als 10 Tagen ohne Rückmeldung
+- fällige und überfällige Aufgaben
+
+## Projektordner (Stufe 5)
+
+Ein kleiner Helfer auf dem Mac legt auf Knopfdruck aus der App die Ordner an. Ziel wählbar: `~/Projekte` oder `/Volumes/SANDISK 4TB/Projekte`.
+
+```
+<Root>/<Ordnername der Firma>/
+├── 01 corporate/
+└── <JJJJ-MM-TT> <Projektname>/
+    ├── 01 RAW FOOTAGE/
+    │   ├── 01 Video/
+    │   ├── 02 Foto/
+    │   ├── 03 Drohne/
+    │   └── 04 AUDIO/
+    ├── 02 AUDIO/
+    ├── 03 MUSIK/
+    ├── 04 INSERTS/
+    │   ├── Video/
+    │   ├── pdf/
+    │   ├── Audio/
+    │   └── Bilder/
+    ├── 05 Downloads/
+    └── 06 Exports/
+        ├── Fotos/
+        ├── Videos/
+        └── 9x16/
+```
+
+Die Vorlage ist in der App einstellbar. Bestehende Ordner werden nie verändert.
+
+## Stufen
+
+| Stufe | Inhalt |
+|---|---|
+| 0 | Design-Entwürfe, Server, Subdomain, Login mit Microsoft |
+| 1 | Firmen, Kontakte, Vorgänge mit Pipeline, Schnellauftrag, Aufgaben, Absagegründe, Import der Lexware-Kontakte |
+| 2 | Mails einlesen und zuordnen, Posteingang, Zeitleiste |
+| 3 | Montags-Mail, Lexware-Abgleich (Angebot, Rechnung, bezahlt) |
+| 4 | Auswertungen |
+| 5 | Ordner-Helfer, Angebote als Entwurf in Lexware, Belege hochladen |
