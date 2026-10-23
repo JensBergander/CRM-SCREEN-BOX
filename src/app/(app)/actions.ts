@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -252,17 +252,19 @@ async function dealOfCompany(dealId: number | null, companyId: number | null): P
   return deal?.companyId === companyId ? dealId : null;
 }
 
-// Mail einem Projekt zuordnen; übrige Mails derselben Unterhaltung ohne Projekt folgen mit
+// Mail einem Projekt zuordnen, umhängen oder lösen. Eine Unterhaltung gehört immer geschlossen zu einem Projekt:
+// alle Mails desselben Verlaufs bei derselben Firma bekommen dieselbe Zuordnung.
 async function assignMailToDeal(mailId: number, dealId: number | null) {
   const [mail] = await db.select().from(emails).where(eq(emails.id, mailId));
   if (!mail) return;
   const target = await dealOfCompany(dealId, mail.companyId);
-  await db.update(emails).set({ dealId: target }).where(eq(emails.id, mailId));
-  if (target && mail.conversationId) {
+  if (mail.conversationId && mail.companyId) {
     await db
       .update(emails)
       .set({ dealId: target })
-      .where(and(eq(emails.conversationId, mail.conversationId), eq(emails.companyId, mail.companyId!), isNull(emails.dealId)));
+      .where(and(eq(emails.conversationId, mail.conversationId), eq(emails.companyId, mail.companyId)));
+  } else {
+    await db.update(emails).set({ dealId: target }).where(eq(emails.id, mailId));
   }
 }
 
