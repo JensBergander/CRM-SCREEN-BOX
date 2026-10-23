@@ -1,7 +1,7 @@
 import "server-only";
 import { sendAutoReplies } from "./autoreply";
 import { sendDigestIfDue } from "./digest";
-import { reconcileDeals, syncVouchers } from "./lexware-sync";
+import { cleanupPdfs, reconcileDeals, syncVouchers } from "./lexware-sync";
 import { mailboxes } from "./graph";
 import { syncMailboxes } from "./mail";
 
@@ -22,6 +22,7 @@ export async function runJobs() {
   if (process.env.LEXWARE_API_KEY) {
     await step("lexware", syncVouchers);
     await step("abgleich", reconcileDeals);
+    await step("pdf-aufraeumen", cleanupPdfs);
   }
   if (mailboxes().length) await step("montagsmail", sendDigestIfDue);
   return result;

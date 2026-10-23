@@ -47,6 +47,9 @@ function VoucherRow({ v, action, showItems }: { v: VoucherView; action?: React.R
         </a>
         {action}
       </div>
+      {showItems && !v.pdfUrl && v.status !== "draft" && (
+        <p className="mt-1 text-xs text-muted">Keine PDF-Kopie im CRM (bei abgeschlossenen Projekten nach 90 Tagen entfernt). Das Original liegt in Lexware.</p>
+      )}
       {showItems && v.items.length > 0 && (
         <table className="mt-3 w-full text-[13px]">
           <tbody>

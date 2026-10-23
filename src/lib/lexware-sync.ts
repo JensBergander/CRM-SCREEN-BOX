@@ -236,8 +236,12 @@ export async function reconcileDeals(): Promise<string[]> {
     }
   }
 
-  // Positionen und PDF aller verknüpften Belege sichern (holt Fehlendes nach, höchstens 10 pro Lauf)
-  const linked = await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals);
+  // Positionen und PDF der Belege laufender Vorgänge sichern (holt Fehlendes nach, höchstens 10 pro Lauf).
+  // Abgeschlossene Vorgänge werden übersprungen, damit gelöschte PDF-Kopien nicht wiederkommen.
+  const linked = await db
+    .select({ o: deals.offerNumber, i: deals.invoiceNumber })
+    .from(deals)
+    .where(notInArray(deals.stage, ["bezahlt", "verloren"]));
   const numbers = linked.flatMap((d) => [d.o, d.i]).filter((n): n is string => !!n);
   if (numbers.length) {
     const stored = new Set((await db.select({ id: voucherFiles.voucherId }).from(voucherFiles)).map((f) => f.id));
@@ -247,6 +251,30 @@ export async function reconcileDeals(): Promise<string[]> {
     for (const v of missing) await secureVoucher(v.number);
   }
   return log;
+}
+
+// PDF-Kopien aufräumen: 90 Tage nach „Bezahlt“ oder „Verloren“ sowie Kopien ohne Vorgang.
+// Das Original bleibt in Lexware; Positionen und Link bleiben im CRM erhalten.
+export const PDF_KEEP_DAYS = 90;
+
+export async function cleanupPdfs(): Promise<number> {
+  const keep = await db
+    .select({ o: deals.offerNumber, i: deals.invoiceNumber, stage: deals.stage, since: deals.stageChangedAt })
+    .from(deals);
+  const cutoff = Date.now() - PDF_KEEP_DAYS * DAY;
+  const needed = new Set(
+    keep
+      .filter((d) => !["bezahlt", "verloren"].includes(d.stage) || d.since.getTime() > cutoff)
+      .flatMap((d) => [d.o, d.i])
+      .filter((n): n is string => !!n),
+  );
+  const files = await db
+    .select({ id: voucherFiles.voucherId, number: lexwareVouchers.number })
+    .from(voucherFiles)
+    .leftJoin(lexwareVouchers, eq(lexwareVouchers.id, voucherFiles.voucherId));
+  const remove = files.filter((f) => !f.number || !needed.has(f.number)).map((f) => f.id);
+  if (remove.length) await db.delete(voucherFiles).where(inArray(voucherFiles.voucherId, remove));
+  return remove.length;
 }
 
 // Schneller Abgleich direkt nach einem Phasenwechsel im CRM
