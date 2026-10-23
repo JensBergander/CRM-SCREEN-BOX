@@ -30,7 +30,7 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
         </p>
         <h1 className="text-[28px] font-bold tracking-tight">{deal.title}</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={deal.stage === "erledigt" ? "accent" : deal.stage === "bezahlt" ? "ok" : "neutral"}>
+          <Badge tone={deal.stage === "erledigt" ? "accent" : "neutral"}>
             {STAGE_LABEL[deal.stage]}
           </Badge>
           <span className="text-sm font-semibold tabular-nums">{euro(deal.amountNet)}</span>

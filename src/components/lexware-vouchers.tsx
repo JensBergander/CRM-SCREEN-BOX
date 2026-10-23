@@ -13,8 +13,8 @@ export type VoucherView = LexwareVoucher & { url: string; pdfUrl: string | null;
 const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "info" | "ok" }> = {
   open: { label: "offen", tone: "neutral" },
   overdue: { label: "überfällig", tone: "accent" },
-  paid: { label: "bezahlt", tone: "ok" },
-  paidoff: { label: "bezahlt", tone: "ok" },
+  paid: { label: "bezahlt", tone: "neutral" },
+  paidoff: { label: "bezahlt", tone: "neutral" },
   accepted: { label: "angenommen", tone: "ok" },
   rejected: { label: "abgelehnt", tone: "neutral" },
   voided: { label: "storniert", tone: "neutral" },

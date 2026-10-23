@@ -17,7 +17,7 @@ export const STAGE_DOT: Record<Stage, string> = {
   beauftragt: "bg-ink",
   erledigt: "bg-accent",
   rechnung: "bg-[#8E8E93]",
-  bezahlt: "bg-ok",
+  bezahlt: "bg-[#7A8FA6]",
   verloren: "bg-line",
 };
 
