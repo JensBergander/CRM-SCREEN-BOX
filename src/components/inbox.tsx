@@ -7,6 +7,7 @@ import { assignMailAction, ignoreMailAction, ignoreSenderAction, syncMailAction,
 import { relativeTime } from "@/lib/format";
 import type { InboxRow } from "@/lib/queries";
 import type { SyncResult } from "@/lib/mail";
+import { KindFields } from "./forms";
 import { btnPrimary, btnQuiet, Empty, Field, FormError, Input } from "./ui";
 
 export function SyncButton() {
@@ -32,12 +33,14 @@ export function SyncButton() {
   );
 }
 
-function AssignForm({ row, companies, onClose }: { row: InboxRow; companies: { id: number; name: string }[]; onClose: () => void }) {
+function AssignForm({ row, companies, tagOptions, onClose }: { row: InboxRow; companies: { id: number; name: string }[]; tagOptions: string[]; onClose: () => void }) {
   const [state, action, pending] = useActionState(assignMailAction.bind(null, row.mail.id), undefined);
   const domain = row.mail.fromAddress?.split("@")[1];
   return (
     <form action={action} className="mt-3 flex flex-col gap-3 rounded-xl bg-bg p-4">
-      <Field label="Firma">
+      <KindFields options={tagOptions} />
+      <Field label="Firma oder Person" hint="Vorhandene wählen oder neuen Namen eingeben; Art und Gewerk gelten nur für neue">
+
         <Input name="companyName" list="inbox-companies" required autoFocus autoComplete="off" placeholder="Firma wählen oder neu eingeben" />
       </Field>
       <datalist id="inbox-companies">
@@ -62,7 +65,7 @@ function AssignForm({ row, companies, onClose }: { row: InboxRow; companies: { i
   );
 }
 
-export function InboxList({ rows, companies }: { rows: InboxRow[]; companies: { id: number; name: string }[] }) {
+export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; companies: { id: number; name: string }[]; tagOptions: string[] }) {
   const [open, setOpen] = useState<number | null>(null);
   const [, startTransition] = useTransition();
   if (!rows.length) return <Empty>Keine Mails in dieser Ansicht.</Empty>;
@@ -122,7 +125,7 @@ export function InboxList({ rows, companies }: { rows: InboxRow[]; companies: { 
                 )}
               </div>
             </div>
-            {open === m.id && <AssignForm row={row} companies={companies} onClose={() => setOpen(null)} />}
+            {open === m.id && <AssignForm row={row} companies={companies} tagOptions={tagOptions} onClose={() => setOpen(null)} />}
           </li>
         );
       })}

@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { dateDe, euro, todayIso } from "@/lib/format";
 import { STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import { getCompany } from "@/lib/queries";
+import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
@@ -35,6 +36,14 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
               .join(" · ") || "Firma"}
           </p>
           <h1 className="mt-1 text-[28px] font-bold tracking-tight">{company.name}</h1>
+          {company.kind === "dienstleister" && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Link href="/dienstleister" className="rounded-md bg-line-soft px-2 py-0.5 text-[11px] font-semibold">Dienstleister</Link>
+              {(company.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
+                <Link key={t} href={`/dienstleister?gewerk=${encodeURIComponent(t)}`} className="rounded-md bg-info-soft px-2 py-0.5 text-[11px] font-semibold text-info-ink">{t}</Link>
+              ))}
+            </div>
+          )}
         </div>
         {(company.phone || company.email) && (
           <ContactActions name={company.name} phone={company.phone} email={company.email} />
@@ -57,7 +66,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
 
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[320px_minmax(0,1fr)_340px]">
         <Card title="Stammdaten">
-          <EditCompanyForm company={company} />
+          <EditCompanyForm company={company} tagOptions={await serviceTagOptions()} />
         </Card>
 
         <div className="flex flex-col gap-5">

@@ -14,6 +14,7 @@ import { sendDigest } from "@/lib/digest";
 import { linkVoucher, quickReconcile, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
 import { saveAutoReplySettings } from "@/lib/autoreply";
+import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
 
 export type FormState = { error?: string } | undefined;
@@ -44,9 +45,16 @@ async function resolveCompany(form: FormData): Promise<number | null> {
   if (!name) return null;
   const [existing] = await db.select({ id: companies.id }).from(companies).where(eq(companies.name, name));
   if (existing) return existing.id;
-  const [inserted] = await db.insert(companies).values({ name, folderName: suggestFolderName(name) });
+  const kind = form.get("kind") === "dienstleister" ? "dienstleister" : "kunde";
+  const [inserted] = await db.insert(companies).values({
+    name,
+    kind,
+    tags: kind === "dienstleister" ? await pickTags(form.getAll("tags").map(String)) : null,
+    folderName: kind === "kunde" ? suggestFolderName(name) : null,
+  });
   return inserted.insertId;
 }
+
 
 const dealSchema = z.object({
   title: z.string().trim().min(1, "Bitte beschreiben, worum es geht."),
@@ -151,17 +159,21 @@ const companySchema = z.object({
   emailDomain: optionalText,
   industry: optionalText,
   notes: optionalText,
+  kind: z.enum(["kunde", "dienstleister"]).catch("kunde"),
 });
 
-function companyValues(form: FormData) {
-  return companySchema.safeParse(
+async function companyValues(form: FormData) {
+  const parsed = companySchema.safeParse(
     Object.fromEntries(Object.keys(companySchema.shape).map((k) => [k, text(form, k)])),
   );
+  if (!parsed.success) return parsed;
+  const tags = parsed.data.kind === "dienstleister" ? await pickTags(form.getAll("tags").map(String)) : null;
+  return { ...parsed, data: { ...parsed.data, tags } };
 }
 
 export async function createCompanyAction(_: FormState, form: FormData): Promise<FormState> {
   await getCurrentUser();
-  const parsed = companyValues(form);
+  const parsed = await companyValues(form);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const [inserted] = await db.insert(companies).values({
     ...parsed.data,
@@ -173,7 +185,7 @@ export async function createCompanyAction(_: FormState, form: FormData): Promise
 
 export async function updateCompanyAction(companyId: number, _: FormState, form: FormData): Promise<FormState> {
   await getCurrentUser();
-  const parsed = companyValues(form);
+  const parsed = await companyValues(form);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   await db
     .update(companies)
@@ -387,6 +399,15 @@ export async function saveAutoReplyAction(_: FormState, form: FormData): Promise
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain.replace(/^@/, ""))) return { error: "Bitte eine gültige Domain angeben, z. B. bergander-film.de" };
   if (body.length < 20) return { error: "Der Antworttext ist zu kurz." };
   await saveAutoReplySettings({ enabled: form.get("enabled") === "on", domain, text: body });
+  refresh();
+  return {};
+}
+
+export async function saveServiceTagsAction(_: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const list = (text(form, "tags") ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  if (!list.length) return { error: "Mindestens ein Gewerk angeben." };
+  await saveServiceTagOptions(list);
   refresh();
   return {};
 }

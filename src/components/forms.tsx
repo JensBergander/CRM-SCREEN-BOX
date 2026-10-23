@@ -184,7 +184,48 @@ export function ContactForm({ companyId }: { companyId: number }) {
   );
 }
 
-export function EditCompanyForm({ company }: { company: Company }) {
+// Kunde oder Dienstleister; bei Dienstleistern die Gewerke als feste Auswahl (Pills, mehrere möglich)
+export function KindFields({ kind = "kunde", tags, options }: { kind?: "kunde" | "dienstleister"; tags?: string | null; options: string[] }) {
+  const [current, setCurrent] = useState(kind);
+  const [selected, setSelected] = useState<string[]>((tags ?? "").split(",").map((t) => t.trim()).filter(Boolean));
+  const toggle = (tag: string) => setSelected(selected.includes(tag) ? selected.filter((t) => t !== tag) : [...selected, tag]);
+  return (
+    <div className="flex flex-col gap-3">
+      <div role="radiogroup" aria-label="Art" className="flex w-fit rounded-full bg-line p-1">
+        {(["kunde", "dienstleister"] as const).map((k) => (
+          <label key={k} className={`inline-flex min-h-9 cursor-pointer items-center rounded-full px-4 text-[13px] font-semibold ${current === k ? "bg-surface shadow-sm" : "text-muted"}`}>
+            <input type="radio" name="kind" value={k} checked={current === k} onChange={() => setCurrent(k)} className="sr-only" />
+            {k === "kunde" ? "Kunde" : "Dienstleister"}
+          </label>
+        ))}
+      </div>
+      {current === "dienstleister" && (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1.5 text-[13px] font-semibold text-muted">Gewerke</legend>
+          <div className="flex flex-wrap gap-2">
+            {options.map((tag) => {
+              const on = selected.includes(tag);
+              return (
+                <label
+                  key={tag}
+                  className={`inline-flex min-h-9 cursor-pointer items-center rounded-full border px-3.5 text-[13px] font-medium has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
+                    on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-ink"
+                  }`}
+                >
+                  <input type="checkbox" name="tags" value={tag} checked={on} onChange={() => toggle(tag)} className="sr-only" />
+                  {tag}
+                </label>
+              );
+            })}
+          </div>
+          <span className="text-xs text-muted">Die Auswahl pflegst du unter Einstellungen → Gewerke.</span>
+        </fieldset>
+      )}
+    </div>
+  );
+}
+
+export function EditCompanyForm({ company, tagOptions }: { company: Company; tagOptions: string[] }) {
   const [state, action, pending] = useActionState(updateCompanyAction.bind(null, company.id), undefined);
   const fields: [keyof Company, string, string?][] = [
     ["name", "Name"],
@@ -200,6 +241,7 @@ export function EditCompanyForm({ company }: { company: Company }) {
   ];
   return (
     <form action={action} className="flex flex-col gap-3 px-5 pb-5 pt-2">
+      <KindFields kind={company.kind} tags={company.tags} options={tagOptions} />
       {fields.map(([key, label, hint]) => (
         <Field key={key} label={label} hint={hint}>
           <Input name={key} defaultValue={(company[key] as string | null) ?? ""} required={key === "name"} />

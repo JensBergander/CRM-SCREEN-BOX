@@ -107,12 +107,15 @@ export async function companyOptions() {
   return db.select({ id: companies.id, name: companies.name }).from(companies).orderBy(asc(companies.name));
 }
 
-export async function listCompanies(query?: string) {
+export async function listCompanies(query?: string, kind: "kunde" | "dienstleister" | "alle" = "kunde", tag?: string) {
   const q = query?.trim();
   return db
     .select({
       id: companies.id,
       name: companies.name,
+      kind: companies.kind,
+      tags: companies.tags,
+      notes: companies.notes,
       city: companies.city,
       emailDomain: companies.emailDomain,
       customerNumber: companies.customerNumber,
@@ -124,12 +127,44 @@ export async function listCompanies(query?: string) {
     .from(companies)
     .leftJoin(deals, eq(deals.companyId, companies.id))
     .where(
-      q
-        ? or(like(companies.name, `%${q}%`), like(companies.city, `%${q}%`), like(companies.emailDomain, `%${q}%`))
-        : undefined,
+      and(
+        kind === "alle" ? undefined : eq(companies.kind, kind),
+        // exakter Treffer in der kommagetrennten Liste
+        tag ? sql`find_in_set(${tag}, replace(${companies.tags}, ', ', ',')) > 0` : undefined,
+        q
+          ? or(
+              like(companies.name, `%${q}%`),
+              like(companies.city, `%${q}%`),
+              like(companies.emailDomain, `%${q}%`),
+              like(companies.tags, `%${q}%`),
+              like(companies.notes, `%${q}%`),
+            )
+          : undefined,
+      ),
     )
     .groupBy(companies.id)
     .orderBy(asc(companies.name));
+}
+
+// Alle vergebenen Gewerke mit Anzahl, für die Filter auf der Dienstleister-Seite
+export async function serviceTags() {
+  const rows = await db.select({ tags: companies.tags }).from(companies).where(eq(companies.kind, "dienstleister"));
+  const counts = new Map<string, number>();
+  for (const r of rows) for (const t of (r.tags ?? "").split(",").map((s) => s.trim()).filter(Boolean)) counts.set(t, (counts.get(t) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag, n]) => ({ tag, n }));
+}
+
+// Erste Kontaktperson je Firma (Name, Telefon, Mail) für die Dienstleister-Liste
+export async function primaryContacts(companyIds: number[]) {
+  if (!companyIds.length) return new Map<number, { name: string; phone: string | null; email: string | null }>();
+  const rows = await db.select().from(contacts).where(inArray(contacts.companyId, companyIds)).orderBy(asc(contacts.id));
+  const map = new Map<number, { name: string; phone: string | null; email: string | null }>();
+  for (const c of rows) {
+    if (c.companyId && !map.has(c.companyId)) {
+      map.set(c.companyId, { name: [c.firstName, c.lastName].filter(Boolean).join(" "), phone: c.phone, email: c.email });
+    }
+  }
+  return map;
 }
 
 export async function getCompany(id: number) {

@@ -56,6 +56,10 @@ export const companies = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     name: varchar("name", { length: 255 }).notNull(),
+    // Kunde oder Dienstleister (Sprecher, Fotografen usw., die man bei Bedarf anfragt)
+    kind: mysqlEnum("kind", ["kunde", "dienstleister"]).notNull().default("kunde"),
+    // Gewerke, kommagetrennt, z. B. „Sprecher, Englisch“
+    tags: varchar("tags", { length: 255 }),
     // Name des Ordners auf der Festplatte, z. B. EUROWINGS für Eurowings GmbH
     folderName: varchar("folder_name", { length: 120 }),
     lexwareId: varchar("lexware_id", { length: 64 }).unique(),
