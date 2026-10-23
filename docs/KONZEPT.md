@@ -110,10 +110,18 @@ Die Vorlage ist in der App einstellbar. Bestehende Ordner werden nie verändert.
 ## Produktionsplanung und Kalender
 
 - Beim Verschieben auf „Beauftragt“ (und nach einem Schnellauftrag) öffnet sich „Produktion planen“, mit „Später“ überspringbar; danach Karte „Termine“ im Vorgang.
-- Produktion: Drehort (vorausgefüllt mit der Firmenadresse), pro Tag Datum und Uhrzeit, „+“ für den Folgetag, optional „durchgehend blocken“.
+- Produktion: Drehort (siehe Adresssuche), pro Tag Datum und Uhrzeit, „+“ für den Folgetag, optional „durchgehend blocken“.
 - Postproduktion: Start- und Zieltag ohne Uhrzeit, Vorschlag nächster Arbeitstag nach dem letzten Drehtag. Nicht im Kalender.
 - Kalender von office@ (Microsoft Graph, Exchange-RBAC „Application Calendars.ReadWrite“ nur für office@): je Drehtag ein Termin bzw. ein durchgehender, Erinnerung am Vortag 18 Uhr, als „Gebucht“. Das CRM führt; Verlieren oder Entfernen löscht Termine. Fehlgeschlagene Abgleiche wiederholt der Cronjob.
 - Projektdatum folgt dem ersten Drehtag. Seite „Planung“ (Zeitleiste über 8 Wochen) und „Nächste Produktionstage“ auf der Startseite.
+
+## Adresssuche (Google Places)
+
+- Drehort: Vorschläge zuerst aus eigenen Daten (Firmenadresse des Kunden, frühere Drehorte), ab drei Buchstaben und kurzer Tipppause auch von Google. Freitext bleibt erlaubt („ohne Karte“).
+- Ausgewählte Orte speichern Straße, PLZ, Ort, Land und Koordinaten am Vorgang. Der Kalendertermin bekommt Adresse und Koordinaten (Karte und Navigation in Outlook und auf dem iPhone) und einen Link „Route in Google Maps“; Planung und Startseite verlinken zu Google Maps.
+- „Adresse suchen“ auch bei Neue Firma, Firma bearbeiten und Kontakt aus Mail: füllt Straße, PLZ, Ort und leere Felder wie Name und Website. Nichts geht an Lexware.
+- Google Places API (New), Projekt screen-box, Schlüssel nur serverseitig (`GOOGLE_PLACES_KEY`, im Schlüsselbund „CRM SCREEN-BOX – Google Places“), beschränkt auf die Server-IPs und auf Places API (New).
+- Kostenschutz: nur Essentials-Felder (Adresse, Koordinaten; Name aus dem Vorschlag), Website (Enterprise) nur bei leerem Feld. Google-Kontingente 300 Autocomplete und 100 GetPlace pro Tag, Budget 1 € mit Ausgabenobergrenze und Mails, CRM-eigene Grenzen 250 Abfragen pro Tag und 300 Website-Abfragen pro Monat. Ist eine Grenze erreicht, gibt es nur noch eigene Vorschläge.
 
 ## Kundeneinschätzung und Wettbewerber
 
