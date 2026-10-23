@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronDown, Plus } from "lucide-react";
 import { dateDe, euro, todayIso } from "@/lib/format";
-import { STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
-import { getCompany } from "@/lib/queries";
+import { LOST_REASON_LABEL, STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
+import { MIN_OFFERS, ratingFor } from "@/lib/rating";
+import { AssessmentCard } from "@/components/rating";
+import { dealsWonBy, getCompany } from "@/lib/queries";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
@@ -16,13 +18,12 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
   const data = await getCompany(Number(id));
   if (!data) notFound();
   const { company, stats } = data;
+  const assessment = await ratingFor(company.id);
+  const won = company.kind === "wettbewerber" ? await dealsWonBy(company.id) : [];
 
-  const quote = stats.requests ? Math.round((stats.won / stats.requests) * 100) : 0;
   const kpis = [
-    { label: "Anfragen gesamt", value: String(stats.requests) },
-    { label: "davon beauftragt", value: stats.requests ? `${stats.won} · ${quote} %` : "–" },
-    { label: "Umsatz (abgerechnet)", value: euro(stats.revenue) },
-    { label: "Vergleichsangebote", value: String(stats.compare), hot: stats.compare > 0 },
+    { label: "Umsatz (Lexware)", value: euro(assessment?.facts.revenue ?? 0) },
+    { label: "Vorgänge im CRM", value: String(stats.requests) },
     { label: "Letzter Kontakt", value: stats.lastContact ? dateDe(new Date(stats.lastContact).toISOString()) : "–" },
   ];
 
@@ -55,11 +56,11 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         </Link>
       </header>
 
-      <section aria-label="Kennzahlen" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <section aria-label="Kennzahlen" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {kpis.map((k) => (
           <div key={k.label} className="rounded-2xl bg-surface p-4">
             <p className="text-xs text-muted">{k.label}</p>
-            <p className={`mt-1 text-xl font-bold tracking-tight ${k.hot ? "text-info-ink" : ""}`}>{k.value}</p>
+            <p className="mt-1 text-xl font-bold tracking-tight">{k.value}</p>
           </div>
         ))}
       </section>
@@ -96,6 +97,32 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         </Card>
 
         <div className="flex flex-col gap-5">
+          {company.kind === "wettbewerber" ? (
+            <Card title="Hat gewonnen bei">
+              {won.length === 0 && <Empty>Noch bei keinem verlorenen Vorgang eingetragen.</Empty>}
+              {won.map((d) => (
+                <Row key={d.id} href={`/vorgaenge/${d.id}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{d.companyName}</p>
+                    <p className="truncate text-xs text-muted">{d.title}{d.lostReason && ` · ${LOST_REASON_LABEL[d.lostReason]}`}</p>
+                  </div>
+                  <span className="text-[13px] tabular-nums">{euro(d.amountNet)}</span>
+                </Row>
+              ))}
+            </Card>
+          ) : (
+            assessment && (
+              <AssessmentCard
+                data={{
+                  companyId: company.id,
+                  ...assessment.rating,
+                  ...assessment.facts,
+                  lastOrder: assessment.facts.lastOrder ? dateDe(assessment.facts.lastOrder.toISOString()) : null,
+                  minOffers: MIN_OFFERS,
+                }}
+              />
+            )
+          )}
           <Card title="Vorgänge">
             {data.deals.length === 0 && <Empty>Noch keine Vorgänge.</Empty>}
             {data.deals.map((d) => (

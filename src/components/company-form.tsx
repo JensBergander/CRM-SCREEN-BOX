@@ -5,11 +5,11 @@ import { createCompanyAction } from "@/app/(app)/actions";
 import { KindFields } from "./forms";
 import { btnPrimary, Field, FormError, Input, Textarea } from "./ui";
 
-export function NewCompanyForm({ kind, tagOptions }: { kind?: "kunde" | "dienstleister"; tagOptions: string[] }) {
+export function NewCompanyForm({ kind, tagOptions }: { kind?: "kunde" | "dienstleister" | "wettbewerber"; tagOptions: string[] }) {
   const [state, action, pending] = useActionState(createCompanyAction, undefined);
   return (
     <form action={action} className="flex max-w-xl flex-col gap-4 rounded-2xl bg-surface p-6">
-      <KindFields kind={kind} options={tagOptions} />
+      <KindFields kind={kind} options={tagOptions} withCompetitor />
       <Field label="Name (Firma oder Person)">
         <Input name="name" required autoFocus placeholder="z. B. Eurowings GmbH" />
       </Field>

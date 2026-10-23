@@ -56,8 +56,11 @@ export const companies = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     name: varchar("name", { length: 255 }).notNull(),
-    // Kunde oder Dienstleister (Sprecher, Fotografen usw., die man bei Bedarf anfragt)
-    kind: mysqlEnum("kind", ["kunde", "dienstleister"]).notNull().default("kunde"),
+    // Kunde, Dienstleister (Sprecher, Fotografen usw., die man bei Bedarf anfragt) oder Wettbewerber
+    kind: mysqlEnum("kind", ["kunde", "dienstleister", "wettbewerber"]).notNull().default("kunde"),
+    // eigene Einschätzung 0–5 Sterne (0 = keine Angebote mehr); leer = Vorschlag der App gilt
+    rating: int("rating"),
+    ratingNote: text("rating_note"),
     // Gewerke, kommagetrennt, z. B. „Sprecher, Englisch“
     tags: varchar("tags", { length: 255 }),
     // Name des Ordners auf der Festplatte, z. B. EUROWINGS für Eurowings GmbH
@@ -114,6 +117,8 @@ export const deals = mysqlTable(
     compareOnly: boolean("compare_only").notNull().default(false),
     quick: boolean("quick").notNull().default(false),
     lostReason: mysqlEnum("lost_reason", LOST_REASONS),
+    // wer den Auftrag stattdessen bekommen hat (Firma der Art „wettbewerber“)
+    competitorId: int("competitor_id"),
     lostNote: text("lost_note"),
     notes: text("notes"),
     stageChangedAt: timestamp("stage_changed_at").notNull().defaultNow(),

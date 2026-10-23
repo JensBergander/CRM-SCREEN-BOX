@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { dateDe, euro } from "@/lib/format";
 import { STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
-import { listDeals } from "@/lib/queries";
+import { competitorNames, listDeals } from "@/lib/queries";
 import { DealBoard } from "@/components/deal-board";
 import { Badge, btnPrimary, PageHeader } from "@/components/ui";
 
@@ -13,6 +13,7 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
   const compareOnly = params.vergleich === "1";
 
   let deals = await listDeals(table && showLost);
+  const competitors = await competitorNames();
   if (compareOnly) deals = deals.filter((d) => d.compareOnly);
 
   const link = (patch: Record<string, string | null>) => {
@@ -45,7 +46,7 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
         </Link>
       </PageHeader>
 
-      {!table && <DealBoard deals={deals} />}
+      {!table && <DealBoard deals={deals} competitors={competitors} />}
 
       {table && (
         <div className="overflow-x-auto rounded-2xl bg-surface">

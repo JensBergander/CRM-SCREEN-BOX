@@ -123,6 +123,26 @@ export async function getActivity(id: number) {
   return row ?? null;
 }
 
+// Verlorene Vorgänge, die ein Wettbewerber gewonnen hat
+export async function dealsWonBy(competitorId: number) {
+  return db
+    .select({ id: deals.id, title: deals.title, amountNet: deals.amountNet, lostReason: deals.lostReason, companyName: companies.name, companyId: deals.companyId })
+    .from(deals)
+    .innerJoin(companies, eq(companies.id, deals.companyId))
+    .where(eq(deals.competitorId, competitorId))
+    .orderBy(desc(deals.stageChangedAt));
+}
+
+export async function companyName(id: number): Promise<string | null> {
+  const [row] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, id));
+  return row?.name ?? null;
+}
+
+export async function competitorNames(): Promise<string[]> {
+  const rows = await db.select({ name: companies.name }).from(companies).where(eq(companies.kind, "wettbewerber")).orderBy(asc(companies.name));
+  return rows.map((r) => r.name);
+}
+
 export async function companyOptions() {
   return db.select({ id: companies.id, name: companies.name }).from(companies).orderBy(asc(companies.name));
 }

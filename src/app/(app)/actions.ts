@@ -19,6 +19,7 @@ import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
 import { projectsFor, type ProjectOption } from "@/lib/queries";
+import { hintProps, ratingFor } from "@/lib/rating";
 
 export type FormState = { error?: string } | undefined;
 
@@ -48,7 +49,8 @@ async function resolveCompany(form: FormData): Promise<number | null> {
   if (!name) return null;
   const [existing] = await db.select({ id: companies.id }).from(companies).where(eq(companies.name, name));
   if (existing) return existing.id;
-  const kind = form.get("kind") === "dienstleister" ? "dienstleister" : "kunde";
+  const kindValue = form.get("kind");
+  const kind = kindValue === "dienstleister" || kindValue === "wettbewerber" ? kindValue : "kunde";
   const [inserted] = await db.insert(companies).values({
     name,
     kind,
@@ -127,12 +129,15 @@ export async function updateDealAction(dealId: number, _: FormState, form: FormD
 export async function moveDealAction(
   dealId: number,
   stage: (typeof STAGES)[number],
-  lost?: { reason: (typeof LOST_REASONS)[number]; note?: string },
+  lost?: { reason: (typeof LOST_REASONS)[number]; note?: string; competitor?: string },
 ) {
   await getCurrentUser();
   z.enum(STAGES).parse(stage);
   if (lost) z.enum(LOST_REASONS).parse(lost.reason);
-  await changeStage(dealId, stage, lost);
+  await changeStage(dealId, stage, lost && { reason: lost.reason, note: lost.note });
+  if (stage === "verloren" && lost?.competitor?.trim()) {
+    await db.update(deals).set({ competitorId: await resolveCompetitor(lost.competitor) }).where(eq(deals.id, dealId));
+  }
   // Gleich in Lexware nach passendem Angebot bzw. Rechnung schauen, statt auf den nächsten Cronjob zu warten
   if (["angebot", "beauftragt", "erledigt"].includes(stage)) {
     try {
@@ -141,6 +146,35 @@ export async function moveDealAction(
       console.error("Lexware-Abgleich nach Phasenwechsel fehlgeschlagen:", e);
     }
   }
+  refresh();
+}
+
+// Wettbewerber per Name finden oder als neue Firma der Art „wettbewerber“ anlegen
+async function resolveCompetitor(name: string): Promise<number> {
+  const clean = name.trim().slice(0, 255);
+  const [existing] = await db.select({ id: companies.id }).from(companies).where(eq(companies.name, clean));
+  if (existing) return existing.id;
+  const [inserted] = await db.insert(companies).values({ name: clean, kind: "wettbewerber" });
+  return inserted.insertId;
+}
+
+// Wettbewerber eines verlorenen Vorgangs nachtragen oder ändern (leer = entfernen)
+export async function setCompetitorAction(dealId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const name = text(form, "competitor")?.trim();
+  await db.update(deals).set({ competitorId: name ? await resolveCompetitor(name) : null }).where(eq(deals.id, dealId));
+  refresh();
+  return {};
+}
+
+// Eigene Sterne-Bewertung einer Firma; null = Vorschlag der App gilt wieder
+export async function setRatingAction(companyId: number, rating: number | null, note: string | null) {
+  await getCurrentUser();
+  const value = rating === null ? null : Math.max(0, Math.min(5, Math.round(rating)));
+  await db
+    .update(companies)
+    .set({ rating: value, ratingNote: value === null ? null : note?.trim() || null })
+    .where(eq(companies.id, companyId));
   refresh();
 }
 
@@ -167,7 +201,7 @@ const companySchema = z.object({
   emailDomain: optionalText,
   industry: optionalText,
   notes: optionalText,
-  kind: z.enum(["kunde", "dienstleister"]).catch("kunde"),
+  kind: z.enum(["kunde", "dienstleister", "wettbewerber"]).catch("kunde"),
 });
 
 async function companyValues(form: FormData) {
@@ -330,6 +364,7 @@ export type MailForContact = {
   suggestion: SignatureData & { email: string };
   company: { id: number; name: string } | null;
   projects: ProjectOption[];
+  hint: ReturnType<typeof hintProps> | null;
 };
 
 // Volltext der Mail holen und Kontaktdaten aus der Signatur vorschlagen
@@ -347,7 +382,9 @@ export async function loadMailForContactAction(mailId: number): Promise<MailForC
       ? await db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.id, match.companyId))
       : [];
     const projects = company ? (await projectsFor(company.id)).filter((p) => p.active) : [];
-    return { text: tidyMailText(full), suggestion: { ...suggestion, email: address }, company: company ?? null, projects };
+    const rating = company ? await ratingFor(company.id) : null;
+    const hint = rating && rating.rating.stars !== null && rating.rating.stars <= 2 ? hintProps(rating) : null;
+    return { text: tidyMailText(full), suggestion: { ...suggestion, email: address }, company: company ?? null, projects, hint };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Mail konnte nicht geladen werden." };
   }

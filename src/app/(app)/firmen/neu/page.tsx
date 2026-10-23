@@ -4,10 +4,10 @@ import { PageHeader } from "@/components/ui";
 
 export default async function NewCompanyPage({ searchParams }: PageProps<"/firmen/neu">) {
   const { art } = await searchParams;
-  const kind = art === "dienstleister" ? "dienstleister" : "kunde";
+  const kind = art === "dienstleister" || art === "wettbewerber" ? art : "kunde";
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={kind === "dienstleister" ? "Neuer Dienstleister" : "Neue Firma"} />
+      <PageHeader title={kind === "dienstleister" ? "Neuer Dienstleister" : kind === "wettbewerber" ? "Neuer Wettbewerber" : "Neue Firma"} />
       <NewCompanyForm kind={kind} tagOptions={await serviceTagOptions()} />
     </div>
   );

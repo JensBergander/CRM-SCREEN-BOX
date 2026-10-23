@@ -13,6 +13,7 @@ import {
   LogOut,
   Plus,
   Settings,
+  Swords,
   Users,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ const NAV = [
   { href: "/firmen", label: "Firmen", icon: Building2 },
   { href: "/kontakte", label: "Kontakte", icon: Users },
   { href: "/dienstleister", label: "Dienstleister", icon: Handshake },
+  { href: "/wettbewerber", label: "Wettbewerber", icon: Swords },
   { href: "/posteingang", label: "Posteingang", icon: Inbox },
   { href: "/aufgaben", label: "Aufgaben", icon: CheckSquare },
   { href: "/auswertungen", label: "Auswertungen", icon: BarChart3 },

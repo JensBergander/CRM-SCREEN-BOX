@@ -1,6 +1,7 @@
 import { todayIso } from "@/lib/format";
 import { companyOptions, getActivity, getMail } from "@/lib/queries";
 import { DealForm } from "@/components/deal-form";
+import { RatingHint } from "@/components/rating-hint";
 import { PageHeader } from "@/components/ui";
 
 export default async function NewDealPage({ searchParams }: PageProps<"/vorgaenge/neu">) {
@@ -36,6 +37,7 @@ export default async function NewDealPage({ searchParams }: PageProps<"/vorgaeng
               : "Anfrage, Angebot oder Auftrag erfassen"
         }
       />
+      {preset && <RatingHint companyId={preset.id} />}
       <DealForm companies={companies} preset={preset} quick={quick} today={todayIso()} fromMail={fromMail} fromNote={fromNote} />
     </div>
   );

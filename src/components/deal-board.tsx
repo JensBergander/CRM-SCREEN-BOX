@@ -7,12 +7,12 @@ import { LOST_REASONS, type LostReason, type Stage } from "@/db/schema";
 import { daysSince, euro } from "@/lib/format";
 import { BOARD_STAGES, LOST_REASON_LABEL, STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import type { DealRow } from "@/lib/queries";
-import { Badge, btnPrimary, btnQuiet, Field, Select, Textarea } from "./ui";
+import { Badge, btnPrimary, btnQuiet, Field, Input, Select, Textarea } from "./ui";
 
 // Ab wann eine Karte in ihrer Phase als „hängt“ markiert wird (Tage)
 const STALE_AFTER: Partial<Record<Stage, number>> = { angebot: 10, beauftragt: 14, erledigt: 7, rechnung: 14 };
 
-export function DealBoard({ deals }: { deals: DealRow[] }) {
+export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; competitors?: string[] }) {
   const [, startTransition] = useTransition();
   const [dragging, setDragging] = useState<number | null>(null);
   const [lostFor, setLostFor] = useState<DealRow | null>(null);
@@ -34,12 +34,12 @@ export function DealBoard({ deals }: { deals: DealRow[] }) {
     });
   }
 
-  function confirmLost(reason: LostReason, note: string) {
+  function confirmLost(reason: LostReason, note: string, competitor: string) {
     const deal = lostFor!;
     setLostFor(null);
     startTransition(async () => {
       move({ id: deal.id, stage: "verloren" });
-      await moveDealAction(deal.id, "verloren", { reason, note });
+      await moveDealAction(deal.id, "verloren", { reason, note, competitor });
     });
   }
 
@@ -108,25 +108,27 @@ export function DealBoard({ deals }: { deals: DealRow[] }) {
         Hierher ziehen: Abgelehnt / Verloren
       </div>
 
-      {lostFor && <LostDialog deal={lostFor} onCancel={() => setLostFor(null)} onConfirm={confirmLost} />}
+      {lostFor && <LostDialog deal={lostFor} competitors={competitors} onCancel={() => setLostFor(null)} onConfirm={confirmLost} />}
     </>
   );
 }
 
-export function LostDialog({ deal, onCancel, onConfirm }: {
+export function LostDialog({ deal, competitors, onCancel, onConfirm }: {
   deal: { title: string; compareOnly: boolean };
+  competitors: string[];
   onCancel: () => void;
-  onConfirm: (reason: LostReason, note: string) => void;
+  onConfirm: (reason: LostReason, note: string, competitor: string) => void;
 }) {
   const [reason, setReason] = useState<LostReason>(deal.compareOnly ? "vergleichsangebot" : "preis");
   const [note, setNote] = useState("");
+  const [competitor, setCompetitor] = useState("");
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Warum verloren?">
       <form
         className="flex w-full max-w-md flex-col gap-4 rounded-3xl bg-surface p-6"
         onSubmit={(e) => {
           e.preventDefault();
-          onConfirm(reason, note);
+          onConfirm(reason, note, competitor);
         }}
       >
         <h2 className="text-lg font-bold">Warum ist „{deal.title}“ verloren?</h2>
@@ -137,8 +139,14 @@ export function LostDialog({ deal, onCancel, onConfirm }: {
             ))}
           </Select>
         </Field>
+        <Field label="Wer hat den Auftrag bekommen? (optional)" hint="Weißt du es noch nicht, trägst du es später im Vorgang nach.">
+          <Input value={competitor} onChange={(e) => setCompetitor(e.target.value)} list="competitor-names" autoComplete="off" placeholder="Name des Wettbewerbers" />
+          <datalist id="competitor-names">
+            {competitors.map((c) => <option key={c} value={c} />)}
+          </datalist>
+        </Field>
         <Field label="Notiz (optional)">
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="z. B. hat sich für günstigeren Anbieter entschieden" />
+          <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="z. B. war 30 % günstiger" />
         </Field>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onCancel} className={btnQuiet}>Abbrechen</button>

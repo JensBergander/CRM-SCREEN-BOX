@@ -4,10 +4,11 @@ import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_LABEL } from "@/lib/labels";
 import { FolderPlus } from "lucide-react";
 import { folderLink } from "@/lib/folders";
-import { getDeal, vouchersForDeal } from "@/lib/queries";
+import { companyName, competitorNames, getDeal, vouchersForDeal } from "@/lib/queries";
+import { RatingHint } from "@/components/rating-hint";
 import { LexwareVouchers } from "@/components/lexware-vouchers";
 import { QuotationDraft } from "@/components/quotation-draft";
-import { ActivityForm, EditDealForm, StageControl, TaskForm } from "@/components/forms";
+import { ActivityForm, CompetitorForm, EditDealForm, StageControl, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
 import { Badge, btnSecondary, Card } from "@/components/ui";
@@ -18,10 +19,13 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
   if (!data) notFound();
   const { deal } = data;
   const vouchers = await vouchersForDeal(deal);
+  const competitors = await competitorNames();
+  const competitor = deal.competitorId ? await companyName(deal.competitorId) : null;
   const folder = data.folderName ? await folderLink(deal, data.folderName) : null;
 
   return (
     <div className="flex flex-col gap-6">
+      {!["verloren", "bezahlt"].includes(deal.stage) && <RatingHint companyId={deal.companyId} />}
       <header className="flex flex-col gap-2">
         <p className="text-[13px] text-muted">
           <Link href={`/firmen/${deal.companyId}`} className="font-semibold text-ink hover:underline">{data.companyName}</Link>
@@ -42,8 +46,17 @@ export default async function DealPage({ params }: PageProps<"/vorgaenge/[id]">)
         </div>
       </header>
 
+      {deal.stage === "verloren" && (
+        <Card className="flex flex-col gap-2 px-5 py-4">
+          <CompetitorForm dealId={deal.id} current={competitor} competitors={competitors} />
+          {competitor && deal.competitorId && (
+            <Link href={`/firmen/${deal.competitorId}`} className="text-[13px] text-muted underline">Zur Seite von {competitor}</Link>
+          )}
+        </Card>
+      )}
+
       <Card className="flex flex-wrap items-start justify-between gap-4 px-5 py-5">
-        <StageControl deal={deal} />
+        <StageControl deal={deal} competitors={competitors} />
         {folder ? (
           <div className="flex flex-col items-start gap-1">
             <a href={folder.href} className={btnSecondary}>

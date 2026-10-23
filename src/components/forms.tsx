@@ -6,6 +6,7 @@ import {
   createContactAction,
   createTaskAction,
   moveDealAction,
+  setCompetitorAction,
   updateCompanyAction,
   updateDealAction,
 } from "@/app/(app)/actions";
@@ -28,10 +29,10 @@ function useResetOnSuccess(state: { error?: string } | undefined, pending: boole
 
 const FLOW: Stage[] = ["anfrage", "angebot", "beauftragt", "erledigt", "rechnung", "bezahlt"];
 
-export function StageControl({ deal }: { deal: Pick<Deal, "id" | "stage" | "title" | "compareOnly"> }) {
+export function StageControl({ deal, competitors = [] }: { deal: Pick<Deal, "id" | "stage" | "title" | "compareOnly">; competitors?: string[] }) {
   const [pending, startTransition] = useTransition();
   const [lost, setLost] = useState(false);
-  const go = (stage: Stage, l?: { reason: LostReason; note: string }) =>
+  const go = (stage: Stage, l?: { reason: LostReason; note: string; competitor: string }) =>
     startTransition(() => moveDealAction(deal.id, stage, l));
   const index = FLOW.indexOf(deal.stage);
   const next = index >= 0 && index < FLOW.length - 1 ? FLOW[index + 1] : null;
@@ -75,13 +76,32 @@ export function StageControl({ deal }: { deal: Pick<Deal, "id" | "stage" | "titl
         <LostDialog
           deal={deal}
           onCancel={() => setLost(false)}
-          onConfirm={(reason, note) => {
+          competitors={competitors}
+          onConfirm={(reason, note, competitor) => {
             setLost(false);
-            go("verloren", { reason, note });
+            go("verloren", { reason, note, competitor });
           }}
         />
       )}
     </div>
+  );
+}
+
+// Wettbewerber eines verlorenen Vorgangs nachtragen oder ändern
+export function CompetitorForm({ dealId, current, competitors }: { dealId: number; current: string | null; competitors: string[] }) {
+  const [state, action, pending] = useActionState(setCompetitorAction.bind(null, dealId), undefined);
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-2">
+      <label className="flex min-w-0 flex-[1_1_240px] flex-col gap-1.5 text-[13px] font-semibold text-muted">
+        Wer hat den Auftrag bekommen?
+        <Input name="competitor" defaultValue={current ?? ""} list={`competitors-${dealId}`} autoComplete="off" placeholder="noch unbekannt" />
+      </label>
+      <datalist id={`competitors-${dealId}`}>
+        {competitors.map((c) => <option key={c} value={c} />)}
+      </datalist>
+      <button type="submit" disabled={pending} className={btnQuiet}>{pending ? "Speichert …" : "Speichern"}</button>
+      {state && !state.error && !pending && <span className="text-sm text-muted">Gespeichert</span>}
+    </form>
   );
 }
 
@@ -212,17 +232,20 @@ export function ContactForm({ companyId }: { companyId: number }) {
 }
 
 // Kunde oder Dienstleister; bei Dienstleistern die Gewerke als feste Auswahl (Pills, mehrere möglich)
-export function KindFields({ kind = "kunde", tags, options }: { kind?: "kunde" | "dienstleister"; tags?: string | null; options: string[] }) {
+type Kind = "kunde" | "dienstleister" | "wettbewerber";
+const KIND_LABEL: Record<Kind, string> = { kunde: "Kunde", dienstleister: "Dienstleister", wettbewerber: "Wettbewerber" };
+
+export function KindFields({ kind = "kunde", tags, options, withCompetitor = false }: { kind?: Kind; tags?: string | null; options: string[]; withCompetitor?: boolean }) {
   const [current, setCurrent] = useState(kind);
   const [selected, setSelected] = useState<string[]>((tags ?? "").split(",").map((t) => t.trim()).filter(Boolean));
   const toggle = (tag: string) => setSelected(selected.includes(tag) ? selected.filter((t) => t !== tag) : [...selected, tag]);
   return (
     <div className="flex flex-col gap-3">
       <div role="radiogroup" aria-label="Art" className="flex w-fit rounded-full bg-line p-1">
-        {(["kunde", "dienstleister"] as const).map((k) => (
+        {(["kunde", "dienstleister", ...(withCompetitor || kind === "wettbewerber" ? ["wettbewerber" as const] : [])] as Kind[]).map((k) => (
           <label key={k} className={`inline-flex min-h-9 cursor-pointer items-center rounded-full px-4 text-[13px] font-semibold ${current === k ? "bg-surface shadow-sm" : "text-muted"}`}>
             <input type="radio" name="kind" value={k} checked={current === k} onChange={() => setCurrent(k)} className="sr-only" />
-            {k === "kunde" ? "Kunde" : "Dienstleister"}
+            {KIND_LABEL[k]}
           </label>
         ))}
       </div>
@@ -269,7 +292,7 @@ export function EditCompanyForm({ company, tagOptions }: { company: Company; tag
   return (
     <form action={action} className="grid gap-3 px-5 pb-5 pt-2 sm:grid-cols-2 lg:grid-cols-4">
       <div className="sm:col-span-2 lg:col-span-4">
-        <KindFields kind={company.kind} tags={company.tags} options={tagOptions} />
+        <KindFields kind={company.kind} tags={company.tags} options={tagOptions} withCompetitor />
       </div>
       {fields.map(([key, label, hint]) => (
         <Field key={key} label={label} hint={hint}>

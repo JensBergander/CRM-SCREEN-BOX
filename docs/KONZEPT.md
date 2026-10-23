@@ -107,6 +107,15 @@ Ein kleiner Helfer auf dem Mac legt auf Knopfdruck aus der App die Ordner an. Zi
 
 Die Vorlage ist in der App einstellbar. Bestehende Ordner werden nie verändert.
 
+## Kundeneinschätzung und Wettbewerber
+
+- Firmen haben eine Art: Kunde, Dienstleister oder Wettbewerber.
+- Beim Verlieren eines Vorgangs optional „Wer hat den Auftrag bekommen?“; ein neuer Name legt einen Wettbewerber an. Nachtragen im Vorgang jederzeit.
+- 0–5 Sterne je Firma. Vorschlag der App ab 3 Angeboten nach RFM-Gedanke: 50 % geglättete Annahmequote (angenommen + 1) / (entschieden + 2), 35 % Umsatz-Rang laut Lexware, 15 % Aktualität des letzten Auftrags. Angebote mit daraus entstandener Rechnung gelten als angenommen. Eigene Bewertung schlägt den Vorschlag; 0 Sterne („keine Angebote mehr“) nur von Hand, mit Begründung.
+- Firmenseite: Karte „Einschätzung“ mit Sternen, „x von y Angeboten angenommen“, Umsatz, letzter Auftrag, Wettbewerber, Mails und Anrufe.
+- Hinweise bei neuen Anfragen (Posteingang, neuer Vorgang, Vorgang): deutlich bei 0 Sternen, dezent bei 1–2 Sternen.
+- Firmenliste mit Sterne-Spalte, Sortierung und Filter; eigene Seite „Wettbewerber“.
+
 ## Ideen für später
 
 - Alte Domain bergander-film.de (ebenfalls Microsoft 365): Wer dorthin schreibt, bekommt automatisch einen Hinweis, künftig office@screen-box.de zu verwenden. Lässt sich voraussichtlich ohne CRM direkt in Exchange lösen (automatische Antwort bzw. Transportregel).

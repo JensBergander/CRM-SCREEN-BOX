@@ -17,6 +17,7 @@ import type { InboxRow } from "@/lib/queries";
 import type { SyncResult } from "@/lib/mail";
 import { KindFields } from "./forms";
 import { RunningDot } from "./timeline";
+import { RatingHintView } from "./rating";
 import { btnPrimary, btnQuiet, Empty, Field, FormError, Input } from "./ui";
 
 export function SyncButton() {
@@ -92,6 +93,7 @@ function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; com
         {data.text || "(kein Text)"}
       </section>
       <form action={action} className="flex flex-col gap-3">
+        {data.hint && data.company && <RatingHintView companyId={data.company.id} {...data.hint} />}
         <p className="text-xs text-muted">Aus der Signatur vorausgefüllt, bitte kurz prüfen.</p>
         <KindFields options={tagOptions} />
         <Field label="Firma oder Person" hint="Vorhandene wählen oder neuen Namen eingeben">
