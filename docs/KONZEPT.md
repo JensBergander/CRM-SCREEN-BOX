@@ -107,6 +107,11 @@ Ein kleiner Helfer auf dem Mac legt auf Knopfdruck aus der App die Ordner an. Zi
 
 Die Vorlage ist in der App einstellbar. Bestehende Ordner werden nie verändert.
 
+## Ideen für später
+
+- Alte Domain bergander-film.de (ebenfalls Microsoft 365): Wer dorthin schreibt, bekommt automatisch einen Hinweis, künftig office@screen-box.de zu verwenden. Lässt sich voraussichtlich ohne CRM direkt in Exchange lösen (automatische Antwort bzw. Transportregel).
+- Alte Kontakte aus der bergander-film.de-Zeit sichten und übernehmen, z. B. über eine Liste früherer Mail-Partner, die noch nicht im CRM stehen.
+
 ## Stufen
 
 | Stufe | Inhalt |
