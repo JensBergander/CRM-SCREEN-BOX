@@ -6,6 +6,7 @@ import { moveDealAction } from "@/app/(app)/actions";
 import { LOST_REASONS, type LostReason, type Stage } from "@/db/schema";
 import { daysSince, euro } from "@/lib/format";
 import { BOARD_STAGES, LOST_REASON_LABEL, STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
+import { STAGE_TONE, TONE_WASH } from "@/lib/tones";
 import type { DealRow } from "@/lib/queries";
 import { PlanningDialog } from "./planning";
 import { Badge, btnPrimary, btnQuiet, Field, Input, Select, Textarea } from "./ui";
@@ -60,7 +61,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
                 aria-label={STAGE_LABEL[stage]}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => drop(stage)}
-                className={`flex min-h-40 flex-col gap-2.5 rounded-2xl p-3 ${dragging ? "bg-line" : "bg-line-soft"}`}
+                className={`flex min-h-40 flex-col gap-2.5 rounded-2xl p-3 ${TONE_WASH[STAGE_TONE[stage]][dragging ? "drag" : "idle"]}`}
               >
                 <div className="flex items-center gap-2 px-1 pt-1">
                   <span className={`h-2 w-2 rounded-full ${STAGE_DOT[stage]}`} />
@@ -79,7 +80,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
                       onDragStart={() => setDragging(deal.id)}
                       onDragEnd={() => setDragging(null)}
                       className={`flex cursor-grab flex-col gap-2 rounded-xl bg-surface p-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.06)] ${
-                        stale ? "ring-[1.5px] ring-[#F3B9A4]" : ""
+                        stale ? "ring-[1.5px] ring-danger/40" : ""
                       } ${dragging === deal.id ? "opacity-50" : ""}`}
                     >
                       <div className="flex gap-2 text-xs text-muted">
@@ -91,7 +92,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
                         <span className="flex-1 text-[13px] font-semibold tabular-nums">{euro(deal.amountNet)}</span>
                         {deal.compareOnly && <Badge tone="info">Vergleich?</Badge>}
                         {deal.quick && <Badge>Schnellauftrag</Badge>}
-                        <Badge tone={stale ? "accent" : "neutral"}>{days <= 0 ? "heute" : `${days} T`}</Badge>
+                        <Badge tone={stale ? "danger" : "neutral"}>{days <= 0 ? "heute" : `${days} T`}</Badge>
                       </div>
                     </Link>
                   );
@@ -106,7 +107,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
         onDragOver={(e) => e.preventDefault()}
         onDrop={() => drop("verloren")}
         className={`rounded-2xl border-2 border-dashed px-5 py-4 text-center text-sm ${
-          dragging ? "border-accent text-accent-ink" : "border-line text-muted"
+          dragging ? "border-muted bg-line-soft text-ink" : "border-line text-muted"
         }`}
       >
         Hierher ziehen: Abgelehnt / Verloren

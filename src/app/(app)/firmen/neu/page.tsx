@@ -9,7 +9,7 @@ export default async function NewCompanyPage({ searchParams }: PageProps<"/firme
   const title = { kunde: "Neue Firma", dienstleister: "Neuer Dienstleister", lieferant: "Neuer Lieferant", wettbewerber: "Neuer Wettbewerber" }[kind];
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title={title} />
+      <PageHeader area={({ kunde: "firmen", dienstleister: "dienstleister", lieferant: "lieferanten", wettbewerber: "wettbewerber" } as const)[kind]} title={title} />
       <NewCompanyForm kind={kind} tagOptions={await allTagOptions()} />
     </div>
   );

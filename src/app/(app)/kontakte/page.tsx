@@ -11,7 +11,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Kontakte" sub={`${rows.length} ${query ? "Treffer" : "Kontakte"}`}>
+      <PageHeader area="kontakte" title="Kontakte" sub={`${rows.length} ${query ? "Treffer" : "Kontakte"}`}>
         <SearchBox defaultValue={query} placeholder="Name, Mail oder Firma" />
       </PageHeader>
       <div className="overflow-x-auto rounded-2xl bg-surface">

@@ -42,7 +42,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Firmen" sub={`${rows.length} ${query || filter !== "alle" ? "Treffer" : "Kunden"}`}>
+      <PageHeader area="firmen" title="Firmen" sub={`${rows.length} ${query || filter !== "alle" ? "Treffer" : "Kunden"}`}>
         <SearchBox defaultValue={query} placeholder="Name oder Ort" keep={{ sterne: filter === "alle" ? undefined : filter, sort: byStars ? "sterne" : undefined }} />
         <Link href="/firmen/neu" className={btnPrimary}>
           <Plus size={16} strokeWidth={2.2} aria-hidden="true" />

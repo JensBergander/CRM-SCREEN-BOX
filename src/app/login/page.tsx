@@ -18,7 +18,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         <p className="mt-2 text-sm text-muted">Anmeldung mit deinem Microsoft-Konto</p>
 
         {message && (
-          <p role="alert" className="mt-6 rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-ink">
+          <p role="alert" className="mt-6 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger-ink">
             {message}
           </p>
         )}

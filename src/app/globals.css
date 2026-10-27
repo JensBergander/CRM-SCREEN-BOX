@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-/* Farben nach screen-box.de. Orange nur für Dinge, die Handeln verlangen. */
+/* Farben nach screen-box.de. Orange steht für Produktion, Rot für Handlungsbedarf.
+   Jede Farbe hat drei Stufen: Grundton (Punkte, Balken), -soft (Flächen), -ink (Text auf -soft).
+   Welche Phase, Firmenart und welcher Bereich welche Farbe hat, steht in src/lib/tones.ts. */
 :root {
   --bg: #f5f5f7;
   --surface: #ffffff;
@@ -8,12 +10,44 @@
   --muted: #6e6e73;
   --line: #e5e5ea;
   --line-soft: #f0f0f3;
-  --accent: #e84a14;
-  --accent-ink: #b93a0e;
-  --accent-soft: #fdede6;
   --info-soft: #e8f4fc;
   --info-ink: #1f5f8b;
+
+  /* Phasen: kalt → heiß → Geld */
+  --lead: #8492a6;
+  --lead-soft: #eef1f5;
+  --lead-ink: #4a5568;
+  --sales: #3d8fd6;
+  --sales-soft: #e8f2fb;
+  --sales-ink: #1f5f8b;
+  --accent: #e84a14;
+  --accent-soft: #fdede6;
+  --accent-ink: #b93a0e;
+  --done: #e3a008;
+  --done-soft: #fdf4dc;
+  --done-ink: #8a6100;
+  --invoice: #8b6bd9;
+  --invoice-soft: #f1ecfb;
+  --invoice-ink: #5b3fa6;
   --ok: #34a869;
+  --ok-soft: #e6f4ec;
+  --ok-ink: #1e7b4d;
+
+  /* Handlungsbedarf */
+  --danger: #d0263a;
+  --danger-soft: #fce8ea;
+  --danger-ink: #a51d2d;
+
+  /* Firmenarten (Kunde bleibt neutral) */
+  --partner: #1f9a9a;
+  --partner-soft: #e2f3f2;
+  --partner-ink: #146b6b;
+  --supplier: #b5883a;
+  --supplier-soft: #f5eddd;
+  --supplier-ink: #7a5a1f;
+  --rival: #a1457f;
+  --rival-soft: #f6e7f0;
+  --rival-ink: #7a2d5e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,10 +58,40 @@
     --muted: #a1a1a6;
     --line: #2c2c2e;
     --line-soft: #242426;
-    --accent-ink: #ff8a5c;
-    --accent-soft: #3a1d12;
     --info-soft: #14283a;
     --info-ink: #9cd2f5;
+
+    --lead: #8f9cb0;
+    --lead-soft: #22262d;
+    --lead-ink: #b9c3d3;
+    --sales: #5aa7e8;
+    --sales-soft: #14283a;
+    --sales-ink: #9cd2f5;
+    --accent-soft: #3a1d12;
+    --accent-ink: #ff8a5c;
+    --done: #f0b429;
+    --done-soft: #33280c;
+    --done-ink: #f2c94c;
+    --invoice: #a68bf0;
+    --invoice-soft: #251d3a;
+    --invoice-ink: #c4b1f5;
+    --ok: #3fbf79;
+    --ok-soft: #12301f;
+    --ok-ink: #7fd6a3;
+
+    --danger: #f0485a;
+    --danger-soft: #3a1418;
+    --danger-ink: #ff8a96;
+
+    --partner: #35b5b3;
+    --partner-soft: #0f2e2e;
+    --partner-ink: #7fd3d1;
+    --supplier: #d0a457;
+    --supplier-soft: #2f2614;
+    --supplier-ink: #e0bd7f;
+    --rival: #c76aa3;
+    --rival-soft: #351828;
+    --rival-ink: #e9a2cc;
   }
 }
 
@@ -38,12 +102,38 @@
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-line-soft: var(--line-soft);
-  --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
-  --color-accent-soft: var(--accent-soft);
   --color-info-soft: var(--info-soft);
   --color-info-ink: var(--info-ink);
+  --color-lead: var(--lead);
+  --color-lead-soft: var(--lead-soft);
+  --color-lead-ink: var(--lead-ink);
+  --color-sales: var(--sales);
+  --color-sales-soft: var(--sales-soft);
+  --color-sales-ink: var(--sales-ink);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-done: var(--done);
+  --color-done-soft: var(--done-soft);
+  --color-done-ink: var(--done-ink);
+  --color-invoice: var(--invoice);
+  --color-invoice-soft: var(--invoice-soft);
+  --color-invoice-ink: var(--invoice-ink);
   --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-ok-ink: var(--ok-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-partner: var(--partner);
+  --color-partner-soft: var(--partner-soft);
+  --color-partner-ink: var(--partner-ink);
+  --color-supplier: var(--supplier);
+  --color-supplier-soft: var(--supplier-soft);
+  --color-supplier-ink: var(--supplier-ink);
+  --color-rival: var(--rival);
+  --color-rival-soft: var(--rival-soft);
+  --color-rival-ink: var(--rival-ink);
   --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
 }
 

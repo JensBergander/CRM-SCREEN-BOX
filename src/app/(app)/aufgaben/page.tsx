@@ -18,7 +18,7 @@ export default async function TasksPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Aufgaben" sub={`${open.length} offen`} />
+      <PageHeader area="aufgaben" title="Aufgaben" sub={`${open.length} offen`} />
       <Card title="Neue Aufgabe">
         <TaskForm />
       </Card>

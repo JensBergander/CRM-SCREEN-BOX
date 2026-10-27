@@ -31,7 +31,7 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Vorgänge">
+      <PageHeader area="vorgaenge" title="Vorgänge">
         <div role="group" aria-label="Ansicht" className="flex rounded-full bg-line p-1">
           <Link href={link({ ansicht: null })} aria-current={!table ? "page" : undefined} className={pill(!table)}>Board</Link>
           <Link href={link({ ansicht: "tabelle" })} aria-current={table ? "page" : undefined} className={pill(table)}>Tabelle</Link>

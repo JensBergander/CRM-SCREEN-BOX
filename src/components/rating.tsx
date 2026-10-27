@@ -15,7 +15,7 @@ export function Stars({ value, suggested = false, size = 14 }: { value: number |
       {[1, 2, 3, 4, 5].map((i) => (
         <Star key={i} size={size} aria-hidden="true" className={i <= value ? "fill-[#F5B400] text-[#F5B400]" : "text-line"} />
       ))}
-      {value === 0 && <span className="ml-1.5 text-xs font-semibold text-accent-ink">keine Angebote mehr</span>}
+      {value === 0 && <span className="ml-1.5 text-xs font-semibold text-danger-ink">keine Angebote mehr</span>}
     </span>
   );
 }
@@ -106,7 +106,7 @@ export function AssessmentCard({ data }: { data: AssessmentData }) {
                 </button>
               ))}
             </div>
-            {draft === 0 && <p className="text-xs text-accent-ink">0 Sterne: Bei neuen Anfragen dieser Firma erscheint ein deutlicher Hinweis.</p>}
+            {draft === 0 && <p className="text-xs text-danger-ink">0 Sterne: Bei neuen Anfragen dieser Firma erscheint ein deutlicher Hinweis.</p>}
             <label className="flex flex-col gap-1 text-[13px] font-semibold text-muted">
               Begründung (optional)
               <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="z. B. vergibt immer an Foto Müller" />
@@ -147,7 +147,7 @@ export function AssessmentCard({ data }: { data: AssessmentData }) {
             <p className="mb-1 text-muted">Wettbewerber gewinnt</p>
             <div className="flex flex-wrap gap-1.5">
               {data.competitors.map((c) => (
-                <Link key={c.id} href={`/firmen/${c.id}`} className="inline-flex min-h-7 items-center gap-1 rounded-full bg-accent-soft px-2.5 text-[12px] font-semibold text-accent-ink">
+                <Link key={c.id} href={`/firmen/${c.id}`} className="inline-flex min-h-7 items-center gap-1 rounded-full bg-rival-soft px-2.5 text-[12px] font-semibold text-rival-ink">
                   {c.name} <span className="opacity-70">{c.wins}×</span>
                 </Link>
               ))}
@@ -163,7 +163,7 @@ export function AssessmentCard({ data }: { data: AssessmentData }) {
 export function RatingHintView({ companyId, stars, manual, note, facts }: { companyId: number; stars: number; manual: boolean; note: string | null; facts: string }) {
   const strong = stars === 0;
   return (
-    <div role="note" className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-sm ${strong ? "bg-accent-soft text-accent-ink" : "bg-line-soft text-ink"}`}>
+    <div role="note" className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-4 py-3 text-sm ${strong ? "bg-danger-soft text-danger-ink" : "bg-line-soft text-ink"}`}>
       <Stars value={stars} suggested={!manual} />
       <span className={strong ? "font-semibold" : ""}>
         {strong ? "Achtung: Für diese Firma hast du „keine Angebote mehr“ festgelegt." : "Vorsicht bei dieser Firma."}

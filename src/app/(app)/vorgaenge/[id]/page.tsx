@@ -16,6 +16,7 @@ import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
 import { SupplierCard } from "@/components/suppliers";
 import { Badge, btnSecondary, Card } from "@/components/ui";
+import { STAGE_TONE } from "@/lib/tones";
 
 export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
   const { id } = await params;
@@ -42,7 +43,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
         </p>
         <InlineTitle value={deal.title} label="Projektname" onSave={renameDealAction.bind(null, deal.id)} />
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={deal.stage === "erledigt" ? "accent" : "neutral"}>
+          <Badge tone={STAGE_TONE[deal.stage]}>
             {STAGE_LABEL[deal.stage]}
           </Badge>
           <span className="text-sm font-semibold tabular-nums">{euro(deal.amountNet)}</span>

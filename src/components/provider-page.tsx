@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { listCompanies, primaryContacts, serviceTags } from "@/lib/queries";
 import { serviceTagOptions, type TagKind } from "@/lib/service-tags";
+import { KIND_TONE, TONE_SOFT } from "@/lib/tones";
 import { ContactActions } from "@/components/contact-actions";
 import { SearchBox } from "@/components/search-box";
 import { btnPrimary, Card, Empty, PageHeader } from "@/components/ui";
@@ -51,7 +52,7 @@ export async function ProviderPage({ kind, params }: { kind: TagKind; params: Re
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title={t.title} sub={t.sub}>
+      <PageHeader area={kind === "lieferant" ? "lieferanten" : "dienstleister"} title={t.title} sub={t.sub}>
         <SearchBox defaultValue={query} placeholder={t.search} keep={{ [t.param]: tag }} />
         <Link href={`/firmen/neu?art=${kind}`} className={btnPrimary}>
           <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
@@ -90,7 +91,7 @@ export async function ProviderPage({ kind, params }: { kind: TagKind; params: Re
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {(r.tags ?? "").split(",").map((x) => x.trim()).filter(Boolean).map((x) => (
-                    <Link key={x} href={href(x)} className="rounded-md bg-info-soft px-2 py-0.5 text-[11px] font-semibold text-info-ink">{x}</Link>
+                    <Link key={x} href={href(x)} className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${TONE_SOFT[KIND_TONE[kind]]}`}>{x}</Link>
                   ))}
                 </div>
                 <ContactActions name={r.name} phone={person?.phone ?? r.phone} email={person?.email ?? r.email} />

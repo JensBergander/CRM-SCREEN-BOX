@@ -27,7 +27,7 @@ export default async function CompetitorsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Wettbewerber" sub={`${rows.length} erfasst · ${unknown} verlorene Vorgänge ohne bekannten Wettbewerber`}>
+      <PageHeader area="wettbewerber" title="Wettbewerber" sub={`${rows.length} erfasst · ${unknown} verlorene Vorgänge ohne bekannten Wettbewerber`}>
         <Link href="/firmen/neu?art=wettbewerber" className={btnPrimary}>
           <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
           Neuer Wettbewerber

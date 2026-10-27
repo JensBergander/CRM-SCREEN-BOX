@@ -47,7 +47,7 @@ export function TaskList({ tasks, today, empty }: { tasks: TaskRow[]; today: str
               )}
             </div>
             {!done && (
-              <span className={`whitespace-nowrap text-xs font-semibold ${due.overdue ? "text-accent-ink" : "text-ink"}`}>
+              <span className={`whitespace-nowrap text-xs font-semibold ${due.overdue ? "text-danger-ink" : "text-ink"}`}>
                 {due.text}
               </span>
             )}

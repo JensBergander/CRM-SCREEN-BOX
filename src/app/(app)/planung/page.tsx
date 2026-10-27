@@ -29,7 +29,7 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Planung" sub={`${dateDe(start)} bis ${dateDe(end)} · Produktion dunkel, Postproduktion hell`}>
+      <PageHeader area="planung" title="Planung" sub={`${dateDe(start)} bis ${dateDe(end)} · Produktion kräftig, Postproduktion hell`}>
         <div className="flex items-center gap-1">
           <Link href={`/planung?ab=${addDaysIso(start, -28)}`} aria-label="4 Wochen zurück" className="flex h-10 w-10 items-center justify-center rounded-full bg-surface hover:bg-line">
             <ChevronLeft size={18} aria-hidden="true" />
@@ -53,7 +53,7 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
                 {days.map((d) => {
                   const wd = new Date(`${d}T12:00:00Z`).getUTCDay();
                   return (
-                    <div key={d} style={{ width: DAY_W }} className={`shrink-0 py-1 text-center ${wd === 0 || wd === 6 ? "bg-bg" : ""} ${d === today ? "font-bold text-accent-ink" : ""}`}>
+                    <div key={d} style={{ width: DAY_W }} className={`shrink-0 py-1 text-center ${wd === 0 || wd === 6 ? "bg-bg" : ""} ${d === today ? "font-bold text-ink" : ""}`}>
                       {wd === 1 && <div className="font-semibold text-ink">KW{isoWeek(d)}</div>}
                       {wd !== 1 && <div>&nbsp;</div>}
                       <div>{Number(d.slice(8))}</div>
@@ -80,12 +80,13 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
                       <div
                         key={d}
                         style={{ width: DAY_W }}
-                        className={`relative flex shrink-0 items-center justify-center ${wd === 0 || wd === 6 ? "bg-bg" : ""} ${d === today ? "bg-accent-soft/50" : ""}`}
+                        className={`relative flex shrink-0 items-center justify-center ${wd === 0 || wd === 6 ? "bg-bg" : ""} `}
                         title={label}
                         aria-label={label}
                       >
-                        {prod && <span className="h-6 w-[22px] rounded-[4px] bg-ink" />}
-                        {!prod && post && <span className="h-3 w-full bg-[#91CCF4]" />}
+                        {d === today && <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-ink/50" aria-hidden="true" />}
+                        {prod && <span className="relative h-6 w-[22px] rounded-[4px] bg-accent" />}
+                        {!prod && post && <span className="relative h-3 w-full bg-accent-soft ring-1 ring-inset ring-accent/30" />}
                       </div>
                     );
                   })}

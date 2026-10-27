@@ -34,12 +34,12 @@ export default async function StartPage() {
       label: "Offen zur Abrechnung",
       value: String(data.billing.length),
       hint: oldestBilling !== null ? `ältester ${ageLabel(oldestBilling)} erledigt` : "erledigt, noch keine Rechnung",
-      dot: "bg-accent",
+      dot: data.billing.length > 0 ? "bg-danger" : "bg-done",
       hot: data.billing.length > 0,
     },
-    { label: "Angebote nachfassen", value: String(data.followUps.length), hint: "über 10 Tage ohne Antwort", dot: "bg-[#91CCF4]" },
-    { label: "Laufende Projekte", value: String(data.beauftragt), hint: "in Phase Beauftragt", dot: "bg-ok" },
-    { label: "Offene Angebote", value: euro(data.offers.total ?? 0), hint: `${data.offers.n} Angebote verschickt`, dot: "bg-[#C7C7CC]" },
+    { label: "Angebote nachfassen", value: String(data.followUps.length), hint: "über 10 Tage ohne Antwort", dot: "bg-sales" },
+    { label: "Laufende Projekte", value: String(data.beauftragt), hint: "in Phase Beauftragt", dot: "bg-accent" },
+    { label: "Offene Angebote", value: euro(data.offers.total ?? 0), hint: `${data.offers.n} Angebote verschickt`, dot: "bg-sales" },
   ];
 
   return (
@@ -57,7 +57,7 @@ export default async function StartPage() {
               <span className={`h-2 w-2 rounded-full ${kpi.dot}`} />
               {kpi.label}
             </div>
-            <div className={`text-3xl font-bold tracking-tight ${kpi.hot ? "text-accent-ink" : ""}`}>{kpi.value}</div>
+            <div className={`text-3xl font-bold tracking-tight ${kpi.hot ? "text-danger-ink" : ""}`}>{kpi.value}</div>
             <div className="text-xs text-muted">{kpi.hint}</div>
           </div>
         ))}
@@ -66,19 +66,19 @@ export default async function StartPage() {
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(380px,100%),1fr))] items-start gap-5">
         <Card
           title="Offen zur Abrechnung"
-          aside={data.billing.length > 0 && <Badge tone="accent">{data.billing.length} · {euro(billingSum)}</Badge>}
+          aside={data.billing.length > 0 && <Badge tone="danger">{data.billing.length} · {euro(billingSum)}</Badge>}
         >
           {data.billing.length === 0 && <Empty>Nichts offen. Alles abgerechnet.</Empty>}
           {data.billing.map((deal) => {
             const days = daysSince(deal.stageChangedAt);
             return (
               <div key={deal.id} className="flex items-center gap-3.5 border-t border-line-soft px-5 py-3.5">
-                <span className={`w-1 self-stretch rounded ${days >= 7 ? "bg-accent" : "bg-accent-soft"}`} />
+                <span className={`w-1 self-stretch rounded ${days >= 7 ? "bg-danger" : "bg-done"}`} />
                 <Link href={`/vorgaenge/${deal.id}`} className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">{deal.companyName}</p>
                   <p className="truncate text-[13px] text-muted">{deal.title} · {euro(deal.amountNet)}</p>
                 </Link>
-                <span className={`whitespace-nowrap text-xs font-semibold ${days >= 7 ? "text-accent-ink" : "text-muted"}`}>
+                <span className={`whitespace-nowrap text-xs font-semibold ${days >= 7 ? "text-danger-ink" : "text-muted"}`}>
                   {ageLabel(days)}
                 </span>
                 <form action={advanceDealAction.bind(null, deal.id, "rechnung")}>
@@ -95,7 +95,7 @@ export default async function StartPage() {
             <div key={`${p.dealId}-${p.day}-${i}`} className="relative">
             <Row href={`/vorgaenge/${p.dealId}`}>
               <div className="w-14 shrink-0 text-center">
-                <p className="text-[11px] font-semibold uppercase text-muted">
+                <p className="text-[11px] font-semibold uppercase text-accent-ink">
                   {new Intl.DateTimeFormat("de-DE", { weekday: "short", timeZone: "UTC" }).format(new Date(`${p.day}T12:00:00Z`))}
                 </p>
                 <p className="text-lg font-bold leading-tight">{p.day.slice(8)}.{p.day.slice(5, 7)}.</p>

@@ -21,6 +21,7 @@ export default async function InboxPage({ searchParams }: PageProps<"/posteingan
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
+        area="posteingang"
         title="Posteingang"
         sub={lastRun ? `Zuletzt abgerufen: ${relativeTime(lastRun)}` : configured ? "Noch nicht abgerufen" : undefined}
       >
@@ -40,7 +41,7 @@ export default async function InboxPage({ searchParams }: PageProps<"/posteingan
             className={`inline-flex min-h-9 items-center rounded-full px-4 text-[13px] font-semibold ${view === key ? "bg-surface shadow-sm" : "text-muted"}`}
           >
             {label}
-            {key === "offen" && state.open > 0 && <span className="ml-1.5 rounded-full bg-accent-soft px-2 text-accent-ink">{state.open}</span>}
+            {key === "offen" && state.open > 0 && <span className="ml-1.5 rounded-full bg-sales-soft px-2 text-sales-ink">{state.open}</span>}
           </Link>
         ))}
       </div>

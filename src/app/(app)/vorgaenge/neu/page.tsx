@@ -26,6 +26,7 @@ export default async function NewDealPage({ searchParams }: PageProps<"/vorgaeng
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        area="vorgaenge"
         title={quick ? "Schnellauftrag" : "Neuer Vorgang"}
         sub={
           fromMail

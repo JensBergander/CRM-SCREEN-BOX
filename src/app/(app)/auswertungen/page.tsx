@@ -3,13 +3,17 @@ import { euro } from "@/lib/format";
 import { LOST_REASON_LABEL } from "@/lib/labels";
 import { crmReport, lexwareReport, type Period } from "@/lib/reports";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { TONE_DOT, type Tone } from "@/lib/tones";
 
 const PERIODS: Record<Period, string> = { "12m": "Letzte 12 Monate", jahr: "Dieses Jahr", alles: "Alles" };
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Stat({ label, value, hint, tone = "neutral" }: { label: string; value: string; hint?: string; tone?: Tone }) {
   return (
     <div className="flex flex-col gap-1 rounded-2xl bg-surface p-5">
-      <p className="text-[13px] text-muted">{label}</p>
+      <p className="flex items-center gap-2 text-[13px] text-muted">
+        <span className={`h-2 w-2 rounded-full ${TONE_DOT[tone]}`} />
+        {label}
+      </p>
       <p className="text-2xl font-bold tracking-tight tabular-nums">{value}</p>
       {hint && <p className="text-xs text-muted">{hint}</p>}
     </div>
@@ -27,7 +31,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/auswertu
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Auswertungen">
+      <PageHeader area="auswertungen" title="Auswertungen">
         <div role="group" aria-label="Zeitraum" className="flex rounded-full bg-line p-1">
           {Object.entries(PERIODS).map(([key, label]) => (
             <Link
@@ -44,10 +48,11 @@ export default async function ReportsPage({ searchParams }: PageProps<"/auswertu
 
       <h2 className="-mb-2 text-lg font-bold">Aus Lexware</h2>
       <section aria-label="Kennzahlen Lexware" className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-        <Stat label="Umsatz netto" value={euro(lx.totals.revenue)} hint={`${lx.totals.invoices} Rechnungen`} />
-        <Stat label="Angebote geschrieben" value={String(lx.totals.offers)} hint={`${lx.totals.openOffers} noch offen`} />
-        <Stat label="Annahmequote" value={pct(lx.totals.acceptRate)} hint="angenommen von entschiedenen Angeboten" />
+        <Stat tone="ok" label="Umsatz netto" value={euro(lx.totals.revenue)} hint={`${lx.totals.invoices} Rechnungen`} />
+        <Stat tone="sales" label="Angebote geschrieben" value={String(lx.totals.offers)} hint={`${lx.totals.openOffers} noch offen`} />
+        <Stat tone="accent" label="Annahmequote" value={pct(lx.totals.acceptRate)} hint="angenommen von entschiedenen Angeboten" />
         <Stat
+          tone="invoice"
           label="Ø Rechnung"
           value={lx.totals.invoices ? euro(lx.totals.revenue / lx.totals.invoices) : "–"}
           hint="netto je Rechnung"
@@ -60,7 +65,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/auswertu
             {lx.months.map((m) => (
               <div key={m.key} role="listitem" className="group relative flex h-full flex-1 flex-col justify-end" tabIndex={0} aria-label={`${m.label}: ${euro(m.value)}`}>
                 <div
-                  className="w-full rounded-t-[4px] bg-ink group-hover:opacity-80 group-focus:opacity-80"
+                  className="w-full rounded-t-[4px] bg-ok group-hover:opacity-80 group-focus:opacity-80"
                   style={{ height: `${(m.value / maxMonth) * 100}%`, minHeight: m.value > 0 ? 2 : 0 }}
                 />
                 <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-ink px-2.5 py-1.5 text-xs text-surface group-hover:block group-focus:block">
@@ -136,10 +141,10 @@ export default async function ReportsPage({ searchParams }: PageProps<"/auswertu
 
       <h2 className="-mb-2 mt-2 text-lg font-bold">Aus dem CRM</h2>
       <section aria-label="Kennzahlen CRM" className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-        <Stat label="Vorgänge" value={String(crm.requests)} hint={`${crm.quick} davon Schnellaufträge`} />
-        <Stat label="Beauftragt" value={String(crm.won)} hint={crm.requests ? `${Math.round((crm.won / crm.requests) * 100)} % der Vorgänge` : undefined} />
+        <Stat tone="lead" label="Vorgänge" value={String(crm.requests)} hint={`${crm.quick} davon Schnellaufträge`} />
+        <Stat tone="accent" label="Beauftragt" value={String(crm.won)} hint={crm.requests ? `${Math.round((crm.won / crm.requests) * 100)} % der Vorgänge` : undefined} />
         <Stat label="Verloren" value={String(crm.lost)} />
-        <Stat label="Vergleichsangebote" value={String(crm.compare)} hint="markiert oder als Grund angegeben" />
+        <Stat tone="info" label="Vergleichsangebote" value={String(crm.compare)} hint="markiert oder als Grund angegeben" />
       </section>
 
       <Card title="Absagegründe">
@@ -151,7 +156,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/auswertu
               <li key={r.reason} className="flex items-center gap-3 text-sm">
                 <span className="w-44 shrink-0 text-muted">{LOST_REASON_LABEL[r.reason]}</span>
                 <span className="h-3 flex-1 rounded-r-[4px] bg-line-soft">
-                  <span className="block h-3 rounded-r-[4px] bg-ink" style={{ width: `${(r.count / maxReason) * 100}%` }} />
+                  <span className="block h-3 rounded-r-[4px] bg-lead" style={{ width: `${(r.count / maxReason) * 100}%` }} />
                 </span>
                 <span className="w-8 text-right font-semibold tabular-nums">{r.count}</span>
               </li>

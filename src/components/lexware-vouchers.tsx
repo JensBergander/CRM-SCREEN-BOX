@@ -5,16 +5,17 @@ import { ExternalLink, FileText } from "lucide-react";
 import { linkVoucherAction } from "@/app/(app)/actions";
 import type { LexwareVoucher } from "@/db/schema";
 import { euro } from "@/lib/format";
+import type { Tone } from "@/lib/tones";
 import { Badge, btnQuiet, Empty } from "./ui";
 
 type LineItem = { name: string; description: string | null; quantity: number | null; unitName: string | null; net: number | null; total: number | null; optional: boolean };
 export type VoucherView = LexwareVoucher & { url: string; pdfUrl: string | null; items: LineItem[]; newer: boolean };
 
-const STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "info" | "ok" }> = {
-  open: { label: "offen", tone: "neutral" },
-  overdue: { label: "überfällig", tone: "accent" },
-  paid: { label: "bezahlt", tone: "neutral" },
-  paidoff: { label: "bezahlt", tone: "neutral" },
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+  open: { label: "offen", tone: "invoice" },
+  overdue: { label: "überfällig", tone: "danger" },
+  paid: { label: "bezahlt", tone: "ok" },
+  paidoff: { label: "bezahlt", tone: "ok" },
   accepted: { label: "angenommen", tone: "ok" },
   rejected: { label: "abgelehnt", tone: "neutral" },
   voided: { label: "storniert", tone: "neutral" },
@@ -91,7 +92,7 @@ export function LexwareVouchers({ dealId, linked, candidates, hasLexware }: {
   return (
     <>
       {newer.length > 0 && (
-        <div className="mx-5 mb-2 mt-1 rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-ink" role="status">
+        <div className="mx-5 mb-2 mt-1 rounded-xl bg-sales-soft px-4 py-3 text-sm text-sales-ink" role="status">
           Für diese Firma gibt es ein neueres Angebot ({newer.map((v) => v.number).join(", ")}). Ist es die überarbeitete Fassung,
           verknüpfe es stattdessen.
         </div>

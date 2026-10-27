@@ -14,7 +14,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Einstellungen" />
+      <PageHeader area="einstellungen" title="Einstellungen" />
       <Card title="Lexware Office" className="max-w-2xl">
         <LexwareImport configured={!!process.env.LEXWARE_API_KEY} />
         <p className="px-5 pb-2 text-sm text-muted">

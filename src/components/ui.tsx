@@ -1,5 +1,8 @@
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
+import { AREAS, type Area } from "@/lib/areas";
+import { TONE_SOFT, type Tone } from "@/lib/tones";
 
 export const btnPrimary =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 text-sm font-semibold text-surface disabled:opacity-50";
@@ -10,15 +13,28 @@ export const btnQuiet =
 export const inputClass =
   "min-h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-[15px] text-ink outline-none focus:border-ink";
 
-export function PageHeader({ title, sub, children }: { title: string; sub?: ReactNode; children?: ReactNode }) {
+export function PageHeader({ title, sub, area, children }: { title: string; sub?: ReactNode; area?: Area; children?: ReactNode }) {
+  const a = area && AREAS[area];
   return (
     <header className="flex flex-wrap items-center gap-4">
-      <div className="min-w-0 flex-[1_1_280px]">
-        {sub && <p className="text-[13px] text-muted">{sub}</p>}
-        <h1 className="mt-1 text-[28px] font-bold tracking-tight">{title}</h1>
+      <div className="flex min-w-0 flex-[1_1_280px] items-end gap-3.5">
+        {a && <AreaTile icon={a.icon} tone={a.tone} />}
+        <div className="min-w-0">
+          {sub && <p className="text-[13px] text-muted">{sub}</p>}
+          <h1 className="mt-1 text-[28px] font-bold tracking-tight">{title}</h1>
+        </div>
       </div>
       {children}
     </header>
+  );
+}
+
+// Getönte Kachel mit Bereichs-Icon, wie in der Seitenleiste
+export function AreaTile({ icon: Icon, tone }: { icon: LucideIcon; tone: Tone }) {
+  return (
+    <span className={`mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${TONE_SOFT[tone]}`}>
+      <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
+    </span>
   );
 }
 
@@ -54,15 +70,9 @@ export function Empty({ children }: { children: ReactNode }) {
   return <p className="border-t border-line-soft px-5 py-6 text-sm text-muted">{children}</p>;
 }
 
-export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "accent" | "info" | "ok"; children: ReactNode }) {
-  const tones = {
-    neutral: "bg-line-soft text-ink",
-    accent: "bg-accent-soft text-accent-ink",
-    info: "bg-info-soft text-info-ink",
-    ok: "bg-[#E6F4EC] text-[#1E7B4D]",
-  };
+export function Badge({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
   return (
-    <span className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold ${tones[tone]}`}>
+    <span className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-semibold ${TONE_SOFT[tone]}`}>
       {children}
     </span>
   );
@@ -92,5 +102,5 @@ export function Select(props: ComponentProps<"select">) {
 
 export function FormError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p role="alert" className="rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-ink">{message}</p>;
+  return <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger-ink">{message}</p>;
 }

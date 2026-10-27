@@ -1,4 +1,5 @@
 import type { LostReason, Stage } from "@/db/schema";
+import { STAGE_TONE, TONE_DOT } from "./tones";
 
 export const STAGE_LABEL: Record<Stage, string> = {
   anfrage: "Anfrage",
@@ -10,16 +11,10 @@ export const STAGE_LABEL: Record<Stage, string> = {
   verloren: "Abgelehnt / Verloren",
 };
 
-// Punktfarbe je Phase, wie im Entwurf
-export const STAGE_DOT: Record<Stage, string> = {
-  anfrage: "bg-[#C7C7CC]",
-  angebot: "bg-[#91CCF4]",
-  beauftragt: "bg-ink",
-  erledigt: "bg-accent",
-  rechnung: "bg-[#8E8E93]",
-  bezahlt: "bg-[#7A8FA6]",
-  verloren: "bg-line",
-};
+// Punktfarbe je Phase
+export const STAGE_DOT = Object.fromEntries(
+  Object.entries(STAGE_TONE).map(([stage, tone]) => [stage, TONE_DOT[tone]]),
+) as Record<Stage, string>;
 
 export const BOARD_STAGES: Stage[] = [
   "anfrage",

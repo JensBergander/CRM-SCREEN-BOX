@@ -12,7 +12,8 @@ import {
 } from "@/app/(app)/actions";
 import type { Company, CompanyKind, Deal, LostReason, Stage } from "@/db/schema";
 import type { TagOptions } from "@/lib/service-tags";
-import { STAGE_LABEL } from "@/lib/labels";
+import { STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
+import { STAGE_TONE, TONE_SOFT } from "@/lib/tones";
 import { LostDialog } from "./deal-board";
 import { PlanningDialog } from "./planning";
 import { AddressSearch } from "./place-input";
@@ -57,10 +58,11 @@ export function StageControl({ deal, competitors = [] }: { deal: Pick<Deal, "id"
                 disabled={pending || current}
                 onClick={() => go(stage)}
                 aria-current={current ? "step" : undefined}
-                className={`min-h-9 rounded-full px-3.5 text-[13px] font-semibold ${
-                  current ? "bg-ink text-surface" : passed ? "bg-line text-ink" : "bg-bg text-muted hover:text-ink"
+                className={`inline-flex min-h-9 items-center gap-2 rounded-full px-3.5 text-[13px] font-semibold ${
+                  current ? `${TONE_SOFT[STAGE_TONE[stage]]} ring-1 ring-inset ring-current/25` : passed ? "bg-line-soft text-ink" : "bg-bg text-muted hover:text-ink"
                 }`}
               >
+                <span className={`h-2 w-2 rounded-full ${STAGE_DOT[stage]} ${current || passed ? "" : "opacity-40"}`} aria-hidden="true" />
                 {STAGE_LABEL[stage]}
               </button>
             </li>

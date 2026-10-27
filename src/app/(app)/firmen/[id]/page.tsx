@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ChevronDown, Plus } from "lucide-react";
 import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
+import { KIND_LABEL, KIND_TONE, TONE_SOFT } from "@/lib/tones";
 import { MIN_OFFERS, ratingFor } from "@/lib/rating";
 import { AssessmentCard } from "@/components/rating";
 import { InlineTitle } from "@/components/inline-title";
@@ -59,11 +60,11 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           <div className="mt-1">
             <InlineTitle value={company.name} label="Firmenname" onSave={renameCompanyAction.bind(null, company.id)} />
           </div>
-          {tagLink && (
+          {company.kind !== "kunde" && (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <Link href={tagLink.href} className="rounded-md bg-line-soft px-2 py-0.5 text-[11px] font-semibold">{tagLink.label}</Link>
-              {(company.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
-                <Link key={t} href={`${tagLink.href}?${tagLink.param}=${encodeURIComponent(t)}`} className="rounded-md bg-info-soft px-2 py-0.5 text-[11px] font-semibold text-info-ink">{t}</Link>
+              <Link href={tagLink?.href ?? "/wettbewerber"} className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${TONE_SOFT[KIND_TONE[company.kind]]}`}>{KIND_LABEL[company.kind]}</Link>
+              {tagLink && (company.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
+                <Link key={t} href={`${tagLink.href}?${tagLink.param}=${encodeURIComponent(t)}`} className="rounded-md bg-line-soft px-2 py-0.5 text-[11px] font-semibold">{t}</Link>
               ))}
             </div>
           )}
@@ -173,7 +174,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
                   <p className="truncate text-sm font-semibold">{d.title}</p>
                   <p className="text-xs text-muted">{STAGE_LABEL[d.stage]}{d.number && ` · ${d.number}`}</p>
                   {d.stage === "verloren" && (
-                    <p className="mt-1 text-xs text-accent-ink">
+                    <p className="mt-1 text-xs text-danger-ink">
                       {[d.lostReason && LOST_REASON_LABEL[d.lostReason], d.competitorId && `an ${competitorNames.get(d.competitorId) ?? "Wettbewerber"}`]
                         .filter(Boolean)
                         .join(" · ")}
