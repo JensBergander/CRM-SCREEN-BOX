@@ -38,21 +38,20 @@ export function AutoReplyForm({ settings, sent }: { settings: { enabled: boolean
   );
 }
 
-export function ServiceTagsForm({ tags, kind = "dienstleister" }: { tags: string[]; kind?: "dienstleister" | "lieferant" }) {
-  const [state, action, pending] = useActionState(saveServiceTagsAction.bind(null, kind), undefined);
-  const supplier = kind === "lieferant";
+export function ServiceTagsForm({ tags }: { tags: string[] }) {
+  const [state, action, pending] = useActionState(saveServiceTagsAction, undefined);
   return (
     <form action={action} className="flex flex-col gap-3 px-5 pb-5">
       <p className="text-sm text-muted">
-        {supplier
-          ? "Eine Kategorie pro Zeile, in der gewünschten Reihenfolge. Diese Auswahl erscheint als Pills bei Lieferanten. Entfernst du eine Kategorie, bleibt sie bei bereits zugeordneten Lieferanten stehen, bis du sie bearbeitest."
-          : "Ein Gewerk pro Zeile, in der gewünschten Reihenfolge. Diese Auswahl erscheint als Pills bei Dienstleistern. Entfernst du ein Gewerk, bleibt es bei bereits zugeordneten Dienstleistern stehen, bis du sie bearbeitest."}
+        Eine Kategorie pro Zeile, in der gewünschten Reihenfolge, z. B. Technikverleih, Sprecher, Übersetzer. Diese Auswahl
+        erscheint als Pills bei Lieferanten und als Filter auf der Lieferanten-Seite. Entfernst du eine Kategorie, bleibt sie bei
+        bereits zugeordneten Lieferanten stehen, bis du sie bearbeitest.
       </p>
-      <label className="sr-only" htmlFor={`tags-${kind}`}>{supplier ? "Kategorien" : "Gewerke"}</label>
-      <Textarea id={`tags-${kind}`} name="tags" rows={10} defaultValue={tags.join("\n")} />
+      <label className="sr-only" htmlFor="tags">Kategorien</label>
+      <Textarea id="tags" name="tags" rows={14} defaultValue={tags.join("\n")} />
       <FormError message={state?.error} />
       <div className="flex items-center gap-3">
-        <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : supplier ? "Kategorien speichern" : "Gewerke speichern"}</button>
+        <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Kategorien speichern"}</button>
         {state && !state.error && !pending && <span className="text-sm text-muted">Gespeichert</span>}
       </div>
     </form>

@@ -287,15 +287,15 @@ export async function listCompanies(query?: string, kind: CompanyKind | "alle" =
     .orderBy(asc(companies.lexwareArchived), asc(companies.name));
 }
 
-// Alle vergebenen Gewerke bzw. Kategorien mit Anzahl, für die Filter auf der Dienstleister- und Lieferanten-Seite
-export async function serviceTags(kind: "dienstleister" | "lieferant" = "dienstleister") {
-  const rows = await db.select({ tags: companies.tags }).from(companies).where(eq(companies.kind, kind));
+// Alle vergebenen Kategorien mit Anzahl, für die Filter auf der Lieferanten-Seite
+export async function serviceTags() {
+  const rows = await db.select({ tags: companies.tags }).from(companies).where(eq(companies.kind, "lieferant"));
   const counts = new Map<string, number>();
   for (const r of rows) for (const t of (r.tags ?? "").split(",").map((s) => s.trim()).filter(Boolean)) counts.set(t, (counts.get(t) ?? 0) + 1);
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag, n]) => ({ tag, n }));
 }
 
-// Erste Kontaktperson je Firma (Name, Telefon, Mail) für die Dienstleister-Liste
+// Erste Kontaktperson je Firma (Name, Telefon, Mail) für die Lieferanten-Liste
 export async function primaryContacts(companyIds: number[]) {
   if (!companyIds.length) return new Map<number, { name: string; phone: string | null; email: string | null }>();
   const rows = await db.select().from(contacts).where(inArray(contacts.companyId, companyIds)).orderBy(asc(contacts.id));

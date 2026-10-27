@@ -100,7 +100,7 @@ function peopleOf(lx: LexwareContact) {
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 // Stammdaten aus Lexware übernehmen: Lexware gewinnt. Mail und Telefon behält das CRM nur, wenn Lexware keine hat.
-// CRM-eigene Felder (Notizen, Ordner, Bewertung, Gewerke, Mail-Domain, Firmenart) bleiben unberührt.
+// CRM-eigene Felder (Notizen, Ordner, Bewertung, Kategorien, Mail-Domain, Firmenart) bleiben unberührt.
 async function applyContact(lx: LexwareContact, company: Company) {
   const emails = emailsOf(lx);
   const phones = phonesOf(lx);

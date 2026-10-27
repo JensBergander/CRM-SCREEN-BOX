@@ -1,5 +1,7 @@
-import { ProviderPage } from "@/components/provider-page";
+import { redirect } from "next/navigation";
 
+// Dienstleister sind in den Lieferanten aufgegangen; alte Links und Lesezeichen landen dort
 export default async function ServicesPage({ searchParams }: PageProps<"/dienstleister">) {
-  return <ProviderPage kind="dienstleister" params={await searchParams} />;
+  const { gewerk } = await searchParams;
+  redirect(typeof gewerk === "string" && gewerk ? `/lieferanten?kategorie=${encodeURIComponent(gewerk)}` : "/lieferanten");
 }

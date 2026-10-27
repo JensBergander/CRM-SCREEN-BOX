@@ -41,7 +41,7 @@ export const LOST_REASONS = [
 ] as const;
 export type LostReason = (typeof LOST_REASONS)[number];
 
-export const COMPANY_KINDS = ["kunde", "dienstleister", "lieferant", "wettbewerber"] as const;
+export const COMPANY_KINDS = ["kunde", "lieferant", "wettbewerber"] as const;
 export type CompanyKind = (typeof COMPANY_KINDS)[number];
 
 export const TASK_KINDS = ["nachfassen", "rechnung", "zahlung"] as const;
@@ -60,13 +60,12 @@ export const companies = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     name: varchar("name", { length: 255 }).notNull(),
-    // Kunde, Dienstleister (Sprecher, Fotografen usw., die man bei Bedarf anfragt),
-    // Lieferant (Verleih, Druck, Hardware usw., bei denen man kauft oder mietet) oder Wettbewerber
+    // Kunde, Lieferant (alle, die dir Rechnungen schreiben: Verleih, Druck, Sprecher, Übersetzer usw.) oder Wettbewerber
     kind: mysqlEnum("kind", COMPANY_KINDS).notNull().default("kunde"),
     // eigene Einschätzung 0–5 Sterne (0 = keine Angebote mehr); leer = Vorschlag der App gilt
     rating: int("rating"),
     ratingNote: text("rating_note"),
-    // Gewerke (Dienstleister) bzw. Kategorien (Lieferanten), kommagetrennt, z. B. „Sprecher, Englisch“
+    // Kategorien bei Lieferanten, kommagetrennt, z. B. „Sprecher, Übersetzer“
     tags: varchar("tags", { length: 255 }),
     // Name des Ordners auf der Festplatte, z. B. EUROWINGS für Eurowings GmbH
     folderName: varchar("folder_name", { length: 120 }),

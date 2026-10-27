@@ -14,7 +14,7 @@ export function LexwareImport({ configured, lastSync }: { configured: boolean; l
     <div className="flex flex-col gap-4 px-5 pb-5 pt-1">
       <p className="text-sm text-muted">
         Lexware ist das Maß der Dinge: Name, Adresse, Nummern, Telefon, Mail und Ansprechpartner kommen von dort und sind im
-        CRM gesperrt. Was es nur im CRM gibt (Notizen, Ordnername, Bewertung, Gewerke, Mail-Domain, Firmenart), bleibt
+        CRM gesperrt. Was es nur im CRM gibt (Notizen, Ordnername, Bewertung, Kategorien, Mail-Domain, Firmenart), bleibt
         erhalten. Der Abgleich läuft jeden Morgen automatisch{lastSync && `, zuletzt am ${lastSync.split("-").reverse().join(".")}`}.
         Archivierte Lexware-Kontakte bleiben im CRM und werden markiert.
       </p>

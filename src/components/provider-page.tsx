@@ -1,44 +1,32 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { listCompanies, primaryContacts, serviceTags } from "@/lib/queries";
-import { serviceTagOptions, type TagKind } from "@/lib/service-tags";
+import { serviceTagOptions } from "@/lib/service-tags";
 import { KIND_TONE, TONE_SOFT } from "@/lib/tones";
 import { ContactActions } from "@/components/contact-actions";
 import { SearchBox } from "@/components/search-box";
 import { btnPrimary, Card, Empty, LexwareBadge, PageHeader } from "@/components/ui";
 
-const TEXT = {
-  dienstleister: {
-    path: "/dienstleister",
-    param: "gewerk",
-    title: "Dienstleister",
-    sub: "Sprecher, Fotografen und andere, die du bei Bedarf anfragst",
-    search: "Name, Gewerk oder Notiz",
-    add: "Neuer Dienstleister",
-    filter: "Nach Gewerk filtern",
-    empty: "Noch keine Dienstleister. Im Posteingang bei „Zuordnen“ „Dienstleister“ wählen oder oben neu anlegen.",
-  },
-  lieferant: {
-    path: "/lieferanten",
-    param: "kategorie",
-    title: "Lieferanten",
-    sub: "Verleih, Druck, Hardware und andere, bei denen du kaufst oder mietest",
-    search: "Name, Kategorie oder Notiz",
-    add: "Neuer Lieferant",
-    filter: "Nach Kategorie filtern",
-    empty: "Noch keine Lieferanten. Lieferanten aus Lexware holst du unter Einstellungen mit „Kunden und Lieferanten aus Lexware importieren“, sonst oben neu anlegen.",
-  },
+const t = {
+  path: "/lieferanten",
+  param: "kategorie",
+  title: "Lieferanten",
+  sub: "Alle, die dir Rechnungen schreiben: Verleih, Technik, Sprecher, Übersetzer und andere",
+  search: "Name, Kategorie oder Notiz",
+  add: "Neuer Lieferant",
+  filter: "Nach Kategorie filtern",
+  empty: "Noch keine Lieferanten. Lieferanten aus Lexware holst du unter Einstellungen mit „Jetzt mit Lexware abgleichen“, sonst oben neu anlegen.",
 };
 
-// Liste der Dienstleister bzw. Lieferanten mit Pill-Filter, Suche und Kontaktknöpfen
-export async function ProviderPage({ kind, params }: { kind: TagKind; params: Record<string, string | string[] | undefined> }) {
-  const t = TEXT[kind];
+// Liste der Lieferanten mit Pill-Filter nach Kategorie, Suche und Kontaktknöpfen
+export async function ProviderPage({ params }: { params: Record<string, string | string[] | undefined> }) {
+  const kind = "lieferant";
   const q = params.q;
   const filterValue = params[t.param];
   const query = typeof q === "string" && q.trim() ? q.trim() : undefined;
   const tag = typeof filterValue === "string" && filterValue ? filterValue : undefined;
-  const [rows, used, options] = await Promise.all([listCompanies(query, kind, tag), serviceTags(kind), serviceTagOptions(kind)]);
-  // Alle vorgegebenen Gewerke in ihrer Reihenfolge, dazu noch vergebene, die nicht mehr in der Auswahl stehen
+  const [rows, used, options] = await Promise.all([listCompanies(query, kind, tag), serviceTags(), serviceTagOptions()]);
+  // Alle vorgegebenen Kategorien in ihrer Reihenfolge, dazu noch vergebene, die nicht mehr in der Auswahl stehen
   const count = new Map(used.map((u) => [u.tag, u.n]));
   const tags = [...options, ...used.map((u) => u.tag).filter((t) => !options.includes(t))].map((t) => ({ tag: t, n: count.get(t) ?? 0 }));
   const people = await primaryContacts(rows.map((r) => r.id));
@@ -52,7 +40,7 @@ export async function ProviderPage({ kind, params }: { kind: TagKind; params: Re
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader area={kind === "lieferant" ? "lieferanten" : "dienstleister"} title={t.title} sub={t.sub}>
+      <PageHeader area="lieferanten" title={t.title} sub={t.sub}>
         <SearchBox defaultValue={query} placeholder={t.search} keep={{ [t.param]: tag }} />
         <Link href={`/firmen/neu?art=${kind}`} className={btnPrimary}>
           <Plus size={16} strokeWidth={2.2} aria-hidden="true" />

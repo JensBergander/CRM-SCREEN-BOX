@@ -241,8 +241,8 @@ export function ContactForm({ companyId }: { companyId: number }) {
   );
 }
 
-// Art der Firma; bei Dienstleistern die Gewerke, bei Lieferanten die Kategorien als feste Auswahl (Pills, mehrere möglich)
-const KIND_LABEL: Record<CompanyKind, string> = { kunde: "Kunde", dienstleister: "Dienstleister", lieferant: "Lieferant", wettbewerber: "Wettbewerber" };
+// Art der Firma; bei Lieferanten die Kategorien als feste Auswahl (Pills, mehrere möglich)
+const KIND_LABEL: Record<CompanyKind, string> = { kunde: "Kunde", lieferant: "Lieferant", wettbewerber: "Wettbewerber" };
 
 export function KindFields({ kind = "kunde", tags, options, withCompetitor = false }: {
   kind?: CompanyKind;
@@ -256,18 +256,18 @@ export function KindFields({ kind = "kunde", tags, options, withCompetitor = fal
   return (
     <div className="flex flex-col gap-3">
       <div role="radiogroup" aria-label="Art" className="flex w-fit rounded-full bg-line p-1">
-        {(["kunde", "dienstleister", "lieferant", ...(withCompetitor || kind === "wettbewerber" ? ["wettbewerber" as const] : [])] as CompanyKind[]).map((k) => (
+        {(["kunde", "lieferant", ...(withCompetitor || kind === "wettbewerber" ? ["wettbewerber" as const] : [])] as CompanyKind[]).map((k) => (
           <label key={k} className={`inline-flex min-h-9 cursor-pointer items-center rounded-full px-4 text-[13px] font-semibold ${current === k ? "bg-surface shadow-sm" : "text-muted"}`}>
             <input type="radio" name="kind" value={k} checked={current === k} onChange={() => setCurrent(k)} className="sr-only" />
             {KIND_LABEL[k]}
           </label>
         ))}
       </div>
-      {(current === "dienstleister" || current === "lieferant") && (
+      {current === "lieferant" && (
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-[13px] font-semibold text-muted">{current === "lieferant" ? "Kategorien" : "Gewerke"}</legend>
+          <legend className="mb-1.5 text-[13px] font-semibold text-muted">Kategorien</legend>
           <div className="flex flex-wrap gap-2">
-            {options[current].map((tag) => {
+            {options.map((tag) => {
               const on = selected.includes(tag);
               return (
                 <label
@@ -283,7 +283,7 @@ export function KindFields({ kind = "kunde", tags, options, withCompetitor = fal
             })}
           </div>
           <span className="text-xs text-muted">
-            Die Auswahl pflegst du unter Einstellungen → {current === "lieferant" ? "Kategorien für Lieferanten" : "Gewerke"}.
+            Die Auswahl pflegst du unter Einstellungen → Kategorien für Lieferanten.
           </span>
         </fieldset>
       )}

@@ -4,7 +4,6 @@ import {
   CalendarRange,
   CheckSquare,
   Columns3,
-  Handshake,
   Home,
   Inbox,
   Package,
@@ -24,7 +23,6 @@ export const AREAS = {
   aufgaben: { href: "/aufgaben", label: "Aufgaben", icon: CheckSquare, tone: "accent" },
   firmen: { href: "/firmen", label: "Firmen", icon: Building2, tone: "neutral" },
   kontakte: { href: "/kontakte", label: "Kontakte", icon: Users, tone: "neutral" },
-  dienstleister: { href: "/dienstleister", label: "Dienstleister", icon: Handshake, tone: "partner" },
   lieferanten: { href: "/lieferanten", label: "Lieferanten", icon: Package, tone: "supplier" },
   wettbewerber: { href: "/wettbewerber", label: "Wettbewerber", icon: Swords, tone: "rival" },
   auswertungen: { href: "/auswertungen", label: "Auswertungen", icon: BarChart3, tone: "ok" },
@@ -37,6 +35,6 @@ export const NAV_GROUPS: { title?: string; areas: Area[] }[] = [
   { areas: ["start"] },
   { title: "Verkauf", areas: ["vorgaenge", "posteingang"] },
   { title: "Produktion", areas: ["planung", "aufgaben"] },
-  { title: "Adressen", areas: ["firmen", "kontakte", "dienstleister", "lieferanten", "wettbewerber"] },
+  { title: "Adressen", areas: ["firmen", "kontakte", "lieferanten", "wettbewerber"] },
   { areas: ["auswertungen", "einstellungen"] },
 ];

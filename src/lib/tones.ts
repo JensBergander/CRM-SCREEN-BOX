@@ -11,7 +11,6 @@ export type Tone =
   | "invoice"
   | "ok"
   | "danger"
-  | "partner"
   | "supplier"
   | "rival";
 
@@ -26,7 +25,6 @@ export const TONE_DOT: Record<Tone, string> = {
   invoice: "bg-invoice",
   ok: "bg-ok",
   danger: "bg-danger",
-  partner: "bg-partner",
   supplier: "bg-supplier",
   rival: "bg-rival",
 };
@@ -42,7 +40,6 @@ export const TONE_SOFT: Record<Tone, string> = {
   invoice: "bg-invoice-soft text-invoice-ink",
   ok: "bg-ok-soft text-ok-ink",
   danger: "bg-danger-soft text-danger-ink",
-  partner: "bg-partner-soft text-partner-ink",
   supplier: "bg-supplier-soft text-supplier-ink",
   rival: "bg-rival-soft text-rival-ink",
 };
@@ -58,7 +55,6 @@ export const TONE_TEXT: Record<Tone, string> = {
   invoice: "text-invoice",
   ok: "text-ok",
   danger: "text-danger",
-  partner: "text-partner",
   supplier: "text-supplier",
   rival: "text-rival",
 };
@@ -74,7 +70,6 @@ export const TONE_WASH: Record<Tone, { idle: string; drag: string }> = {
   invoice: { idle: "bg-invoice-soft/60", drag: "bg-invoice-soft" },
   ok: { idle: "bg-ok-soft/60", drag: "bg-ok-soft" },
   danger: { idle: "bg-danger-soft/60", drag: "bg-danger-soft" },
-  partner: { idle: "bg-partner-soft/60", drag: "bg-partner-soft" },
   supplier: { idle: "bg-supplier-soft/60", drag: "bg-supplier-soft" },
   rival: { idle: "bg-rival-soft/60", drag: "bg-rival-soft" },
 };
@@ -93,14 +88,12 @@ export const STAGE_TONE: Record<Stage, Tone> = {
 // Kunde ist der Normalfall und bleibt neutral
 export const KIND_TONE: Record<CompanyKind, Tone> = {
   kunde: "neutral",
-  dienstleister: "partner",
   lieferant: "supplier",
   wettbewerber: "rival",
 };
 
 export const KIND_LABEL: Record<CompanyKind, string> = {
   kunde: "Kunde",
-  dienstleister: "Dienstleister",
   lieferant: "Lieferant",
   wettbewerber: "Wettbewerber",
 };

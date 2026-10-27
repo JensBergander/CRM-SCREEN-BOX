@@ -1,0 +1,2 @@
+UPDATE `companies` SET `kind` = 'lieferant' WHERE `kind` = 'dienstleister';--> statement-breakpoint
+ALTER TABLE `companies` MODIFY COLUMN `kind` enum('kunde','lieferant','wettbewerber') NOT NULL DEFAULT 'kunde';

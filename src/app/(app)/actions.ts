@@ -644,14 +644,14 @@ export async function loadMailForContactAction(mailId: number): Promise<MailForC
   }
 }
 
-// Kontakt (und bei Bedarf Firma oder Dienstleister) aus einer Mail anlegen und die Mail zuordnen.
+// Kontakt (und bei Bedarf Firma oder Lieferant) aus einer Mail anlegen und die Mail zuordnen.
 // Vorhandene Einträge werden nur ergänzt, nie überschrieben.
 export async function createContactFromMailAction(mailId: number, _: FormState, form: FormData): Promise<FormState> {
   await getCurrentUser();
   const lastName = text(form, "lastName")?.trim();
   if (!lastName) return { error: "Der Nachname fehlt." };
   const companyId = await resolveCompany(form);
-  if (!companyId) return { error: "Bitte eine Firma bzw. den Namen des Dienstleisters angeben." };
+  if (!companyId) return { error: "Bitte eine Firma bzw. den Namen des Lieferanten angeben." };
   const value = (key: string) => text(form, key)?.trim() || null;
   const email = value("email")?.toLowerCase() ?? null;
 
@@ -801,11 +801,11 @@ export async function saveAutoReplyAction(_: FormState, form: FormData): Promise
   return {};
 }
 
-export async function saveServiceTagsAction(kind: "dienstleister" | "lieferant", _: FormState, form: FormData): Promise<FormState> {
+export async function saveServiceTagsAction(_: FormState, form: FormData): Promise<FormState> {
   await getCurrentUser();
   const list = (text(form, "tags") ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
-  if (!list.length) return { error: kind === "lieferant" ? "Mindestens eine Kategorie angeben." : "Mindestens ein Gewerk angeben." };
-  await saveServiceTagOptions(list, kind);
+  if (!list.length) return { error: "Mindestens eine Kategorie angeben." };
+  await saveServiceTagOptions(list);
   refresh();
   return {};
 }

@@ -9,7 +9,7 @@ import { AssessmentCard } from "@/components/rating";
 import { InlineTitle } from "@/components/inline-title";
 import { renameCompanyAction } from "../../actions";
 import { companyName, dealsWonBy, getCompany, projectsOfSupplier } from "@/lib/queries";
-import { allTagOptions } from "@/lib/service-tags";
+import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
@@ -41,8 +41,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         { label: "Vorgänge im CRM", value: String(stats.requests) },
         lastContact,
       ];
-  const tagLinks = { dienstleister: { href: "/dienstleister", param: "gewerk", label: "Dienstleister" }, lieferant: { href: "/lieferanten", param: "kategorie", label: "Lieferant" } };
-  const tagLink = company.kind === "dienstleister" || company.kind === "lieferant" ? tagLinks[company.kind] : null;
+  const tagLink = supplier ? { href: "/lieferanten", param: "kategorie" } : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -122,7 +121,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           </span>
         </summary>
         <div className="border-t border-line-soft pt-2">
-          <EditCompanyForm key={company.name} company={company} tagOptions={await allTagOptions()} />
+          <EditCompanyForm key={company.name} company={company} tagOptions={await serviceTagOptions()} />
         </div>
       </details>
 
