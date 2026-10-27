@@ -2,7 +2,7 @@ import Link from "next/link";
 import { listContacts } from "@/lib/queries";
 import { ContactActions } from "@/components/contact-actions";
 import { SearchBox } from "@/components/search-box";
-import { PageHeader } from "@/components/ui";
+import { LexwareBadge, PageHeader } from "@/components/ui";
 
 export default async function ContactsPage({ searchParams }: PageProps<"/kontakte">) {
   const { q } = await searchParams;
@@ -26,7 +26,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ contact: c, companyName }) => {
+            {rows.map(({ contact: c, companyName, lexware }) => {
               const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
               return (
                 <tr key={c.id} className="border-t border-line-soft">
@@ -35,7 +35,12 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
                     {c.position && <span className="block text-xs font-normal text-muted">{c.position}</span>}
                   </td>
                   <td className="px-3 py-3">
-                    {c.companyId ? <Link href={`/firmen/${c.companyId}`} className="hover:underline">{companyName}</Link> : "–"}
+                    {c.companyId ? (
+                      <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <Link href={`/firmen/${c.companyId}`} className="hover:underline">{companyName}</Link>
+                        {lexware && <LexwareBadge company={lexware} />}
+                      </span>
+                    ) : "–"}
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap text-muted">
                     {c.phone ?? (c.mobile ? null : "–")}

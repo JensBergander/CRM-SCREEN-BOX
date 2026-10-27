@@ -5,7 +5,7 @@ import { serviceTagOptions, type TagKind } from "@/lib/service-tags";
 import { KIND_TONE, TONE_SOFT } from "@/lib/tones";
 import { ContactActions } from "@/components/contact-actions";
 import { SearchBox } from "@/components/search-box";
-import { btnPrimary, Card, Empty, PageHeader } from "@/components/ui";
+import { btnPrimary, Card, Empty, LexwareBadge, PageHeader } from "@/components/ui";
 
 const TEXT = {
   dienstleister: {
@@ -86,6 +86,7 @@ export async function ProviderPage({ kind, params }: { kind: TagKind; params: Re
               <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-soft px-5 py-3.5 first:border-t-0">
                 <div className="min-w-0 flex-[1_1_260px]">
                   <Link href={`/firmen/${r.id}`} className="text-sm font-semibold hover:underline">{r.name}</Link>
+                  <span className="ml-2"><LexwareBadge company={r} /></span>
                   {person && person.name !== r.name && <span className="ml-2 text-xs text-muted">{person.name}</span>}
                   {r.notes && <p className="truncate text-xs text-muted">{r.notes}</p>}
                 </div>

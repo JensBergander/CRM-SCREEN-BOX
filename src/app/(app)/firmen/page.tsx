@@ -6,7 +6,7 @@ import { ratingsForAll } from "@/lib/rating";
 import { ContactActions } from "@/components/contact-actions";
 import { Stars } from "@/components/rating";
 import { SearchBox } from "@/components/search-box";
-import { btnPrimary, PageHeader } from "@/components/ui";
+import { btnPrimary, LexwareBadge, PageHeader } from "@/components/ui";
 
 const FILTERS = { alle: "Alle", gut: "ab 4 Sterne", vorsicht: "0 bis 2 Sterne", offen: "nicht bewertet" } as const;
 type Filter = keyof typeof FILTERS;
@@ -79,7 +79,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
               <tr key={c.id} className="border-t border-line-soft hover:bg-bg/60">
                 <td className="px-5 py-3">
                   <Link href={`/firmen/${c.id}`} className="font-semibold hover:underline">{c.name}</Link>
-                  {c.customerNumber && <span className="ml-2 text-xs text-muted">Kd.-Nr. {c.customerNumber}</span>}
+                  <span className="ml-2"><LexwareBadge company={c} /></span>
                 </td>
                 <td className="px-3 py-3">
                   {c.rating?.stars !== null && c.rating?.stars !== undefined ? (

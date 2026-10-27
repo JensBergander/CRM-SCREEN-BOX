@@ -71,6 +71,8 @@ export const companies = mysqlTable(
     // Name des Ordners auf der Festplatte, z. B. EUROWINGS für Eurowings GmbH
     folderName: varchar("folder_name", { length: 120 }),
     lexwareId: varchar("lexware_id", { length: 64 }).unique(),
+    // in Lexware archiviert oder dort nicht mehr vorhanden; bleibt im CRM, rutscht in Listen nach unten
+    lexwareArchived: boolean("lexware_archived").notNull().default(false),
     customerNumber: varchar("customer_number", { length: 32 }),
     supplierNumber: varchar("supplier_number", { length: 32 }),
     street: varchar("street", { length: 255 }),
@@ -99,6 +101,8 @@ export const contacts = mysqlTable(
     mobile: varchar("mobile", { length: 64 }),
     position: varchar("position", { length: 120 }),
     notes: text("notes"),
+    // Ansprechpartner aus Lexware: Name, Mail und Telefon kommen beim Abgleich von dort
+    fromLexware: boolean("from_lexware").notNull().default(false),
     ...timestamps,
   },
   (t) => [index("contacts_company_idx").on(t.companyId), index("contacts_email_idx").on(t.email)],

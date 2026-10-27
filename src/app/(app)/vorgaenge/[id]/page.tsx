@@ -15,7 +15,7 @@ import { ActivityForm, CompetitorForm, EditDealForm, StageControl, TaskForm } fr
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
 import { SupplierCard } from "@/components/suppliers";
-import { Badge, btnSecondary, Card } from "@/components/ui";
+import { Badge, btnSecondary, Card, LexwareBadge } from "@/components/ui";
 import { STAGE_TONE } from "@/lib/tones";
 
 export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
@@ -37,7 +37,8 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
       {!["verloren", "bezahlt"].includes(deal.stage) && <RatingHint companyId={deal.companyId} />}
       <header className="flex flex-col gap-2">
         <p className="text-[13px] text-muted">
-          <Link href={`/firmen/${deal.companyId}`} className="font-semibold text-ink hover:underline">{data.companyName}</Link>
+          <Link href={`/firmen/${deal.companyId}`} className="font-semibold text-ink hover:underline">{data.companyName}</Link>{" "}
+          <LexwareBadge company={data.lexware} />
           {deal.number && <> · Nr. {deal.number}</>}
           {deal.projectDate && <> · {dateDe(deal.projectDate)}</>}
         </p>

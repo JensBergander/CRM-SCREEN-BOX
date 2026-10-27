@@ -291,6 +291,8 @@ export function KindFields({ kind = "kunde", tags, options, withCompetitor = fal
   );
 }
 
+const LEXWARE_FIELDS: (keyof Company)[] = ["name", "street", "zip", "city", "phone", "email"];
+
 export function EditCompanyForm({ company, tagOptions }: { company: Company; tagOptions: TagOptions }) {
   const [state, action, pending] = useActionState(updateCompanyAction.bind(null, company.id), undefined);
   const fields: [keyof Company, string, string?][] = [
@@ -305,21 +307,35 @@ export function EditCompanyForm({ company, tagOptions }: { company: Company; tag
     ["emailDomain", "Mail-Domain", "z. B. eurowings.com, für die Zuordnung der Mails"],
     ["industry", "Branche"],
   ];
+  // Stammdaten von Lexware-Firmen kommen aus Lexware und werden dort gepflegt
+  const fromLexware = !!company.lexwareId;
+  const locked = (key: keyof Company) => fromLexware && LEXWARE_FIELDS.includes(key);
   return (
     <form action={action} className="grid gap-3 px-5 pb-5 pt-2 sm:grid-cols-2 lg:grid-cols-4">
       <div className="sm:col-span-2 lg:col-span-4">
         <KindFields kind={company.kind} tags={company.tags} options={tagOptions} withCompetitor />
       </div>
+      {fromLexware && (
+        <p className="rounded-xl bg-lexware-soft px-4 py-3 text-sm text-lexware-ink sm:col-span-2 lg:col-span-4">
+          Name, Adresse, Telefon und Mail kommen aus Lexware. Bitte dort ändern, dann „Aus Lexware aktualisieren“.
+        </p>
+      )}
       {fields.map(([key, label, hint]) => (
         <Fragment key={key}>
-          {key === "street" && (
+          {key === "street" && !fromLexware && (
             <div className="flex flex-col gap-1.5 text-[13px] font-semibold text-muted sm:col-span-2 lg:col-span-4">
               Adresse suchen
               <AddressSearch />
             </div>
           )}
           <Field label={label} hint={hint}>
-            <Input name={key} defaultValue={(company[key] as string | null) ?? ""} required={key === "name"} />
+            <Input
+              name={key}
+              defaultValue={(company[key] as string | null) ?? ""}
+              required={key === "name"}
+              readOnly={locked(key)}
+              className={locked(key) ? "bg-bg text-muted" : ""}
+            />
           </Field>
         </Fragment>
       ))}

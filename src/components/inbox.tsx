@@ -20,7 +20,7 @@ import type { SyncResult } from "@/lib/mail";
 import { KindFields } from "./forms";
 import { RunningDot } from "./timeline";
 import { RatingHintView } from "./rating";
-import { btnPrimary, btnQuiet, Empty, Field, FormError, Input, Select } from "./ui";
+import { btnPrimary, btnQuiet, Empty, Field, FormError, Input, LexwareBadge, Select } from "./ui";
 
 export function SyncButton() {
   const [pending, startTransition] = useTransition();
@@ -119,6 +119,12 @@ function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; com
         <datalist id={`companies-${row.mail.id}`}>
           {companies.map((c) => <option key={c.id} value={c.name} />)}
         </datalist>
+        {data.company && (
+          <p className="-mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+            Erkannt: <span className="font-semibold text-ink">{data.company.name}</span>
+            <LexwareBadge company={data.company} />
+          </p>
+        )}
         {data.projects.length > 0 && <ProjectPicker projects={data.projects} companyName={data.company?.name ?? ""} />}
         <div className="grid grid-cols-2 gap-2">
           <Input name="firstName" aria-label="Vorname" placeholder="Vorname" defaultValue={s.firstName} />

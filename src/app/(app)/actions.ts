@@ -8,7 +8,17 @@ import { db } from "@/db";
 import { activities, appState, companies, COMPANY_KINDS, contacts, dealSuppliers, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, tidyMailText, todayIso } from "@/lib/format";
-import { importLexwareCustomers, domainOf, type ImportResult } from "@/lib/lexware";
+import {
+  createInLexware,
+  dismissDuplicate,
+  domainOf,
+  linkCompanyToLexware,
+  refreshCompanyFromLexware,
+  searchLexwareContacts,
+  syncLexwareContacts,
+  type LexwareHit,
+  type LexwareSyncResult,
+} from "@/lib/lexware";
 import { matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { graphSend, mailboxes, messageText } from "@/lib/graph";
 import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
@@ -194,6 +204,7 @@ export async function renameCompanyAction(companyId: number, name: string): Prom
   await getCurrentUser();
   const clean = name.trim().slice(0, 255);
   if (!clean) return { error: "Der Name darf nicht leer sein." };
+  if (await fromLexware(companyId)) return { error: "Der Name kommt aus Lexware. Bitte dort ändern." };
   await db.update(companies).set({ name: clean }).where(eq(companies.id, companyId));
   refresh();
   return {};
@@ -435,9 +446,12 @@ export async function updateCompanyAction(companyId: number, _: FormState, form:
   await getCurrentUser();
   const parsed = await companyValues(form);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  // Stammdaten von Lexware-Firmen kommen beim Abgleich aus Lexware und werden hier nicht gespeichert
+  const { name, street, zip, city, phone, email, ...own } = parsed.data;
+  const master = (await fromLexware(companyId)) ? {} : { name, street, zip, city, phone, email };
   await db
     .update(companies)
-    .set({ ...parsed.data, emailDomain: parsed.data.emailDomain?.toLowerCase().replace(/^@/, "") ?? null })
+    .set({ ...own, ...master, emailDomain: own.emailDomain?.toLowerCase().replace(/^@/, "") ?? null })
     .where(eq(companies.id, companyId));
   refresh();
   return {};
@@ -592,7 +606,7 @@ export async function mailTextAction(mailId: number): Promise<{ text: string } |
 export type MailForContact = {
   text: string;
   suggestion: SignatureData & { email: string };
-  company: { id: number; name: string } | null;
+  company: { id: number; name: string; lexwareId: string | null; customerNumber: string | null; supplierNumber: string | null; lexwareArchived: boolean } | null;
   projects: ProjectOption[];
   hint: ReturnType<typeof hintProps> | null;
 };
@@ -609,7 +623,17 @@ export async function loadMailForContactAction(mailId: number): Promise<MailForC
     const suggestion = parseSignature(mail.outgoing ? "" : unique, { name: mail.outgoing ? null : mail.fromName, address });
     const match = await matchAddress(address);
     const [company] = match
-      ? await db.select({ id: companies.id, name: companies.name }).from(companies).where(eq(companies.id, match.companyId))
+      ? await db
+          .select({
+            id: companies.id,
+            name: companies.name,
+            lexwareId: companies.lexwareId,
+            customerNumber: companies.customerNumber,
+            supplierNumber: companies.supplierNumber,
+            lexwareArchived: companies.lexwareArchived,
+          })
+          .from(companies)
+          .where(eq(companies.id, match.companyId))
       : [];
     const projects = company ? (await projectsFor(company.id)).filter((p) => p.active) : [];
     const rating = company ? await ratingFor(company.id) : null;
@@ -633,7 +657,9 @@ export async function createContactFromMailAction(mailId: number, _: FormState, 
 
   const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
   const fill: Partial<typeof companies.$inferInsert> = {};
-  for (const key of ["website", "street", "zip", "city"] as const) if (!company[key] && value(key)) fill[key] = value(key);
+  // Die Adresse von Lexware-Firmen kommt aus Lexware
+  const fillable = company.lexwareId ? (["website"] as const) : (["website", "street", "zip", "city"] as const);
+  for (const key of fillable) if (!company[key] && value(key)) fill[key] = value(key);
   if (form.get("learnDomain") === "on" && !company.emailDomain && domainOf(email)) fill.emailDomain = domainOf(email);
   if (Object.keys(fill).length) await db.update(companies).set(fill).where(eq(companies.id, companyId));
 
@@ -796,13 +822,57 @@ export async function saveFolderTemplateAction(_: FormState, form: FormData): Pr
   return {};
 }
 
-export async function importLexwareAction(): Promise<ImportResult | { error: string }> {
+export async function importLexwareAction(): Promise<LexwareSyncResult | { error: string }> {
   await getCurrentUser();
   try {
-    const result = await importLexwareCustomers();
+    const result = await syncLexwareContacts();
+    await rematchOpenMails();
     refresh();
     return result;
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Import fehlgeschlagen" };
+    return { error: e instanceof Error ? e.message : "Abgleich fehlgeschlagen" };
+  }
+}
+
+async function fromLexware(companyId: number) {
+  const [company] = await db.select({ lexwareId: companies.lexwareId }).from(companies).where(eq(companies.id, companyId));
+  return !!company?.lexwareId;
+}
+
+// Lexware-Aktionen auf der Firmenseite und bei den Dubletten; Fehler kommen als Text zurück
+async function lexwareStep(fn: () => Promise<unknown>): Promise<{ error?: string }> {
+  await getCurrentUser();
+  try {
+    await fn();
+    await rematchOpenMails();
+    refresh();
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Lexware ist gerade nicht erreichbar." };
+  }
+}
+
+export async function refreshFromLexwareAction(companyId: number) {
+  return lexwareStep(() => refreshCompanyFromLexware(companyId));
+}
+
+export async function linkLexwareAction(companyId: number, lexwareId: string) {
+  return lexwareStep(() => linkCompanyToLexware(companyId, lexwareId));
+}
+
+export async function dismissDuplicateAction(lexwareId: string, companyId: number) {
+  return lexwareStep(() => dismissDuplicate(lexwareId, companyId));
+}
+
+export async function createInLexwareAction(companyId: number, opts: { customer: boolean; vendor: boolean; person: boolean }) {
+  return lexwareStep(() => createInLexware(companyId, opts));
+}
+
+export async function searchLexwareAction(query: string): Promise<LexwareHit[] | { error: string }> {
+  await getCurrentUser();
+  try {
+    return await searchLexwareContacts(query);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Lexware ist gerade nicht erreichbar." };
   }
 }

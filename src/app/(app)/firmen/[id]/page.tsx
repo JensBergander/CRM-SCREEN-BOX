@@ -14,7 +14,8 @@ import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
-import { Badge, btnPrimary, btnSecondary, Card, Empty, Row } from "@/components/ui";
+import { Badge, btnPrimary, btnSecondary, Card, Empty, LexwareBadge, Row } from "@/components/ui";
+import { LexwareActions } from "@/components/lexware-actions";
 
 export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">) {
   const { id } = await params;
@@ -50,25 +51,33 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           <p className="text-[13px] text-muted">
             {[
               company.city,
-              company.customerNumber && `Kd.-Nr. ${company.customerNumber}`,
-              company.supplierNumber && `Lief.-Nr. ${company.supplierNumber}`,
               company.folderName && `Ordner ${company.folderName}`,
             ]
               .filter(Boolean)
               .join(" · ") || "Firma"}
           </p>
           <div className="mt-1">
-            <InlineTitle value={company.name} label="Firmenname" onSave={renameCompanyAction.bind(null, company.id)} />
+            {company.lexwareId ? (
+              <h1 className="text-[28px] font-bold tracking-tight">{company.name}</h1>
+            ) : (
+              <InlineTitle value={company.name} label="Firmenname" onSave={renameCompanyAction.bind(null, company.id)} />
+            )}
           </div>
-          {company.kind !== "kunde" && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <Link href={tagLink?.href ?? "/wettbewerber"} className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${TONE_SOFT[KIND_TONE[company.kind]]}`}>{KIND_LABEL[company.kind]}</Link>
+          {(company.kind !== "kunde" || company.lexwareId) && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <LexwareBadge company={company} />
+              {company.lexwareArchived && <span className="text-[11px] font-semibold text-muted">in Lexware archiviert</span>}
+              {company.kind !== "kunde" && <Link href={tagLink?.href ?? "/wettbewerber"} className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${TONE_SOFT[KIND_TONE[company.kind]]}`}>{KIND_LABEL[company.kind]}</Link>}
               {tagLink && (company.tags ?? "").split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
                 <Link key={t} href={`${tagLink.href}?${tagLink.param}=${encodeURIComponent(t)}`} className="rounded-md bg-line-soft px-2 py-0.5 text-[11px] font-semibold">{t}</Link>
               ))}
             </div>
           )}
         </div>
+        <LexwareActions
+          company={{ id: company.id, name: company.name, kind: company.kind, lexwareId: company.lexwareId }}
+          personGuess={data.contacts.length === 1 && [data.contacts[0].firstName, data.contacts[0].lastName].filter(Boolean).join(" ") === company.name}
+        />
         {(company.phone || company.email) && (
           <ContactActions name={company.name} phone={company.phone} email={company.email} />
         )}

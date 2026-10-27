@@ -104,3 +104,30 @@ export function FormError({ message }: { message?: string }) {
   if (!message) return null;
   return <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger-ink">{message}</p>;
 }
+
+// „LX 10023“: Firma ist in Lexware (Kunden- bzw. Lieferantennummer). Fehlt das Badge, gibt es sie dort nicht.
+export function LexwareBadge({ company, link = true }: {
+  company: { lexwareId: string | null; customerNumber: string | null; supplierNumber: string | null; lexwareArchived?: boolean };
+  link?: boolean;
+}) {
+  if (!company.lexwareId) return null;
+  const number = company.customerNumber ?? company.supplierNumber;
+  const title = [
+    company.customerNumber && `Kundennummer ${company.customerNumber}`,
+    company.supplierNumber && `Lieferantennummer ${company.supplierNumber}`,
+    company.lexwareArchived && "in Lexware archiviert",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const cls = `inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 align-middle text-[11px] font-semibold tabular-nums ${
+    company.lexwareArchived ? "bg-line-soft text-muted line-through" : "bg-lexware-soft text-lexware-ink"
+  }`;
+  const label = `LX ${number ?? ""}`.trim();
+  return link ? (
+    <a href={`https://app.lexware.de/permalink/contacts/view/${company.lexwareId}`} target="_blank" rel="noreferrer" title={`${title} – in Lexware öffnen`} className={`${cls} hover:underline`}>
+      {label}
+    </a>
+  ) : (
+    <span title={title} className={cls}>{label}</span>
+  );
+}

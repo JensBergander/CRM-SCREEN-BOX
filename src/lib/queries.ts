@@ -87,9 +87,17 @@ export async function getDashboard() {
   return { billing, followUps, todayTasks, beauftragt: beauftragt.n, offers, mails };
 }
 
+// Felder für das Lexware-Badge
+const lexwareFields = {
+  lexwareId: companies.lexwareId,
+  customerNumber: companies.customerNumber,
+  supplierNumber: companies.supplierNumber,
+  lexwareArchived: companies.lexwareArchived,
+};
+
 export async function getDeal(id: number) {
   const [row] = await db
-    .select({ deal: deals, companyName: companies.name, folderName: companies.folderName, contact: contacts })
+    .select({ deal: deals, companyName: companies.name, folderName: companies.folderName, contact: contacts, lexware: lexwareFields })
     .from(deals)
     .innerJoin(companies, eq(companies.id, deals.companyId))
     .leftJoin(contacts, eq(contacts.id, deals.contactId))
@@ -248,6 +256,9 @@ export async function listCompanies(query?: string, kind: CompanyKind | "alle" =
       city: companies.city,
       emailDomain: companies.emailDomain,
       customerNumber: companies.customerNumber,
+      supplierNumber: companies.supplierNumber,
+      lexwareId: companies.lexwareId,
+      lexwareArchived: companies.lexwareArchived,
       phone: companies.phone,
       email: companies.email,
       deals: count(deals.id),
@@ -272,7 +283,8 @@ export async function listCompanies(query?: string, kind: CompanyKind | "alle" =
       ),
     )
     .groupBy(companies.id)
-    .orderBy(asc(companies.name));
+    // in Lexware archivierte Firmen ans Ende
+    .orderBy(asc(companies.lexwareArchived), asc(companies.name));
 }
 
 // Alle vergebenen Gewerke bzw. Kategorien mit Anzahl, für die Filter auf der Dienstleister- und Lieferanten-Seite
@@ -342,7 +354,7 @@ export async function getCompany(id: number) {
 export async function listContacts(query?: string) {
   const q = query?.trim();
   return db
-    .select({ contact: contacts, companyName: companies.name })
+    .select({ contact: contacts, companyName: companies.name, lexware: lexwareFields })
     .from(contacts)
     .leftJoin(companies, eq(companies.id, contacts.companyId))
     .where(

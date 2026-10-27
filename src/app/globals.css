@@ -48,6 +48,11 @@
   --rival: #a1457f;
   --rival-soft: #f6e7f0;
   --rival-ink: #7a2d5e;
+
+  /* Lexware-Badge (Kunden- bzw. Lieferantennummer) */
+  --lexware: #43a047;
+  --lexware-soft: #e8f5e9;
+  --lexware-ink: #2e7d32;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -92,6 +97,10 @@
     --rival: #c76aa3;
     --rival-soft: #351828;
     --rival-ink: #e9a2cc;
+
+    --lexware: #5cb860;
+    --lexware-soft: #15301a;
+    --lexware-ink: #8fd492;
   }
 }
 
@@ -134,6 +143,9 @@
   --color-rival: var(--rival);
   --color-rival-soft: var(--rival-soft);
   --color-rival-ink: var(--rival-ink);
+  --color-lexware: var(--lexware);
+  --color-lexware-soft: var(--lexware-soft);
+  --color-lexware-ink: var(--lexware-ink);
   --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
 }
 

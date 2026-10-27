@@ -99,6 +99,13 @@
       "when": 1792793559214,
       "tag": "0013_suppliers",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1793113940699,
+      "tag": "0014_lexware_master_data",
+      "breakpoints": true
     }
   ]
 }
