@@ -3,6 +3,7 @@ import { asc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { companies, contacts, deals, productionDays } from "@/db/schema";
 import { graphSend, mailboxes } from "./graph";
+import { CONFIRMED } from "./website";
 
 // Produktionstermine eines Vorgangs im Kalender von office@ abbilden. Das CRM führt:
 // Änderungen in Outlook werden nicht zurückgelesen, sondern beim nächsten Abgleich überschrieben.
@@ -47,6 +48,7 @@ function eventLocation(deal: typeof deals.$inferSelect) {
 // zeigen das gleich an (Apple setzt bei HTML-Links die ganze Adresse hinter den Linktext)
 function eventBody(ctx: Context, start: string, end: string, startTime: string) {
   const { deal } = ctx;
+  const confirmed = CONFIRMED.includes(deal.stage);
   const blocks = [
     deal.number && `Projekt ${deal.number}`,
     deal.location &&
@@ -58,12 +60,13 @@ function eventBody(ctx: Context, start: string, end: string, startTime: string) 
     .filter(Boolean)
     .map((b) => (Array.isArray(b) ? b.filter(Boolean).join("\n") : b));
   return {
-    subject: `Produktion: ${deal.title} · ${ctx.companyName}`,
+    // Bis zur Beauftragung nur reserviert
+    subject: `Produktion: ${deal.title} · ${ctx.companyName}${confirmed ? "" : " (unbestätigt)"}`,
     body: { contentType: "text", content: blocks.join("\n\n") },
     start: { dateTime: start, timeZone: TZ },
     end: { dateTime: end, timeZone: TZ },
     location: eventLocation(deal),
-    showAs: "busy",
+    showAs: confirmed ? "busy" : "tentative",
     isReminderOn: true,
     reminderMinutesBeforeStart: reminderMinutes(startTime),
   };

@@ -147,6 +147,18 @@ export const deals = mysqlTable(
     // ein durchgehender Kalendertermin (bei blockContinuous)
     calendarEventId: varchar("calendar_event_id", { length: 255 }),
     calendarError: text("calendar_error"),
+    // Event auf screen-box.de/admin/events (ab „Beauftragt“); Name und „öffentlich“ wie zuletzt gesendet,
+    // damit Änderungen auf der Website erkannt und nicht überschrieben werden
+    websiteEventId: int("website_event_id"),
+    websiteName: varchar("website_name", { length: 255 }),
+    websitePublic: boolean("website_public").notNull().default(false),
+    websitePublicSent: boolean("website_public_sent"),
+    // „Nein, eigenes Event“ auf die Rückfrage nach einem zeitgleichen Event
+    websiteOwn: boolean("website_own").notNull().default(false),
+    // zeitgleiche Events auf der Website, die nicht aus dem CRM stammen (JSON), bis zur Antwort
+    websiteCandidates: text("website_candidates"),
+    websiteNotice: varchar("website_notice", { length: 500 }),
+    websiteError: text("website_error"),
     lostNote: text("lost_note"),
     notes: text("notes"),
     stageChangedAt: timestamp("stage_changed_at").notNull().defaultNow(),

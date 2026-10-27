@@ -2,8 +2,10 @@ import "server-only";
 import { and, eq, inArray, isNull, like, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { activities, deals, tasks, type LostReason, type Stage } from "@/db/schema";
+import { syncDealCalendar } from "./calendar";
 import { addDaysIso, todayIso } from "./format";
 import { LOST_REASON_LABEL, STAGE_LABEL } from "./labels";
+import { CONFIRMED, syncDealWebsite } from "./website";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -101,9 +103,11 @@ export async function changeStage(
   lost?: { reason: LostReason; note?: string | null },
 ) {
   if (to === "verloren" && !lost) throw new Error("Für „Verloren“ ist ein Grund Pflicht");
+  let from: Stage | undefined;
   await db.transaction(async (tx) => {
     const [deal] = await tx.select({ stage: deals.stage }).from(deals).where(eq(deals.id, dealId)).for("update");
     if (!deal || deal.stage === to) return;
+    from = deal.stage;
     await tx
       .update(deals)
       .set({
@@ -115,4 +119,10 @@ export async function changeStage(
       .where(eq(deals.id, dealId));
     await applyStageEffects(tx, dealId, to, deal.stage);
   });
+  if (!from) return;
+  // Kalender: „(unbestätigt)“ bis zur Beauftragung, gelöscht bei „Verloren“; Website-Event erst ab „Beauftragt“
+  if (CONFIRMED.includes(from) !== CONFIRMED.includes(to) || from === "verloren" || to === "verloren") {
+    await syncDealCalendar(dealId);
+    await syncDealWebsite(dealId);
+  }
 }

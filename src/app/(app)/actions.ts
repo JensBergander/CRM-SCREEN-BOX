@@ -22,6 +22,7 @@ import {
 import { matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { graphSend, mailboxes, messageText } from "@/lib/graph";
 import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
+import { deleteDealWebsite, linkWebsiteEvent, ownWebsiteEvent, setWebsitePublic, syncDealWebsite } from "@/lib/website";
 import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
 import { archiveVoucher, createDealFromVoucher, linkVoucher, quickReconcile, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
@@ -150,7 +151,6 @@ export async function moveDealAction(
   if (stage === "verloren" && lost?.competitor?.trim()) {
     await db.update(deals).set({ competitorId: await resolveCompetitor(lost.competitor) }).where(eq(deals.id, dealId));
   }
-  if (stage === "verloren") await syncDealCalendar(dealId);
   // Gleich in Lexware nach passendem Angebot bzw. Rechnung schauen, statt auf den nächsten Cronjob zu warten
   if (["angebot", "beauftragt", "erledigt"].includes(stage)) {
     try {
@@ -196,6 +196,7 @@ export async function renameDealAction(dealId: number, title: string): Promise<{
   const clean = title.trim().slice(0, 255);
   if (!clean) return { error: "Der Name darf nicht leer sein." };
   await db.update(deals).set({ title: clean }).where(eq(deals.id, dealId));
+  await syncDealWebsite(dealId);
   refresh();
   return {};
 }
@@ -344,6 +345,7 @@ export async function savePlanningAction(dealId: number, input: Planning): Promi
     })
     .where(eq(deals.id, dealId));
   await syncDealCalendar(dealId);
+  await syncDealWebsite(dealId);
   const [after] = await db.select({ e: deals.calendarError }).from(deals).where(eq(deals.id, dealId));
   refresh();
   return { calendarError: after?.e ?? null };
@@ -394,6 +396,25 @@ export async function removeSupplierAction(id: number) {
   refresh();
 }
 
+// Website-Event: Rückfrage beantworten, „öffentlich ankündigen“ umschalten
+export async function linkWebsiteEventAction(dealId: number, eventId: number) {
+  await getCurrentUser();
+  await linkWebsiteEvent(dealId, z.number().int().positive().parse(eventId));
+  refresh();
+}
+
+export async function ownWebsiteEventAction(dealId: number) {
+  await getCurrentUser();
+  await ownWebsiteEvent(dealId);
+  refresh();
+}
+
+export async function setWebsitePublicAction(dealId: number, value: boolean) {
+  await getCurrentUser();
+  await setWebsitePublic(dealId, value === true);
+  refresh();
+}
+
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)
 export async function advanceDealAction(dealId: number, stage: "angebot" | "beauftragt" | "erledigt" | "rechnung" | "bezahlt") {
   await moveDealAction(dealId, stage);
@@ -402,6 +423,7 @@ export async function advanceDealAction(dealId: number, stage: "angebot" | "beau
 export async function deleteDealAction(dealId: number) {
   await getCurrentUser();
   await deleteDealEvents(dealId);
+  await deleteDealWebsite(dealId);
   await db.delete(deals).where(eq(deals.id, dealId));
   redirect("/vorgaenge");
 }

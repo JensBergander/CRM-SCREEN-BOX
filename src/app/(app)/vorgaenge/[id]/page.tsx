@@ -17,6 +17,8 @@ import { Timeline } from "@/components/timeline";
 import { SupplierCard } from "@/components/suppliers";
 import { Badge, btnSecondary, Card, LexwareBadge } from "@/components/ui";
 import { STAGE_TONE } from "@/lib/tones";
+import { CONFIRMED, parseCandidates, WEBSITE_EVENTS_URL, websiteConfigured } from "@/lib/website";
+import { WebsiteEventPanel } from "@/components/website-event";
 
 export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
   const { id } = await params;
@@ -95,11 +97,34 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
           </Card>
         </div>
         <div className="flex flex-col gap-5">
-          {planning && ["beauftragt", "erledigt", "rechnung", "bezahlt"].includes(deal.stage) && (
+          {planning && deal.stage !== "verloren" && (
             <Card title="Termine">
               <div className="px-5 pb-5 pt-2">
                 <PlanningForm key={JSON.stringify(planning)} dealId={deal.id} initial={planning} />
               </div>
+              {websiteConfigured() && (
+                <WebsiteEventPanel
+                  dealId={deal.id}
+                  confirmed={CONFIRMED.includes(deal.stage)}
+                  hasDays={planning.days.length > 0}
+                  eventId={deal.websiteEventId}
+                  isPublic={deal.websitePublic}
+                  candidates={parseCandidates(deal.websiteCandidates)}
+                  notice={deal.websiteNotice}
+                  error={deal.websiteError}
+                  adminUrl={WEBSITE_EVENTS_URL}
+                />
+              )}
+            </Card>
+          )}
+          {deal.stage === "verloren" && deal.websiteNotice && (
+            <Card title="Event auf der Website">
+              <p className="px-5 pb-4 text-sm text-danger-ink">
+                {deal.websiteNotice}{" "}
+                <a href={WEBSITE_EVENTS_URL} target="_blank" rel="noreferrer" className="font-semibold underline">
+                  Zur Website
+                </a>
+              </p>
             </Card>
           )}
           <Card title="Lieferanten">

@@ -6,6 +6,7 @@ import { syncLexwareContactsIfDue } from "./lexware";
 import { cleanupPdfs, reconcileDeals, syncVouchers } from "./lexware-sync";
 import { mailboxes } from "./graph";
 import { syncMailboxes } from "./mail";
+import { retryWebsiteSync, websiteConfigured } from "./website";
 
 // Alles, was regelmäßig laufen soll; jeder Teil scheitert für sich allein
 export async function runJobs() {
@@ -31,5 +32,6 @@ export async function runJobs() {
     await step("montagsmail", sendDigestIfDue);
     await step("kalender", retryCalendarSync);
   }
+  if (websiteConfigured()) await step("website", retryWebsiteSync);
   return result;
 }
