@@ -26,7 +26,7 @@ const TEXT = {
     search: "Name, Kategorie oder Notiz",
     add: "Neuer Lieferant",
     filter: "Nach Kategorie filtern",
-    empty: "Noch keine Lieferanten. Lexware-Lieferanten kommen mit dem nächsten Abgleich, sonst oben neu anlegen.",
+    empty: "Noch keine Lieferanten. Lieferanten aus Lexware holst du unter Einstellungen mit „Kunden und Lieferanten aus Lexware importieren“, sonst oben neu anlegen.",
   },
 };
 

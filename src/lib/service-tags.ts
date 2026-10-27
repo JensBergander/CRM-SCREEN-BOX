@@ -9,7 +9,7 @@ export type TagKind = "dienstleister" | "lieferant";
 export type TagOptions = Record<TagKind, string[]>;
 
 const DEFAULTS: TagOptions = {
-  dienstleister: ["Sprecher", "Fotograf", "Videograf", "Drohnenoperator", "Visagist", "Cutter", "Ton", "Licht", "Grafik"],
+  dienstleister: ["Sprecher", "Fotograf", "Videograf", "Drohnenoperator", "Visagist", "Cutter", "Ton", "Licht", "Grafik", "Übersetzer"],
   lieferant: [
     "Technikverleih",
     "Licht",

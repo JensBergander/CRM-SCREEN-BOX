@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -644,13 +644,21 @@ export async function createContactFromMailAction(mailId: number, _: FormState, 
     phone: value("phone"),
     mobile: value("mobile"),
   };
-  const [known] = email ? await db.select().from(contacts).where(eq(contacts.email, email)) : [];
+  // Erst über die Mailadresse suchen, sonst denselben Namen in der Firma ohne Adresse (z. B. aus Lexware importiert)
+  const [byEmail] = email ? await db.select().from(contacts).where(eq(contacts.email, email)) : [];
+  const [byName] = byEmail
+    ? []
+    : (await db.select().from(contacts).where(and(eq(contacts.companyId, companyId), eq(contacts.lastName, lastName), isNull(contacts.email)))).filter(
+        (c) => !c.firstName || !person.firstName || c.firstName.toLowerCase() === person.firstName.toLowerCase(),
+      );
+  const known = byEmail ?? byName;
   let contactId: number;
   if (known) {
     contactId = known.id;
     const update: Partial<typeof contacts.$inferInsert> = {};
     for (const key of ["firstName", "position", "phone", "mobile"] as const) if (!known[key] && person[key]) update[key] = person[key];
     if (!known.companyId) update.companyId = companyId;
+    if (!known.email && email) update.email = email;
     if (Object.keys(update).length) await db.update(contacts).set(update).where(eq(contacts.id, known.id));
   } else {
     const [inserted] = await db.insert(contacts).values({ ...person, companyId, email });
