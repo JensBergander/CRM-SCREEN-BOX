@@ -1,0 +1,1 @@
+ALTER TABLE `deals` ADD `website_image` varchar(512);

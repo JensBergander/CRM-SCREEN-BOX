@@ -11,7 +11,7 @@ export const CONFIRMED: Stage[] = ["beauftragt", "erledigt", "rechnung", "bezahl
 const BASE = (process.env.WEBSITE_URL ?? "https://screen-box.de").replace(/\/$/, "");
 export const WEBSITE_EVENTS_URL = `${BASE}/admin/events`;
 
-export type WebsiteEvent = { id: number; name: string; ort: string | null; startAt: string; endAt: string; oeffentlich: boolean; anmeldungen: number };
+export type WebsiteEvent = { id: number; name: string; ort: string | null; startAt: string; endAt: string; oeffentlich: boolean; bildUrl: string | null; anmeldungen: number };
 
 export function websiteConfigured() {
   return !!process.env.WEBSITE_ADMIN_SECRET;
@@ -76,6 +76,7 @@ export async function syncDealWebsite(dealId: number): Promise<void> {
         .set({
           ...(name && { websiteName: name }),
           ...(oeffentlich !== undefined && { websitePublicSent: oeffentlich }),
+          websiteImage: current.bildUrl,
           websiteCandidates: null,
           websiteNotice: null,
           websiteError: null,
@@ -112,7 +113,7 @@ export async function syncDealWebsite(dealId: number): Promise<void> {
 
 // Löschen nur, solange das Event nicht begonnen hat und niemand angemeldet ist; sonst ein Hinweis am Vorgang
 async function removeEvent(deal: typeof deals.$inferSelect) {
-  const clear = { websiteEventId: null, websiteName: null, websitePublicSent: null, websiteCandidates: null, websiteNotice: null, websiteError: null };
+  const clear = { websiteEventId: null, websiteName: null, websiteImage: null, websitePublicSent: null, websiteCandidates: null, websiteNotice: null, websiteError: null };
   if (!deal.websiteEventId) {
     if (deal.websiteCandidates || deal.websiteError) await db.update(deals).set(clear).where(eq(deals.id, deal.id));
     return;
@@ -157,6 +158,28 @@ export async function ownWebsiteEvent(dealId: number) {
   await db.update(deals).set({ websiteOwn: true, websiteCandidates: null }).where(eq(deals.id, dealId));
   await syncDealWebsite(dealId);
 }
+
+// Handyfoto in die Mediathek der Website (Ordner „treffen“, wie dort im Event-Dialog) und als Titelbild setzen
+export async function uploadWebsiteImage(dealId: number, file: File) {
+  const [deal] = await db.select({ eventId: deals.websiteEventId }).from(deals).where(eq(deals.id, dealId));
+  if (!deal?.eventId) throw new Error("Zu diesem Vorgang gibt es noch kein Event auf der Website.");
+  const form = new FormData();
+  form.append("files", file, file.name || "event.jpg");
+  form.append("post", "treffen");
+  const res = await fetch(`${BASE}/api/admin/upload`, {
+    method: "POST",
+    headers: { "x-admin-secret": process.env.WEBSITE_ADMIN_SECRET ?? "" },
+    body: form,
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => ({}))) as { files?: { localUrl: string }[]; error?: string };
+  const bildUrl = data.files?.[0]?.localUrl;
+  if (!res.ok || !bildUrl) throw new Error(`Upload fehlgeschlagen (${res.status}${data.error ? `: ${data.error}` : ""})`);
+  await api("PATCH", "", { id: deal.eventId, bildUrl });
+  await db.update(deals).set({ websiteImage: bildUrl }).where(eq(deals.id, dealId));
+}
+
+export const websiteImageUrl = (path: string) => `${BASE}${path}`;
 
 export async function setWebsitePublic(dealId: number, value: boolean) {
   await db.update(deals).set({ websitePublic: value }).where(eq(deals.id, dealId));

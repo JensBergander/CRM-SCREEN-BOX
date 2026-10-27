@@ -17,7 +17,8 @@ import { Timeline } from "@/components/timeline";
 import { SupplierCard } from "@/components/suppliers";
 import { Badge, btnSecondary, Card, LexwareBadge } from "@/components/ui";
 import { STAGE_TONE } from "@/lib/tones";
-import { CONFIRMED, parseCandidates, WEBSITE_EVENTS_URL, websiteConfigured } from "@/lib/website";
+import { CONFIRMED, parseCandidates, WEBSITE_EVENTS_URL, websiteConfigured, websiteImageUrl } from "@/lib/website";
+import { EventPhoto } from "@/components/event-photo";
 import { WebsiteEventPanel } from "@/components/website-event";
 
 export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
@@ -44,7 +45,12 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
           {deal.number && <> · Nr. {deal.number}</>}
           {deal.projectDate && <> · {dateDe(deal.projectDate)}</>}
         </p>
-        <InlineTitle value={deal.title} label="Projektname" onSave={renameDealAction.bind(null, deal.id)} />
+        <InlineTitle
+          value={deal.title}
+          label="Projektname"
+          onSave={renameDealAction.bind(null, deal.id)}
+          extra={deal.websiteEventId && websiteConfigured() && <EventPhoto dealId={deal.id} image={deal.websiteImage && websiteImageUrl(deal.websiteImage)} />}
+        />
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={STAGE_TONE[deal.stage]}>
             {STAGE_LABEL[deal.stage]}

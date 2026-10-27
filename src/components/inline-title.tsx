@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import { Check, Pencil, X } from "lucide-react";
 import { FormError } from "./ui";
 
@@ -9,10 +9,13 @@ export function InlineTitle({
   value,
   label,
   onSave,
+  extra,
 }: {
   value: string;
   label: string;
   onSave: (value: string) => Promise<{ error?: string } | void>;
+  // weitere Knöpfe hinter dem Stift, z. B. Foto fürs Website-Event
+  extra?: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -53,6 +56,7 @@ export function InlineTitle({
         >
           <Pencil size={16} aria-hidden="true" />
         </button>
+        {extra}
       </div>
     );
   }

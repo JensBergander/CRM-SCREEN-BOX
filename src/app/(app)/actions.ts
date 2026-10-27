@@ -22,7 +22,7 @@ import {
 import { matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { graphSend, mailboxes, messageText } from "@/lib/graph";
 import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
-import { deleteDealWebsite, linkWebsiteEvent, ownWebsiteEvent, setWebsitePublic, syncDealWebsite } from "@/lib/website";
+import { deleteDealWebsite, linkWebsiteEvent, ownWebsiteEvent, setWebsitePublic, syncDealWebsite, uploadWebsiteImage } from "@/lib/website";
 import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
 import { archiveVoucher, createDealFromVoucher, linkVoucher, quickReconcile, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
@@ -407,6 +407,20 @@ export async function ownWebsiteEventAction(dealId: number) {
   await getCurrentUser();
   await ownWebsiteEvent(dealId);
   refresh();
+}
+
+export async function uploadWebsiteImageAction(dealId: number, form: FormData): Promise<{ error?: string }> {
+  await getCurrentUser();
+  const file = form.get("file");
+  if (!(file instanceof File) || !file.size) return { error: "Kein Bild ausgewählt." };
+  if (!file.type.startsWith("image/")) return { error: "Bitte ein Foto wählen." };
+  try {
+    await uploadWebsiteImage(dealId, file);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+  refresh();
+  return {};
 }
 
 export async function setWebsitePublicAction(dealId: number, value: boolean) {

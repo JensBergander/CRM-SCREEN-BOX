@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
     "/*": ["./drizzle/**/*"],
   },
   experimental: {
+    // Handyfotos für das Website-Event; der Browser verkleinert vorher, das ist der Puffer
+    serverActions: { bodySizeLimit: "8mb" },
     cpus: 1,
     webpackBuildWorker: false,
     parallelServerCompiles: false,

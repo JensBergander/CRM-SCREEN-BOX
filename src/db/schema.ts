@@ -157,6 +157,8 @@ export const deals = mysqlTable(
     websiteOwn: boolean("website_own").notNull().default(false),
     // zeitgleiche Events auf der Website, die nicht aus dem CRM stammen (JSON), bis zur Antwort
     websiteCandidates: text("website_candidates"),
+    // Titelbild des Events (Pfad auf screen-box.de), beim Abgleich von der Website übernommen
+    websiteImage: varchar("website_image", { length: 512 }),
     websiteNotice: varchar("website_notice", { length: 500 }),
     websiteError: text("website_error"),
     lostNote: text("lost_note"),
