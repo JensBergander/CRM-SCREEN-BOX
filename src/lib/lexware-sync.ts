@@ -169,10 +169,16 @@ async function note(deal: Deal, body: string) {
 
 const DAY = 86_400_000;
 
-// Beleg am Vorgang eintragen (Betrag nur ergänzen) und aus Archiv und Rückfragen nehmen
+// Lexware führt beim Betrag: der Nettobetrag der Rechnung, sonst der des Angebots; ohne Betrag bleibt der im CRM
+function amountFrom(deal: Pick<Deal, "amountNet" | "invoiceNumber">, v: LexwareVoucher) {
+  if (v.type === "quotation" && deal.invoiceNumber) return deal.amountNet;
+  return v.netAmount ?? deal.amountNet;
+}
+
+// Beleg am Vorgang eintragen und aus Archiv und Rückfragen nehmen
 async function linkNumber(deal: Deal, v: LexwareVoucher, used: Set<string | null>) {
   const field = v.type === "invoice" ? { invoiceNumber: v.number } : { offerNumber: v.number };
-  await db.update(deals).set({ ...field, amountNet: deal.amountNet ?? v.netAmount }).where(eq(deals.id, deal.id));
+  await db.update(deals).set({ ...field, amountNet: amountFrom(deal, v) }).where(eq(deals.id, deal.id));
   await db.update(lexwareVouchers).set({ archived: false, pending: false, fresh: false }).where(eq(lexwareVouchers.id, v.id));
   used.add(v.number);
   await note(deal, `${v.type === "invoice" ? "Rechnung" : "Angebot"} ${v.number} verknüpft`);
@@ -318,6 +324,13 @@ export async function reconcileDeals(): Promise<string[]> {
 
     // 4. Phase nach Rechnungsstatus
     const invoice = current.invoiceNumber ? vouchers.find((v) => v.number === current.invoiceNumber) : undefined;
+
+    // 5. Betrag nachziehen, wenn der verknüpfte Beleg in Lexware geändert wurde (Rechnung vor Angebot)
+    const target = invoice?.netAmount ?? (invoice ? null : offer?.netAmount) ?? null;
+    if (target !== null && Number(target) !== Number(current.amountNet)) {
+      await db.update(deals).set({ amountNet: target }).where(eq(deals.id, current.id));
+      log.push(`${current.title}: Betrag ${target} aus Lexware`);
+    }
     if (invoice && PAID.includes(invoice.status)) {
       await changeStage(current.id, "bezahlt");
       log.push(`${current.title}: bezahlt`);
@@ -386,8 +399,7 @@ export async function linkVoucher(dealId: number, voucherId: string) {
   await secureVoucher(found.number);
   const [voucher] = await db.select().from(lexwareVouchers).where(eq(lexwareVouchers.id, voucherId));
   const replaced = voucher.type === "invoice" ? deal.invoiceNumber : deal.offerNumber;
-  // Bei einer neuen Version gilt deren Betrag, sonst nur ergänzen
-  const amountNet = replaced ? voucher.netAmount ?? deal.amountNet : deal.amountNet ?? voucher.netAmount;
+  const amountNet = amountFrom(deal, voucher);
   await db
     .update(deals)
     .set(voucher.type === "invoice" ? { invoiceNumber: voucher.number, amountNet } : { offerNumber: voucher.number, amountNet })
