@@ -3,7 +3,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { MapPin } from "lucide-react";
 import { addDaysIso, ageLabel, daysSince, euro, mapsUrl, todayIso } from "@/lib/format";
 import { upcomingProductionDays } from "@/lib/schedule";
-import { getDashboard } from "@/lib/queries";
+import { getDashboard, pendingVouchers } from "@/lib/queries";
+import { lexwareUrl } from "@/lib/lexware-sync";
+import { VoucherQuestions } from "@/components/voucher-questions";
 import { TaskList } from "@/components/task-list";
 import { Badge, btnQuiet, Card, Empty, PageHeader, Row } from "@/components/ui";
 import { advanceDealAction } from "./actions";
@@ -18,7 +20,12 @@ function greeting(date: Date) {
 }
 
 export default async function StartPage() {
-  const [user, data, upcoming] = await Promise.all([getCurrentUser(), getDashboard(), upcomingProductionDays(todayIso(), addDaysIso(todayIso(), 14))]);
+  const [user, data, upcoming, questions] = await Promise.all([
+    getCurrentUser(),
+    getDashboard(),
+    upcomingProductionDays(todayIso(), addDaysIso(todayIso(), 14)),
+    pendingVouchers(),
+  ]);
   const now = new Date();
   const today = new Intl.DateTimeFormat("de-DE", {
     weekday: "long",
@@ -62,6 +69,27 @@ export default async function StartPage() {
           </div>
         ))}
       </section>
+
+      {questions.length > 0 && (
+        <Card
+          title="Belege zuordnen"
+          aside={<Badge tone="danger">{questions.length} neu aus Lexware</Badge>}
+        >
+          <VoucherQuestions
+            items={questions.map((q) => ({
+              ...q,
+              voucher: {
+                id: q.voucher.id,
+                number: q.voucher.number,
+                type: q.voucher.type,
+                totalAmount: q.voucher.totalAmount,
+                voucherDate: q.voucher.voucherDate,
+                url: lexwareUrl(q.voucher),
+              },
+            }))}
+          />
+        </Card>
+      )}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(380px,100%),1fr))] items-start gap-5">
         <Card

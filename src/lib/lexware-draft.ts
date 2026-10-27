@@ -58,6 +58,8 @@ export async function createQuotationDraft(dealId: number, items: DraftItem[]): 
     const details = Array.isArray(data?.details) ? data.details.map((d: { field?: string; message?: string }) => `${d.field}: ${d.message}`).join(", ") : "";
     throw new Error(`Lexware lehnt den Entwurf ab (${response.status}). ${data?.message ?? ""} ${details}`.trim());
   }
+  // Nach dem Abschließen in Lexware verknüpft der Abgleich das Angebot über diese ID
+  await db.update(deals).set({ lexwareDraftId: data.id }).where(eq(deals.id, dealId));
   await db.insert(activities).values({
     companyId: row.deal.companyId,
     dealId,

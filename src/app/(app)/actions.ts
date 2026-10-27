@@ -24,7 +24,7 @@ import { graphSend, mailboxes, messageText } from "@/lib/graph";
 import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
 import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
-import { linkVoucher, quickReconcile, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
+import { archiveVoucher, createDealFromVoucher, linkVoucher, quickReconcile, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
@@ -742,6 +742,18 @@ export async function linkVoucherAction(dealId: number, voucherId: string) {
   await getCurrentUser();
   await linkVoucher(dealId, voucherId);
   refresh();
+}
+
+// Beleg gehört zu keinem Vorgang: ins Archiv, zählt weiter im Umsatz
+export async function archiveVoucherAction(voucherId: string) {
+  await getCurrentUser();
+  await archiveVoucher(voucherId);
+  refresh();
+}
+
+// Rückfrage „Eigener Vorgang“: Vorgang aus dem Beleg anlegen
+export async function dealFromVoucherAction(voucherId: string): Promise<{ error?: string }> {
+  return lexwareStep(() => createDealFromVoucher(voucherId));
 }
 
 const draftItem = z.object({

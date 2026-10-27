@@ -125,6 +125,10 @@ export const deals = mysqlTable(
     invoiceNumber: varchar("invoice_number", { length: 64 }),
     compareOnly: boolean("compare_only").notNull().default(false),
     quick: boolean("quick").notNull().default(false),
+    // automatisch aus einem Lexware-Beleg ohne Vorgang angelegt
+    fromLexware: boolean("from_lexware").notNull().default(false),
+    // ID eines Angebotsentwurfs, den das CRM in Lexware angelegt hat; wird nach dem Abschließen verknüpft
+    lexwareDraftId: varchar("lexware_draft_id", { length: 64 }),
     lostReason: mysqlEnum("lost_reason", LOST_REASONS),
     // wer den Auftrag stattdessen bekommen hat (Firma der Art „wettbewerber“)
     competitorId: int("competitor_id"),
@@ -288,6 +292,12 @@ export const lexwareVouchers = mysqlTable(
     detailsLoaded: boolean("details_loaded").notNull().default(false),
     // Änderungszeitpunkt in Lexware; ändert er sich, werden Positionen und PDF neu geholt
     lexwareUpdatedAt: varchar("lexware_updated_at", { length: 40 }),
+    // gehört zu keinem Vorgang (Altlast oder ausdrücklich so entschieden): nie vorschlagen, nie verknüpfen; zählt im Umsatz weiter
+    archived: boolean("archived").notNull().default(false),
+    // neu seit der Umstellung am 27.10.2026: wird automatisch verknüpft, als Vorgang angelegt oder zur Entscheidung vorgelegt
+    fresh: boolean("fresh").notNull().default(true),
+    // wartet auf deine Entscheidung „Gehört Beleg X zu Vorgang Y?“
+    pending: boolean("pending").notNull().default(false),
     updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
   },
   (t) => [index("lexware_vouchers_contact_idx").on(t.contactId, t.type), index("lexware_vouchers_number_idx").on(t.number)],

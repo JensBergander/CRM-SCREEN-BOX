@@ -50,6 +50,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
           <span className="text-sm font-semibold tabular-nums">{euro(deal.amountNet)}</span>
           {deal.compareOnly && <Badge tone="info">Vermutlich Vergleichsangebot</Badge>}
           {deal.quick && <Badge>Schnellauftrag</Badge>}
+          {deal.fromLexware && <Badge>aus Lexware</Badge>}
           {deal.stage === "verloren" && deal.lostReason && (
             <span className="text-sm text-muted">Grund: {LOST_REASON_LABEL[deal.lostReason]}{deal.lostNote && ` – ${deal.lostNote}`}</span>
           )}

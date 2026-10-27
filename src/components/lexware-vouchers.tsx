@@ -1,12 +1,12 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { ExternalLink, FileText } from "lucide-react";
-import { linkVoucherAction } from "@/app/(app)/actions";
+import { archiveVoucherAction, dealFromVoucherAction, linkVoucherAction } from "@/app/(app)/actions";
 import type { LexwareVoucher } from "@/db/schema";
 import { euro } from "@/lib/format";
 import type { Tone } from "@/lib/tones";
-import { Badge, btnQuiet, Empty } from "./ui";
+import { Badge, btnQuiet, Empty, FormError } from "./ui";
 
 type LineItem = { name: string; description: string | null; quantity: number | null; unitName: string | null; net: number | null; total: number | null; optional: boolean };
 export type VoucherView = LexwareVoucher & { url: string; pdfUrl: string | null; items: LineItem[]; newer: boolean };
@@ -74,23 +74,57 @@ function VoucherRow({ v, action, showItems }: { v: VoucherView; action?: React.R
   );
 }
 
-export function LexwareVouchers({ dealId, linked, candidates, hasLexware }: {
+export function LexwareVouchers({ dealId, linked, candidates, questions, archived, hasLexware }: {
   dealId: number;
   linked: VoucherView[];
   candidates: VoucherView[];
+  questions: VoucherView[];
+  archived: VoucherView[];
   hasLexware: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  if (!hasLexware) return <Empty>Diese Firma ist nicht mit Lexware verknüpft (nicht aus Lexware importiert).</Empty>;
+  const [error, setError] = useState<string>();
+  if (!hasLexware) return <Empty>Diese Firma ist nicht mit Lexware verknüpft.</Empty>;
   const newer = candidates.filter((v) => v.newer);
   const others = candidates.filter((v) => !v.newer);
+  const run = (fn: () => Promise<unknown>) =>
+    startTransition(async () => {
+      const result = await fn();
+      setError(result && typeof result === "object" && "error" in result ? (result.error as string | undefined) : undefined);
+    });
   const link = (v: VoucherView, label: string) => (
-    <button type="button" disabled={pending} onClick={() => startTransition(() => linkVoucherAction(dealId, v.id))} className={btnQuiet}>
+    <button type="button" disabled={pending} onClick={() => run(() => linkVoucherAction(dealId, v.id))} className={btnQuiet}>
       {label}
+    </button>
+  );
+  const dismiss = (v: VoucherView) => (
+    <button type="button" disabled={pending} onClick={() => run(() => archiveVoucherAction(v.id))} className="text-[13px] text-muted hover:text-ink">
+      Gehört zu keinem Vorgang
     </button>
   );
   return (
     <>
+      {questions.length > 0 && (
+        <div className="mx-5 mb-2 mt-1 rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger-ink" role="status">
+          Neu in Lexware ohne Vorgang: Gehört {questions.length === 1 ? "dieser Beleg" : "einer dieser Belege"} zu diesem Vorgang?
+        </div>
+      )}
+      {questions.map((v) => (
+        <VoucherRow
+          key={v.id}
+          v={v}
+          action={
+            <>
+              {link(v, "Ja, zu diesem Vorgang")}
+              <button type="button" disabled={pending} onClick={() => run(() => dealFromVoucherAction(v.id))} className={btnQuiet}>
+                Eigener Vorgang
+              </button>
+              {dismiss(v)}
+            </>
+          }
+        />
+      ))}
+      {error && <div className="px-5 pb-2"><FormError message={error} /></div>}
       {newer.length > 0 && (
         <div className="mx-5 mb-2 mt-1 rounded-xl bg-sales-soft px-4 py-3 text-sm text-sales-ink" role="status">
           Für diese Firma gibt es ein neueres Angebot ({newer.map((v) => v.number).join(", ")}). Ist es die überarbeitete Fassung,
@@ -98,13 +132,23 @@ export function LexwareVouchers({ dealId, linked, candidates, hasLexware }: {
         </div>
       )}
       {newer.map((v) => <VoucherRow key={v.id} v={v} showItems action={link(v, "Stattdessen verknüpfen")} />)}
-      {linked.length === 0 && <Empty>Noch kein Angebot und keine Rechnung verknüpft. Die App verknüpft eindeutige Fälle selbst.</Empty>}
+      {linked.length === 0 && questions.length === 0 && (
+        <Empty>Noch kein Angebot und keine Rechnung verknüpft. Was aus dem verknüpften Angebot entsteht, verknüpft die App selbst; alles andere fragt sie nach.</Empty>
+      )}
       {linked.map((v) => <VoucherRow key={v.id} v={v} showItems />)}
       {others.length > 0 && (
         <>
           <p className="border-t border-line-soft px-5 pb-1 pt-4 text-xs font-semibold text-muted">Weitere Belege dieser Firma (noch keinem Vorgang zugeordnet)</p>
-          {others.slice(0, 8).map((v) => <VoucherRow key={v.id} v={v} action={link(v, "Verknüpfen")} />)}
+          {others.slice(0, 8).map((v) => <VoucherRow key={v.id} v={v} action={<>{link(v, "Verknüpfen")}{dismiss(v)}</>} />)}
         </>
+      )}
+      {archived.length > 0 && (
+        <details className="border-t border-line-soft">
+          <summary className="cursor-pointer px-5 py-3 text-xs font-semibold text-muted">
+            Archivierte Belege der letzten 2 Monate ({archived.length})
+          </summary>
+          {archived.map((v) => <VoucherRow key={v.id} v={v} action={link(v, "Doch verknüpfen")} />)}
+        </details>
       )}
     </>
   );

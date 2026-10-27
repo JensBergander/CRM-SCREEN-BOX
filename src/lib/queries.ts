@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lt, lte, max, ne, or, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
 import { activities, companies, contacts, dealSuppliers, deals, emails, lexwareVouchers, mailSync, productionDays, tasks, voucherFiles, type CompanyKind, type Email } from "@/db/schema";
-import { lexwareUrl, type LineItem } from "./lexware-sync";
+import { lexwareUrl, waitingDeals, type LineItem } from "./lexware-sync";
 import { addDaysIso, todayIso } from "./format";
 
 const dealWithCompany = {
@@ -449,9 +449,22 @@ export async function emailsFor(filter: { companyId?: number; dealId?: number; w
 }
 
 // Lexware-Belege der Firma eines Vorgangs: verknüpfte und noch freie (letzte 12 Monate)
-export async function vouchersForDeal(deal: { offerNumber: string | null; invoiceNumber: string | null; companyId: number }) {
+// Rückfragen: neue Lexware-Belege, zu denen ein laufender Vorgang der Firma passen könnte
+export async function pendingVouchers() {
+  const rows = await db
+    .select({ voucher: lexwareVouchers, companyId: companies.id, companyName: companies.name })
+    .from(lexwareVouchers)
+    .innerJoin(companies, eq(companies.lexwareId, lexwareVouchers.contactId))
+    .where(eq(lexwareVouchers.pending, true))
+    .orderBy(desc(lexwareVouchers.voucherDate));
+  return Promise.all(
+    rows.map(async (r) => ({ ...r, deals: (await waitingDeals(r.companyId, r.voucher.type)).map((d) => ({ id: d.id, title: d.title, stage: d.stage })) })),
+  );
+}
+
+export async function vouchersForDeal(deal: { offerNumber: string | null; invoiceNumber: string | null; companyId: number; stage: string }) {
   const [company] = await db.select({ lexwareId: companies.lexwareId }).from(companies).where(eq(companies.id, deal.companyId));
-  if (!company?.lexwareId) return { linked: [], candidates: [], hasLexware: false };
+  if (!company?.lexwareId) return { linked: [], candidates: [], questions: [], archived: [], hasLexware: false };
   const all = await db
     .select()
     .from(lexwareVouchers)
@@ -478,12 +491,20 @@ export async function vouchersForDeal(deal: { offerNumber: string | null; invoic
       v.number !== linkedOffer.number &&
       v.voucherDate.getTime() >= linkedOffer.voucherDate.getTime(),
   });
+  const free = all.filter((v) => !used.has(v.number) && !["voided", "draft"].includes(v.status));
+  // Rückfragen: neue Belege, die zu diesem Vorgang gehören könnten
+  const waitsFor = (v: (typeof all)[number]) =>
+    v.type === "invoice"
+      ? !deal.invoiceNumber && ["beauftragt", "erledigt"].includes(deal.stage)
+      : !deal.offerNumber && ["anfrage", "angebot"].includes(deal.stage);
+  const twoMonthsAgo = new Date(Date.now() - 61 * 86_400_000);
   return {
     hasLexware: true,
     linked: all.filter((v) => v.number === deal.offerNumber || v.number === deal.invoiceNumber).map(enrich),
-    candidates: all
-      .filter((v) => !used.has(v.number) && v.voucherDate && v.voucherDate > yearAgo && !["voided", "draft"].includes(v.status))
-      .map(enrich),
+    questions: free.filter((v) => v.pending && waitsFor(v)).map(enrich),
+    candidates: free.filter((v) => !v.archived && !v.pending && v.voucherDate && v.voucherDate > yearAgo).map(enrich),
+    // ausgeblendete Belege der letzten zwei Monate, z. B. um nachzusehen, ob eine Rechnung schon raus ist
+    archived: free.filter((v) => v.archived && v.voucherDate && v.voucherDate > twoMonthsAgo).map(enrich),
   };
 }
 

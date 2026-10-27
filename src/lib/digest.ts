@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { appState, companies, deals, lexwareVouchers } from "@/db/schema";
 import { addDaysIso, dateDe, daysSince, euro, todayIso } from "./format";
 import { graphPost, mailboxes } from "./graph";
-import { listInbox, listTasks } from "./queries";
+import { listInbox, listTasks, pendingVouchers } from "./queries";
 
 const APP_URL = () => process.env.APP_URL ?? "https://crm.screen-box.de";
 
@@ -21,13 +21,14 @@ export async function buildDigest(): Promise<{ sections: Section[]; total: numbe
       .where(and(eq(deals.stage, stage), lt(deals.stageChangedAt, new Date(`${addDaysIso(today, -olderThanDays)}T23:59:59Z`))))
       .orderBy(asc(deals.stageChangedAt));
 
-  const [billing, running, offers, invoiced, tasks, mails] = await Promise.all([
+  const [billing, running, offers, invoiced, tasks, mails, questions] = await Promise.all([
     dealRows("erledigt", 0),
     dealRows("beauftragt", 14),
     dealRows("angebot", 10),
     dealRows("rechnung", 14),
     listTasks({ open: true, dueUntil: today }),
     listInbox("offen"),
+    pendingVouchers(),
   ]);
   const overdue = invoiced.length
     ? await db
@@ -43,6 +44,14 @@ export async function buildDigest(): Promise<{ sections: Section[]; total: numbe
     href: `${base}/vorgaenge/${d.id}`,
   });
   const sections: Section[] = [
+    {
+      title: "Neue Lexware-Belege zuordnen",
+      rows: questions.map((q) => ({
+        text: `${q.companyName}: ${q.voucher.type === "invoice" ? "Rechnung" : "Angebot"} ${q.voucher.number}`,
+        detail: `${euro(q.voucher.totalAmount)} brutto · gehört sie zu ${q.deals.map((d) => `„${d.title}“`).join(" oder ")}?`,
+        href: `${base}/`,
+      })),
+    },
     { title: "Erledigt, aber noch nicht abgerechnet", rows: billing.map((d) => deal(d, `seit ${daysSince(d.since)} Tagen erledigt`)) },
     {
       title: "Rechnung gestellt, nach 14 Tagen noch nicht bezahlt",

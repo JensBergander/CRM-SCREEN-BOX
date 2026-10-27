@@ -1,8 +1,9 @@
 import "server-only";
 import { and, eq, inArray, isNotNull, notInArray } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, companies, deals, lexwareVouchers, voucherFiles, type Deal, type LexwareVoucher } from "@/db/schema";
-import { changeStage } from "./pipeline";
+import { activities, companies, deals, lexwareVouchers, voucherFiles, type Deal, type LexwareVoucher, type Stage } from "@/db/schema";
+import { companyForLexwareContact } from "./lexware";
+import { changeStage, createDeal } from "./pipeline";
 
 const API = "https://api.lexware.io/v1";
 const pause = () => new Promise((resolve) => setTimeout(resolve, 600)); // max. 2 Anfragen pro Sekunde
@@ -167,10 +168,99 @@ async function note(deal: Deal, body: string) {
 }
 
 const DAY = 86_400_000;
-// Angebote ab 30 Tage vor Anlage des Vorgangs kommen in Frage (das Angebot entsteht oft vor dem Eintrag im CRM),
-// Rechnungen nur ab 2 Tage davor, damit keine Rechnung eines früheren Auftrags erwischt wird
-const after = (v: LexwareVoucher, deal: Deal, days: number) =>
-  !!v.voucherDate && v.voucherDate.getTime() >= deal.createdAt.getTime() - days * DAY;
+
+// Beleg am Vorgang eintragen (Betrag nur ergänzen) und aus Archiv und Rückfragen nehmen
+async function linkNumber(deal: Deal, v: LexwareVoucher, used: Set<string | null>) {
+  const field = v.type === "invoice" ? { invoiceNumber: v.number } : { offerNumber: v.number };
+  await db.update(deals).set({ ...field, amountNet: deal.amountNet ?? v.netAmount }).where(eq(deals.id, deal.id));
+  await db.update(lexwareVouchers).set({ archived: false, pending: false, fresh: false }).where(eq(lexwareVouchers.id, v.id));
+  used.add(v.number);
+  await note(deal, `${v.type === "invoice" ? "Rechnung" : "Angebot"} ${v.number} verknüpft`);
+}
+
+// Laufende Vorgänge einer Firma, zu denen ein neuer Beleg gehören könnte
+export async function waitingDeals(companyId: number, type: string) {
+  const open = await db.select().from(deals).where(and(eq(deals.companyId, companyId), notInArray(deals.stage, ["verloren", "bezahlt"])));
+  return type === "invoice"
+    ? open.filter((d) => !d.invoiceNumber && ["beauftragt", "erledigt"].includes(d.stage))
+    : open.filter((d) => !d.offerNumber && ["anfrage", "angebot"].includes(d.stage));
+}
+
+// Neue Belege seit der Umstellung, die noch zu keinem Vorgang gehören:
+// passt ein laufender Vorgang, wird nachgefragt; sonst entsteht ein Vorgang aus dem Beleg
+async function handleFreshVouchers(): Promise<string[]> {
+  const log: string[] = [];
+  const fresh = await db
+    .select()
+    .from(lexwareVouchers)
+    .where(and(eq(lexwareVouchers.fresh, true), eq(lexwareVouchers.archived, false), notInArray(lexwareVouchers.status, ["draft"])));
+  if (!fresh.length) return log;
+  const used = new Set(
+    (await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals)).flatMap((d) => [d.o, d.i]).filter(Boolean),
+  );
+  const done = (id: string, set: Partial<LexwareVoucher> = {}) =>
+    db.update(lexwareVouchers).set({ fresh: false, ...set }).where(eq(lexwareVouchers.id, id));
+
+  for (const v of fresh) {
+    if (used.has(v.number) || ["voided", "rejected"].includes(v.status) || !v.contactId) {
+      await done(v.id);
+      continue;
+    }
+    try {
+      const company = await companyForLexwareContact(v.contactId);
+      if (!company) {
+        await done(v.id);
+        continue;
+      }
+      if ((await waitingDeals(company.id, v.type)).length) {
+        await done(v.id, { pending: true });
+        log.push(`${v.number}: Rückfrage, zu welchem Vorgang`);
+        continue;
+      }
+      await createDealFromVoucher(v.id);
+      log.push(`${v.number}: Vorgang angelegt`);
+    } catch (e) {
+      // Beim nächsten Lauf erneut versuchen
+      console.error(`Beleg ${v.number} konnte nicht verarbeitet werden:`, e);
+    }
+  }
+  return log;
+}
+
+// Vorgang aus einem Lexware-Beleg: Rechnung → Rechnung gestellt (bzw. Bezahlt), Angebot → Angebot verschickt (bzw. Beauftragt)
+export async function createDealFromVoucher(voucherId: string): Promise<number> {
+  const [found] = await db.select().from(lexwareVouchers).where(eq(lexwareVouchers.id, voucherId));
+  if (!found?.contactId) throw new Error("Beleg nicht gefunden.");
+  const company = await companyForLexwareContact(found.contactId);
+  if (!company) throw new Error("Die Firma zu diesem Beleg gibt es in Lexware nicht mehr.");
+  await secureVoucher(found.number);
+  const [v] = await db.select().from(lexwareVouchers).where(eq(lexwareVouchers.id, voucherId));
+  const items = v.lineItems ? (JSON.parse(v.lineItems) as LineItem[]) : [];
+  const invoice = v.type === "invoice";
+  const title = (items.find((i) => i.name)?.name ?? `${invoice ? "Rechnung" : "Angebot"} ${v.number}`).slice(0, 255);
+  const stage: Stage = invoice ? (PAID.includes(v.status) ? "bezahlt" : "rechnung") : v.status === "accepted" ? "beauftragt" : "angebot";
+  // Rechnung aus einem noch freien Angebot: das Angebot gleich mit eintragen
+  const [fromOffer] = invoice && v.quotationId ? await db.select().from(lexwareVouchers).where(eq(lexwareVouchers.id, v.quotationId)) : [];
+  const [taken] = fromOffer ? await db.select({ id: deals.id }).from(deals).where(eq(deals.offerNumber, fromOffer.number)) : [];
+
+  const dealId = await createDeal({ companyId: company.id, title, stage, amountNet: v.netAmount });
+  await db
+    .update(deals)
+    .set({
+      fromLexware: true,
+      ...(invoice ? { invoiceNumber: v.number, ...(fromOffer && !taken ? { offerNumber: fromOffer.number } : {}) } : { offerNumber: v.number }),
+    })
+    .where(eq(deals.id, dealId));
+  await db.update(lexwareVouchers).set({ fresh: false, pending: false, archived: false }).where(eq(lexwareVouchers.id, v.id));
+  const [deal] = await db.select().from(deals).where(eq(deals.id, dealId));
+  await note(deal, `Vorgang aus ${invoice ? "Rechnung" : "Angebot"} ${v.number} angelegt (in Lexware ohne Vorgang geschrieben)`);
+  return dealId;
+}
+
+// „Gehört zu keinem Vorgang“: Beleg ins Archiv, zählt aber weiter im Umsatz
+export async function archiveVoucher(voucherId: string) {
+  await db.update(lexwareVouchers).set({ archived: true, pending: false, fresh: false }).where(eq(lexwareVouchers.id, voucherId));
+}
 
 // Lexware-Belege mit Vorgängen abgleichen; ändert nur eindeutige Fälle
 export async function reconcileDeals(): Promise<string[]> {
@@ -180,7 +270,10 @@ export async function reconcileDeals(): Promise<string[]> {
     .from(deals)
     .innerJoin(companies, eq(companies.id, deals.companyId))
     .where(and(notInArray(deals.stage, ["verloren", "bezahlt"]), isNotNull(companies.lexwareId)));
-  if (!active.length) return log;
+  if (!active.length) {
+    log.push(...(await handleFreshVouchers()));
+    return log;
+  }
 
   const contactIds = [...new Set(active.map((a) => a.lexwareId!))];
   const vouchers = await db.select().from(lexwareVouchers).where(inArray(lexwareVouchers.contactId, contactIds));
@@ -189,18 +282,15 @@ export async function reconcileDeals(): Promise<string[]> {
   );
 
   for (const { deal, lexwareId } of active) {
-    const mine = vouchers.filter((v) => v.contactId === lexwareId && !DEAD.includes(v.status));
+    const mine = vouchers.filter((v) => v.contactId === lexwareId && !DEAD.includes(v.status) && !v.pending);
     let current = deal;
 
-    // 1. Angebot verknüpfen: genau ein neues, noch freies Angebot der Firma
-    if (!current.offerNumber && (current.stage === "anfrage" || current.stage === "angebot")) {
-      const offers = mine.filter((v) => v.type === "quotation" && !used.has(v.number) && after(v, current, 30));
-      if (offers.length === 1) {
-        const offer = offers[0];
-        await db.update(deals).set({ offerNumber: offer.number, amountNet: current.amountNet ?? offer.netAmount }).where(eq(deals.id, current.id));
-        used.add(offer.number);
+    // 1. Angebot verknüpfen: ein Entwurf, den das CRM selbst in Lexware angelegt hat und der inzwischen abgeschlossen ist
+    if (!current.offerNumber && current.lexwareDraftId) {
+      const offer = mine.find((v) => v.id === current.lexwareDraftId && v.type === "quotation");
+      if (offer) {
+        await linkNumber(current, offer, used);
         current = { ...current, offerNumber: offer.number };
-        await note(current, `Angebot ${offer.number} verknüpft`);
         log.push(`${current.title}: Angebot ${offer.number}`);
         if (current.stage === "anfrage") await changeStage(current.id, "angebot");
         current = { ...current, stage: current.stage === "anfrage" ? "angebot" : current.stage };
@@ -216,21 +306,13 @@ export async function reconcileDeals(): Promise<string[]> {
       log.push(`${current.title}: Angebot angenommen → Beauftragt`);
     }
 
-    // 3. Rechnung verknüpfen: aus dem Angebot erstellt oder einzige neue Rechnung der Firma
-    if (!current.invoiceNumber && ["angebot", "beauftragt", "erledigt"].includes(current.stage)) {
-      const free = mine.filter((v) => v.type === "invoice" && !used.has(v.number));
-      const fromOffer = offer ? free.filter((v) => v.quotationId === offer.id) : [];
-      const otherOpenDeals = active.filter(
-        (a) => a.lexwareId === lexwareId && a.deal.id !== current.id && !a.deal.invoiceNumber && ["beauftragt", "erledigt"].includes(a.deal.stage),
-      );
-      const recent = free.filter((v) => after(v, current, 2));
-      const invoice = fromOffer.length === 1 ? fromOffer[0] : recent.length === 1 && otherOpenDeals.length === 0 ? recent[0] : undefined;
-      if (invoice) {
-        await db.update(deals).set({ invoiceNumber: invoice.number, amountNet: current.amountNet ?? invoice.netAmount }).where(eq(deals.id, current.id));
-        used.add(invoice.number);
-        current = { ...current, invoiceNumber: invoice.number };
-        await note(current, `Rechnung ${invoice.number} verknüpft`);
-        log.push(`${current.title}: Rechnung ${invoice.number}`);
+    // 3. Rechnung verknüpfen: nur wenn sie aus dem verknüpften Angebot erstellt wurde; alles andere wird nachgefragt
+    if (!current.invoiceNumber && offer && ["angebot", "beauftragt", "erledigt"].includes(current.stage)) {
+      const fromOffer = mine.filter((v) => v.type === "invoice" && !used.has(v.number) && v.quotationId === offer.id);
+      if (fromOffer.length === 1) {
+        await linkNumber(current, fromOffer[0], used);
+        current = { ...current, invoiceNumber: fromOffer[0].number };
+        log.push(`${current.title}: Rechnung ${fromOffer[0].number}`);
       }
     }
 
@@ -244,6 +326,8 @@ export async function reconcileDeals(): Promise<string[]> {
       log.push(`${current.title}: Rechnung gestellt`);
     }
   }
+
+  log.push(...(await handleFreshVouchers()));
 
   // Positionen und PDF der Belege laufender Vorgänge sichern (holt Fehlendes nach, höchstens 10 pro Lauf).
   // Abgeschlossene Vorgänge werden übersprungen, damit gelöschte PDF-Kopien nicht wiederkommen.
@@ -308,6 +392,7 @@ export async function linkVoucher(dealId: number, voucherId: string) {
     .update(deals)
     .set(voucher.type === "invoice" ? { invoiceNumber: voucher.number, amountNet } : { offerNumber: voucher.number, amountNet })
     .where(eq(deals.id, dealId));
+  await db.update(lexwareVouchers).set({ archived: false, pending: false, fresh: false }).where(eq(lexwareVouchers.id, voucherId));
   const kind = voucher.type === "invoice" ? "Rechnung" : "Angebot";
   await note(deal, replaced ? `${kind} ${replaced} ersetzt durch ${voucher.number}` : `${kind} ${voucher.number} von Hand verknüpft`);
   await reconcileDeals();

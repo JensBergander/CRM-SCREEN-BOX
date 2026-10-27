@@ -291,6 +291,19 @@ async function companyById(id: number) {
   return company;
 }
 
+// Firma zu einem Lexware-Kontakt (z. B. für einen neuen Beleg); unbekannte holt sie aus Lexware
+// und verknüpft eindeutige Treffer oder legt die Firma an
+export async function companyForLexwareContact(lexwareId: string): Promise<Company | null> {
+  const [existing] = await db.select().from(companies).where(eq(companies.lexwareId, lexwareId));
+  if (existing) return existing;
+  const lx = await lexware<LexwareContact>(`/contacts/${lexwareId}`);
+  if (!lx.roles.customer && !lx.roles.vendor) return null;
+  const unlinked = await db.select().from(companies).where(and(isNull(companies.lexwareId), sql`${companies.kind} <> 'wettbewerber'`));
+  const company = (await exactMatch(lx, unlinked)) ?? (await createCompanyFrom(lx));
+  await applyContact(lx, company);
+  return companyById(company.id);
+}
+
 // Eine Firma sofort aus Lexware neu laden
 export async function refreshCompanyFromLexware(companyId: number) {
   const company = await companyById(companyId);
