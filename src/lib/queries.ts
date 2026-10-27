@@ -11,6 +11,8 @@ const dealWithCompany = {
   title: deals.title,
   stage: deals.stage,
   amountNet: deals.amountNet,
+  offerNumber: deals.offerNumber,
+  invoiceNumber: deals.invoiceNumber,
   projectDate: deals.projectDate,
   compareOnly: deals.compareOnly,
   quick: deals.quick,

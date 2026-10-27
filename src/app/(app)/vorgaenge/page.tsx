@@ -4,7 +4,10 @@ import { dateDe, euro } from "@/lib/format";
 import { STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import { competitorNames, listDeals } from "@/lib/queries";
 import { DealBoard } from "@/components/deal-board";
+import { SearchBox } from "@/components/search-box";
 import { Badge, btnPrimary, PageHeader } from "@/components/ui";
+
+const str = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
 
 export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge">) {
   const params = await searchParams;
@@ -15,10 +18,18 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
   let deals = await listDeals(table && showLost);
   const competitors = await competitorNames();
   if (compareOnly) deals = deals.filter((d) => d.compareOnly);
+  // Suche über Firma, Vorgang, Projekt-, Angebots- und Rechnungsnummer
+  const query = typeof params.q === "string" ? params.q.trim() : "";
+  if (query) {
+    const needle = query.toLowerCase();
+    deals = deals.filter((d) =>
+      [d.companyName, d.title, d.number, d.offerNumber, d.invoiceNumber].some((f) => f?.toLowerCase().includes(needle)),
+    );
+  }
 
   const link = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams();
-    for (const [k, v] of Object.entries({ ansicht: params.ansicht, verloren: params.verloren, vergleich: params.vergleich, ...patch })) {
+    for (const [k, v] of Object.entries({ ansicht: params.ansicht, verloren: params.verloren, vergleich: params.vergleich, q: query, ...patch })) {
       if (typeof v === "string" && v) next.set(k, v);
     }
     const qs = next.toString();
@@ -31,7 +42,12 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader area="vorgaenge" title="Vorgänge">
+      <PageHeader area="vorgaenge" title="Vorgänge" sub={query ? `${deals.length} Treffer für „${query}“` : undefined}>
+        <SearchBox
+          defaultValue={query}
+          placeholder="Firma, Vorgang oder Nummer"
+          keep={{ ansicht: str(params.ansicht), verloren: str(params.verloren), vergleich: str(params.vergleich) }}
+        />
         <div role="group" aria-label="Ansicht" className="flex rounded-full bg-line p-1">
           <Link href={link({ ansicht: null })} aria-current={!table ? "page" : undefined} className={pill(!table)}>Board</Link>
           <Link href={link({ ansicht: "tabelle" })} aria-current={table ? "page" : undefined} className={pill(table)}>Tabelle</Link>
@@ -82,7 +98,7 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
                 </tr>
               ))}
               {deals.length === 0 && (
-                <tr><td colSpan={5} className="px-5 py-6 text-muted">Noch keine Vorgänge.</td></tr>
+                <tr><td colSpan={5} className="px-5 py-6 text-muted">{query ? `Nichts gefunden für „${query}“.` : "Noch keine Vorgänge."}</td></tr>
               )}
             </tbody>
           </table>
