@@ -141,6 +141,20 @@
       "when": 1793138661405,
       "tag": "0019_amount_from_lexware",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1793611289229,
+      "tag": "0020_mail_modified",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1793611469419,
+      "tag": "0021_graph_id_case",
+      "breakpoints": true
     }
   ]
 }

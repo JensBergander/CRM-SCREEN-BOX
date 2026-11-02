@@ -16,6 +16,7 @@ import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
 import { Badge, btnPrimary, btnSecondary, Card, Empty, LexwareBadge, Row } from "@/components/ui";
 import { LexwareActions } from "@/components/lexware-actions";
+import { OlderMails } from "@/components/older-mails";
 
 export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">) {
   const { id } = await params;
@@ -126,7 +127,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
       </details>
 
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
-        <Card title="Zeitleiste">
+        <Card title="Zeitleiste" aside={<OlderMails companyId={company.id} />}>
           {/* Lieferanten: Notizen nur zur Firma; Mails ordnest du über die Zeitleiste einem Kundenprojekt zu */}
           <ActivityForm companyId={company.id} dealId={null} projects={supplier ? [] : data.projects.filter((p) => p.active)} />
           <Timeline items={data.timeline} emails={data.emails} senders={data.senders} searchable projects={data.projects} projectFilter today={todayIso()} />

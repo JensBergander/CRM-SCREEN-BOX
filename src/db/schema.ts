@@ -239,6 +239,7 @@ export const emails = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     // ID der Nachricht in Microsoft Graph, je Postfach eindeutig
+    // binär sortiert (Migration 0021): Outlook-IDs unterscheiden Groß- und Kleinschreibung
     graphId: varchar("graph_id", { length: 255 }).notNull(),
     mailbox: varchar("mailbox", { length: 120 }).notNull(),
     internetMessageId: varchar("internet_message_id", { length: 255 }),
@@ -263,6 +264,7 @@ export const emails = mysqlTable(
   },
   (t) => [
     uniqueIndex("emails_graph_idx").on(t.mailbox, t.graphId),
+    index("emails_message_idx").on(t.mailbox, t.internetMessageId),
     index("emails_company_idx").on(t.companyId, t.receivedAt),
     index("emails_status_idx").on(t.status, t.receivedAt),
     index("emails_from_idx").on(t.fromAddress),
@@ -280,6 +282,8 @@ export const mailIgnore = mysqlTable("mail_ignore", {
 export const mailSync = mysqlTable("mail_sync", {
   mailbox: varchar("mailbox", { length: 120 }).primaryKey(),
   lastReceivedAt: timestamp("last_received_at"),
+  // Abruf nach „zuletzt verändert“, damit auch nachträglich ins Postfach verschobene Mails ankommen
+  lastModifiedAt: timestamp("last_modified_at"),
   lastRunAt: timestamp("last_run_at"),
   lastError: text("last_error"),
 });

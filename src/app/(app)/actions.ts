@@ -19,7 +19,7 @@ import {
   type LexwareHit,
   type LexwareSyncResult,
 } from "@/lib/lexware";
-import { matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
+import { loadOlderMails, matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { graphSend, mailboxes, messageText } from "@/lib/graph";
 import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
 import { deleteDealWebsite, linkWebsiteEvent, ownWebsiteEvent, setWebsitePublic, syncDealWebsite, uploadWebsiteImage } from "@/lib/website";
@@ -427,6 +427,17 @@ export async function setWebsitePublicAction(dealId: number, value: boolean) {
   await getCurrentUser();
   await setWebsitePublic(dealId, value === true);
   refresh();
+}
+
+export async function loadOlderMailsAction(companyId: number): Promise<{ added?: number; error?: string }> {
+  await getCurrentUser();
+  try {
+    const added = await loadOlderMails(companyId);
+    refresh();
+    return { added };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)

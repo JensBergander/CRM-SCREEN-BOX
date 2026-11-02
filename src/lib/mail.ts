@@ -15,6 +15,7 @@ type GraphMessage = {
   webLink?: string;
   hasAttachments?: boolean;
   receivedDateTime: string;
+  lastModifiedDateTime?: string;
   from?: GraphAddress;
   toRecipients?: GraphAddress[];
   ccRecipients?: GraphAddress[];
@@ -24,7 +25,7 @@ type GraphPage = { value: GraphMessage[]; "@odata.nextLink"?: string };
 
 const SELECT = [
   "id", "internetMessageId", "conversationId", "subject", "bodyPreview", "webLink",
-  "hasAttachments", "receivedDateTime", "from", "toRecipients", "ccRecipients", "parentFolderId",
+  "hasAttachments", "receivedDateTime", "lastModifiedDateTime", "from", "toRecipients", "ccRecipients", "parentFolderId",
 ].join(",");
 
 // Ordner, deren Mails nicht ins CRM gehören
@@ -61,6 +62,8 @@ async function skippedFolderIds(mailbox: string): Promise<Set<string>> {
 
 // Wie weit beim ersten Abruf zurückgegangen wird
 const HISTORY_DAYS = 365;
+// Beim Umstieg auf den Abruf nach „zuletzt verändert“: so weit zurück nach verschobenen Mails schauen
+const CATCH_UP_DAYS = 30;
 // Seiten à 100 Mails pro Postfach und Lauf; der Rest folgt beim nächsten Lauf
 const MAX_PAGES_PER_RUN = 10;
 
@@ -121,14 +124,31 @@ function counterpart(message: GraphMessage, outgoing: boolean): string | null {
   return recipients.find((a) => !isOwn(a)) ?? null;
 }
 
-async function storeMessage(mailbox: string, message: GraphMessage, patterns: Set<string>) {
+// companyId: beim Nachladen einer Firma gehört die Mail ihr, auch wenn die Adresse (noch) nicht passt
+async function storeMessage(mailbox: string, message: GraphMessage, patterns: Set<string>, companyId?: number) {
   const fromAddress = message.from?.emailAddress?.address?.toLowerCase() ?? null;
   const outgoing = fromAddress === mailbox || isOwn(fromAddress);
   const other = counterpart(message, outgoing);
-  const match = await matchAddress(other);
+  const match = (await matchAddress(other)) ?? (companyId ? { companyId, contactId: null } : null);
   // nur zwischen eigenen Adressen oder von einem ignorierten Absender
   const internal = !other || (!match && isIgnored(other, patterns));
   const dealId = match ? await dealOfConversation(message.conversationId, match.companyId) : null;
+
+  // Schon bekannt, nur verschoben (Outlook vergibt dabei eine neue ID): Zuordnung behalten, ID und Link nachführen
+  const messageId = message.internetMessageId?.slice(0, 255);
+  if (messageId) {
+    const [known] = await db
+      .select({ id: emails.id, companyId: emails.companyId })
+      .from(emails)
+      .where(and(eq(emails.mailbox, mailbox), eq(emails.internetMessageId, messageId)))
+      .limit(1);
+    if (known) {
+      // bisher ohne Firma: jetzt zuordnen
+      const assign = !known.companyId && match ? { companyId: match.companyId, contactId: match.contactId, dealId, status: "zugeordnet" as const } : {};
+      await db.update(emails).set({ graphId: message.id, webLink: message.webLink ?? null, ...assign }).where(eq(emails.id, known.id));
+      return;
+    }
+  }
 
   await db
     .insert(emails)
@@ -181,21 +201,22 @@ export async function syncMailboxes(): Promise<SyncResult> {
   const result: SyncResult = [];
   for (const mailbox of mailboxes()) {
     const [state] = await db.select().from(mailSync).where(eq(mailSync.mailbox, mailbox));
-    const since = state?.lastReceivedAt ?? new Date(Date.now() - HISTORY_DAYS * 86_400_000);
+    const since =
+      state?.lastModifiedAt ?? new Date(Date.now() - (state ? CATCH_UP_DAYS : HISTORY_DAYS) * 86_400_000);
     let fetched = 0;
     let latest = since;
     let done = false;
     try {
       const skip = await skippedFolderIds(mailbox);
       const patterns = await ignorePatterns();
-      const filter = `receivedDateTime ge ${since.toISOString()} and isDraft eq false`;
+      const filter = `lastModifiedDateTime ge ${since.toISOString()} and isDraft eq false`;
       let next: string | undefined =
         `/users/${encodeURIComponent(mailbox)}/messages?$select=${SELECT}&$top=100` +
-        `&$filter=${encodeURIComponent(filter)}&$orderby=receivedDateTime asc`;
+        `&$filter=${encodeURIComponent(filter)}&$orderby=lastModifiedDateTime asc`;
       for (let page = 0; next && page < MAX_PAGES_PER_RUN; page++) {
         const data: GraphPage = await graphGet<GraphPage>(next);
         for (const message of data.value) {
-          const at = new Date(message.receivedDateTime);
+          const at = new Date(message.lastModifiedDateTime ?? message.receivedDateTime);
           if (at > latest) latest = at;
           if (message.parentFolderId && skip.has(message.parentFolderId)) continue;
           await storeMessage(mailbox, message, patterns);
@@ -206,20 +227,59 @@ export async function syncMailboxes(): Promise<SyncResult> {
       done = !next;
       await db
         .insert(mailSync)
-        .values({ mailbox, lastReceivedAt: latest, lastRunAt: new Date(), lastError: null })
-        .onDuplicateKeyUpdate({ set: { lastReceivedAt: latest, lastRunAt: new Date(), lastError: null } });
+        .values({ mailbox, lastModifiedAt: latest, lastRunAt: new Date(), lastError: null })
+        .onDuplicateKeyUpdate({ set: { lastModifiedAt: latest, lastRunAt: new Date(), lastError: null } });
       result.push({ mailbox, fetched, done });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       await db
         .insert(mailSync)
-        .values({ mailbox, lastReceivedAt: latest > since ? latest : state?.lastReceivedAt ?? null, lastRunAt: new Date(), lastError: message })
+        .values({ mailbox, lastModifiedAt: latest > since ? latest : state?.lastModifiedAt ?? null, lastRunAt: new Date(), lastError: message })
         .onDuplicateKeyUpdate({ set: { lastRunAt: new Date(), lastError: message } });
       result.push({ mailbox, fetched, done: false, error: message });
     }
   }
   await rematchOpenMails();
   return result;
+}
+
+// Ältere Mails einer Firma ohne Zeitgrenze aus den Postfächern holen (der laufende Abruf reicht nur ein Jahr zurück).
+// Gesucht wird nach Mail-Domain und Adressen; gespeichert wird nur, was die Firma als Absender oder Empfänger hat.
+export async function loadOlderMails(companyId: number): Promise<number> {
+  const [company] = await db.select({ email: companies.email, domain: companies.emailDomain }).from(companies).where(eq(companies.id, companyId));
+  if (!company) return 0;
+  const people = await db.select({ email: contacts.email }).from(contacts).where(eq(contacts.companyId, companyId));
+  const addresses = new Set([company.email, ...people.map((p) => p.email)].filter((a): a is string => !!a).map((a) => a.toLowerCase()));
+  const domains = new Set([company.domain, ...[...addresses].map(domainOf)].filter((d): d is string => !!d).map((d) => d.toLowerCase()));
+  // Adressen mit eigener Firmen-Domain deckt die Domain-Suche schon ab
+  const terms = [...domains, ...[...addresses].filter((a) => !domains.has(a.split("@")[1]))];
+  if (!terms.length) return 0;
+
+  const belongs = (address: string | undefined) => {
+    const lower = address?.toLowerCase();
+    return !!lower && (addresses.has(lower) || domains.has(lower.split("@")[1] ?? ""));
+  };
+  const [before] = await db.select({ n: sql<number>`count(*)` }).from(emails).where(eq(emails.companyId, companyId));
+  for (const mailbox of mailboxes()) {
+    const skip = await skippedFolderIds(mailbox);
+    const patterns = await ignorePatterns();
+    for (const term of terms) {
+      let next: string | undefined =
+        `/users/${encodeURIComponent(mailbox)}/messages?$select=${SELECT},isDraft&$top=100&$search=${encodeURIComponent(`"${term}"`)}`;
+      for (let page = 0; next && page < MAX_PAGES_PER_RUN; page++) {
+        const data: GraphPage = await graphGet<GraphPage>(next);
+        for (const message of data.value as (GraphMessage & { isDraft?: boolean })[]) {
+          if (message.isDraft || (message.parentFolderId && skip.has(message.parentFolderId))) continue;
+          const people = [message.from, ...(message.toRecipients ?? []), ...(message.ccRecipients ?? [])];
+          if (!people.some((p) => belongs(p?.emailAddress?.address))) continue;
+          await storeMessage(mailbox, message, patterns, companyId);
+        }
+        next = data["@odata.nextLink"];
+      }
+    }
+  }
+  const [after] = await db.select({ n: sql<number>`count(*)` }).from(emails).where(eq(emails.companyId, companyId));
+  return Number(after.n) - Number(before.n);
 }
 
 // Offene Mails erneut zuordnen, z. B. nachdem eine Firma eine Mail-Domain bekommen hat
