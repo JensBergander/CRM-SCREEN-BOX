@@ -82,8 +82,9 @@ async function fetchAllContacts(): Promise<LexwareContact[]> {
   }
 }
 
+// Leerzeichen am Rand (z. B. „ Hartig GmbH“) lassen sonst gleiche Namen verschieden aussehen
 const nameOf = (lx: LexwareContact) =>
-  lx.company?.name ?? [lx.person?.firstName, lx.person?.lastName].filter(Boolean).join(" ");
+  (lx.company?.name ?? [lx.person?.firstName, lx.person?.lastName].filter(Boolean).join(" ")).trim();
 const emailsOf = (lx: LexwareContact) => Object.values(lx.emailAddresses ?? {}).flat().filter(Boolean);
 const phonesOf = (lx: LexwareContact) => Object.values(lx.phoneNumbers ?? {}).flat().filter(Boolean);
 

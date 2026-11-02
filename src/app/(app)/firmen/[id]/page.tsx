@@ -17,6 +17,8 @@ import { Timeline } from "@/components/timeline";
 import { Badge, btnPrimary, btnSecondary, Card, Empty, LexwareBadge, Row } from "@/components/ui";
 import { LexwareActions } from "@/components/lexware-actions";
 import { OlderMails } from "@/components/older-mails";
+import { MergeCompany } from "@/components/merge-company";
+import { mergeCandidates } from "@/lib/merge";
 
 export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">) {
   const { id } = await params;
@@ -123,6 +125,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         </summary>
         <div className="border-t border-line-soft pt-2">
           <EditCompanyForm key={company.name} company={company} tagOptions={await serviceTagOptions()} />
+          <MergeCompany company={{ id: company.id, name: company.name.trim(), lexwareId: company.lexwareId }} candidates={await mergeCandidates(company.id)} />
         </div>
       </details>
 

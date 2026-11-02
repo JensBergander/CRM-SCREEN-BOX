@@ -22,6 +22,7 @@ import {
 import { loadOlderMails, matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { graphSend, mailboxes, messageText } from "@/lib/graph";
 import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
+import { mergeCompanies } from "@/lib/merge";
 import { deleteDealWebsite, linkWebsiteEvent, ownWebsiteEvent, setWebsitePublic, syncDealWebsite, uploadWebsiteImage } from "@/lib/website";
 import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
@@ -438,6 +439,14 @@ export async function loadOlderMailsAction(companyId: number): Promise<{ added?:
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+export async function mergeCompanyAction(fromId: number, intoId: number): Promise<{ error?: string }> {
+  await getCurrentUser();
+  const result = await mergeCompanies(z.number().int().parse(fromId), z.number().int().parse(intoId));
+  if ("error" in result) return result;
+  refresh();
+  redirect(`/firmen/${result.keptId}`);
 }
 
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)
