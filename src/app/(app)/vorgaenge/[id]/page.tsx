@@ -4,7 +4,7 @@ import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_LABEL } from "@/lib/labels";
 import { FolderPlus } from "lucide-react";
 import { folderLink } from "@/lib/folders";
-import { companyName, competitorNames, getDeal, supplierNames, suppliersForDeal, vouchersForDeal } from "@/lib/queries";
+import { companyName, competitorNames, phoneNumbers, getDeal, supplierNames, suppliersForDeal, vouchersForDeal } from "@/lib/queries";
 import { RatingHint } from "@/components/rating-hint";
 import { InlineTitle } from "@/components/inline-title";
 import { loadPlanningAction, renameDealAction } from "../../actions";
@@ -100,7 +100,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
             <TaskForm companyId={deal.companyId} dealId={deal.id} />
           </Card>
           <Card title="Verlauf">
-            <ActivityForm companyId={deal.companyId} dealId={deal.id} />
+            <ActivityForm companyId={deal.companyId} dealId={deal.id} numbers={await phoneNumbers(deal.companyId, deal.id)} />
             <Timeline items={data.timeline} emails={data.emails} senders={data.senders} searchable projects={data.projects} today={todayIso()} />
           </Card>
         </div>

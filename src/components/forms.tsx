@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { Fragment, useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   addActivityAction,
   createContactAction,
@@ -19,6 +19,8 @@ import { PlanningDialog } from "./planning";
 import { AddressSearch } from "./place-input";
 import { RunningDot } from "./timeline";
 import { ActivityDialog, type ActivityKind } from "./activity-dialog";
+import { dial, NumberMenu } from "./call-menu";
+import type { PhoneNumber } from "@/lib/queries";
 import { btnPrimary, btnQuiet, Field, FormError, Input, Textarea } from "./ui";
 
 // Leert ein Formular nach erfolgreichem Absenden
@@ -153,9 +155,11 @@ export function EditDealForm({ deal }: { deal: Deal }) {
   );
 }
 
-export function ActivityForm({ companyId, dealId, projects = [] }: {
+export function ActivityForm({ companyId, dealId, projects = [], numbers = [] }: {
   companyId: number | null;
   dealId: number | null;
+  // Nummern für „Anruf“ bei leerem Feld: wählen und das große Fenster öffnen
+  numbers?: PhoneNumber[];
   // aktive Projekte der Firma; die erste Pill ist vorausgewählt
   projects?: { id: number; title: string }[];
 }) {
@@ -163,12 +167,20 @@ export function ActivityForm({ companyId, dealId, projects = [] }: {
   const ref = useResetOnSuccess(state, pending);
   const [target, setTarget] = useState<string>(projects[0] ? String(projects[0].id) : "");
   // „Notiz“/„Anruf“ bei leerem Feld: großes Fenster statt Pflichtfeld-Meldung
-  const [dialog, setDialog] = useState<ActivityKind | null>(null);
+  const [dialog, setDialog] = useState<{ kind: ActivityKind; notice?: string } | null>(null);
+  const [menu, setMenu] = useState(false);
+  const closeMenu = useCallback(() => setMenu(false), []);
   const body = useRef<HTMLTextAreaElement>(null);
   const openIfEmpty = (kind: ActivityKind) => (e: React.MouseEvent) => {
     if (body.current?.value.trim()) return;
     e.preventDefault();
-    setDialog(kind);
+    if (kind === "notiz") return setDialog({ kind });
+    // Anruf: eine Nummer wählt sofort, mehrere zeigen die Auswahl, keine nur das Fenster mit Hinweis
+    if (numbers.length === 1) {
+      dial(numbers[0].number);
+      setDialog({ kind });
+    } else if (numbers.length > 1) setMenu(!menu);
+    else setDialog({ kind, notice: "Keine Nummer hinterlegt." });
   };
   const pill = (on: boolean) =>
     `inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
@@ -182,10 +194,30 @@ export function ActivityForm({ companyId, dealId, projects = [] }: {
           <Textarea ref={body} name="body" rows={5} placeholder="Notiz oder Anruf festhalten …" required className="resize-y py-2" />
         </label>
         <button type="submit" name="type" value="notiz" disabled={pending} onClick={openIfEmpty("notiz")} className={btnQuiet}>Notiz</button>
-        <button type="submit" name="type" value="anruf" disabled={pending} onClick={openIfEmpty("anruf")} className={btnQuiet}>Anruf</button>
+        <div className="relative">
+          <button type="submit" name="type" value="anruf" disabled={pending} onClick={openIfEmpty("anruf")} aria-expanded={numbers.length > 1 ? menu : undefined} className={btnQuiet}>Anruf</button>
+          {menu && (
+            <NumberMenu
+              numbers={numbers}
+              onClose={closeMenu}
+              onPick={(n) => {
+                dial(n.number);
+                setMenu(false);
+                setDialog({ kind: "anruf" });
+              }}
+            />
+          )}
+        </div>
       </div>
       {dialog && (
-        <ActivityDialog companyId={companyId} dealId={dealId} projects={projects} initialKind={dialog} onClose={() => setDialog(null)} />
+        <ActivityDialog
+          companyId={companyId}
+          dealId={dealId}
+          projects={projects}
+          initialKind={dialog.kind}
+          notice={dialog.notice}
+          onClose={() => setDialog(null)}
+        />
       )}
       {!dealId && projects.length > 0 && (
         <div role="radiogroup" aria-label="Zuordnen zu" className="flex flex-wrap items-center gap-1.5">

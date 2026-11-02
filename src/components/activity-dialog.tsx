@@ -2,10 +2,10 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { PhoneMissed, X } from "lucide-react";
 import { addActivityAction } from "@/app/(app)/actions";
 import { RunningDot } from "./timeline";
-import { btnPrimary, FormError, Textarea } from "./ui";
+import { btnPrimary, btnQuiet, FormError, Textarea } from "./ui";
 
 export type ActivityKind = "notiz" | "anruf";
 
@@ -34,6 +34,8 @@ export function ActivityDialog({
   title,
   initialKind,
   initialBody = "",
+  notice,
+  person,
   onClose,
 }: {
   companyId: number | null;
@@ -43,6 +45,10 @@ export function ActivityDialog({
   title?: string;
   initialKind: ActivityKind;
   initialBody?: string;
+  // Hinweis oben, z. B. „Keine Nummer hinterlegt“
+  notice?: string;
+  // angerufene Person, für „… telefonisch nicht erreicht“
+  person?: string;
   onClose: () => void;
 }) {
   const [state, action, pending] = useActionState(addActivityAction.bind(null, { companyId, dealId }), undefined);
@@ -50,6 +56,19 @@ export function ActivityDialog({
   const [target, setTarget] = useState(projects[0] ? String(projects[0].id) : "");
   const [followUp, setFollowUp] = useState("");
   const submitted = useRef(false);
+  const form = useRef<HTMLFormElement>(null);
+  const body = useRef<HTMLTextAreaElement>(null);
+  const unreached = useRef<HTMLInputElement>(null);
+
+  // Ein Tipp: als Anruf „telefonisch nicht erreicht“ speichern; schon Getipptes wird angehängt
+  const notReached = () => {
+    const prefix = `${person ? `${person} telefonisch` : "Telefonisch"} nicht erreicht`;
+    const typed = body.current?.value.trim();
+    if (body.current) body.current.value = typed ? `${prefix}. ${typed}` : prefix;
+    if (unreached.current) unreached.current.value = "1";
+    setKind("anruf");
+    form.current?.requestSubmit();
+  };
 
   useEffect(() => {
     if (submitted.current && !pending && state && !state.error) onClose();
@@ -76,6 +95,7 @@ export function ActivityDialog({
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <form
+        ref={form}
         action={action}
         onSubmit={() => (submitted.current = true)}
         className="flex max-h-[92vh] w-full max-w-2xl flex-col gap-4 overflow-auto rounded-3xl bg-surface p-6"
@@ -84,6 +104,7 @@ export function ActivityDialog({
           <div>
             <h2 className="text-lg font-bold">{kind === "anruf" ? "Anruf festhalten" : "Notiz festhalten"}</h2>
             {title && <p className="text-sm text-muted">{title}</p>}
+            {notice && <p className="mt-1 text-sm text-danger-ink">{notice}</p>}
           </div>
           <button type="button" onClick={onClose} aria-label="Schließen" className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
             <X size={18} aria-hidden="true" />
@@ -101,7 +122,7 @@ export function ActivityDialog({
 
         <label>
           <span className="sr-only">Text</span>
-          <Textarea name="body" rows={10} defaultValue={initialBody} required autoFocus placeholder={kind === "anruf" ? "Worum ging es im Gespräch?" : "Notiz …"} className="resize-y" />
+          <Textarea ref={body} name="body" rows={10} defaultValue={initialBody} required autoFocus placeholder={kind === "anruf" ? "Worum ging es im Gespräch?" : "Notiz …"} className="resize-y" />
         </label>
 
         {!dealId && projects.length > 0 && (
@@ -143,8 +164,14 @@ export function ActivityDialog({
           <input type="hidden" name="followUp" value={followUp} />
         </div>
 
+        <input ref={unreached} type="hidden" name="unreached" defaultValue="" />
         <FormError message={state?.error} />
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {kind === "anruf" && (
+            <button type="button" disabled={pending} onClick={notReached} className={`${btnQuiet} mr-auto`}>
+              <PhoneMissed size={15} aria-hidden="true" /> Nicht erreicht
+            </button>
+          )}
           <button type="submit" disabled={pending} className={btnPrimary}>
             {pending ? "Speichert …" : "Speichern"}
           </button>

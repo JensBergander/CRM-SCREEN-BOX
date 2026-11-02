@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowDown, Plus } from "lucide-react";
 import { dateDe, euro } from "@/lib/format";
-import { listCompanies } from "@/lib/queries";
+import { callContexts, companyCall, listCompanies } from "@/lib/queries";
 import { ratingsForAll } from "@/lib/rating";
 import { ContactActions } from "@/components/contact-actions";
 import { Stars } from "@/components/rating";
@@ -27,6 +27,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
       if (filter === "offen") return s === null;
       return true;
     });
+  const calls = await callContexts(rows.map((c) => c.id));
   if (byStars) rows.sort((a, b) => (b.rating?.stars ?? -1) - (a.rating?.stars ?? -1) || b.revenue - a.revenue);
 
   const href = (patch: Record<string, string | undefined>) => {
@@ -92,7 +93,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
                 <td className="px-3 py-3 text-right tabular-nums text-muted">{c.revenue > 0 ? euro(c.revenue) : "–"}</td>
                 <td className="px-3 py-3 text-muted">{c.lastChange ? dateDe(new Date(c.lastChange).toISOString()) : "–"}</td>
                 <td className="px-5 py-2">
-                  <ContactActions name={c.name} phone={c.phone} email={c.email} />
+                  <ContactActions name={c.name} call={companyCall(calls.get(c.id)!)} email={c.email} />
                 </td>
               </tr>
             ))}

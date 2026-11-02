@@ -8,7 +8,7 @@ import { MIN_OFFERS, ratingFor } from "@/lib/rating";
 import { AssessmentCard } from "@/components/rating";
 import { InlineTitle } from "@/components/inline-title";
 import { renameCompanyAction } from "../../actions";
-import { companyName, dealsWonBy, getCompany, projectsOfSupplier } from "@/lib/queries";
+import { callContexts, companyCall, companyName, dealsWonBy, personCall, phoneNumbers, getCompany, projectsOfSupplier } from "@/lib/queries";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
@@ -26,6 +26,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
   const data = await getCompany(Number(id));
   if (!data) notFound();
   const { company, stats } = data;
+  const call = (await callContexts([company.id])).get(company.id)!;
   const assessment = await ratingFor(company.id);
   const won = company.kind === "wettbewerber" ? await dealsWonBy(company.id) : [];
   const supplier = company.kind === "lieferant";
@@ -83,9 +84,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           company={{ id: company.id, name: company.name, kind: company.kind, lexwareId: company.lexwareId }}
           personGuess={data.contacts.length === 1 && [data.contacts[0].firstName, data.contacts[0].lastName].filter(Boolean).join(" ") === company.name}
         />
-        {(company.phone || company.email) && (
-          <ContactActions name={company.name} phone={company.phone} email={company.email} />
-        )}
+        <ContactActions name={company.name} call={companyCall(call)} email={company.email} />
         {!supplier && (
           <>
             <Link href={`/vorgaenge/neu?firma=${company.id}`} className={btnSecondary}>Neuer Vorgang</Link>
@@ -135,7 +134,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
         <Card title="Zeitleiste" aside={<OlderMails companyId={company.id} />}>
           {/* Lieferanten: Notizen nur zur Firma; Mails ordnest du über die Zeitleiste einem Kundenprojekt zu */}
-          <ActivityForm companyId={company.id} dealId={null} projects={supplier ? [] : data.projects.filter((p) => p.active)} />
+          <ActivityForm companyId={company.id} dealId={null} projects={supplier ? [] : data.projects.filter((p) => p.active)} numbers={await phoneNumbers(company.id)} />
           <Timeline items={data.timeline} emails={data.emails} senders={data.senders} searchable projects={data.projects} projectFilter today={todayIso()} />
         </Card>
 
@@ -215,7 +214,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
                       {[c.position, c.phone, c.mobile && `mobil ${c.mobile}`, c.email].filter(Boolean).join(" · ") || "–"}
                     </p>
                   </div>
-                  <ContactActions name={name} phone={c.mobile ?? c.phone} email={c.email} />
+                  <ContactActions name={name} call={personCall(call, c)} email={c.email} />
                 </Row>
               );
             })}

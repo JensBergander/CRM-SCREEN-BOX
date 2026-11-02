@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listContacts } from "@/lib/queries";
+import { callContexts, listContacts, personCall } from "@/lib/queries";
 import { ContactActions } from "@/components/contact-actions";
 import { SearchBox } from "@/components/search-box";
 import { LexwareBadge, PageHeader } from "@/components/ui";
@@ -8,6 +8,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
   const { q } = await searchParams;
   const query = typeof q === "string" ? q : undefined;
   const rows = await listContacts(query);
+  const calls = await callContexts(rows.map((r) => r.contact.companyId).filter((id): id is number => !!id));
 
   return (
     <div className="flex flex-col gap-5">
@@ -48,7 +49,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
                   </td>
                   <td className="px-3 py-3 text-muted">{c.email ?? "–"}</td>
                   <td className="px-5 py-2">
-                    <ContactActions name={name} phone={c.mobile ?? c.phone} email={c.email} />
+                    <ContactActions name={name} call={personCall(c.companyId ? calls.get(c.companyId) : undefined, c)} email={c.email} />
                   </td>
                 </tr>
               );

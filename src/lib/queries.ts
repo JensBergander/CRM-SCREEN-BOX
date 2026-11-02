@@ -89,6 +89,102 @@ export async function getDashboard() {
   return { billing, followUps, todayTasks, beauftragt: beauftragt.n, offers, mails };
 }
 
+// own: Nummer der angeklickten Person (im Menü oben, abgetrennt von den übrigen der Firma)
+export type PhoneNumber = { label: string; number: string; own?: boolean };
+type Person = { id: number; firstName: string | null; lastName: string; phone: string | null; mobile: string | null };
+
+// Alle Nummern einer Firma zum Anrufen: bevorzugte Person zuerst, Handy vor Festnetz, Zentrale zuletzt, ohne Doppelte
+function collectNumbers(staff: Person[], preferredId: number | null | undefined, companyPhone: string | null, markOwn = false): PhoneNumber[] {
+  const first = staff.find((p) => p.id === preferredId) ?? staff[0];
+  const ordered = first ? [first, ...staff.filter((p) => p.id !== first.id)] : staff;
+  const numbers: PhoneNumber[] = [];
+  const add = (label: string, number: string | null, own = false) => {
+    const clean = number?.trim();
+    if (clean && !numbers.some((n) => n.number.replace(/\D/g, "") === clean.replace(/\D/g, ""))) numbers.push({ label, number: clean, ...(own && { own }) });
+  };
+  for (const p of ordered) {
+    const who = [p.firstName, p.lastName].filter(Boolean).join(" ");
+    const own = markOwn && p.id === preferredId;
+    add(`${who} · Handy`, p.mobile, own);
+    add(`${who} · Festnetz`, p.phone, own);
+  }
+  add("Zentrale", companyPhone);
+  return numbers;
+}
+
+// Alles, was 📞 und das Popup „Anruf festhalten“ brauchen
+export type CallTarget = {
+  companyId: number | null;
+  title: string;
+  person?: string;
+  numbers: PhoneNumber[];
+  projects: { id: number; title: string }[];
+};
+type CallContext = { id: number; name: string; phone: string | null; staff: Person[]; preferredId: number | null; projects: { id: number; title: string }[] };
+
+// Für Listen: Ansprechpartner, Zentrale und laufende Vorgänge vieler Firmen in drei Abfragen
+export async function callContexts(companyIds: number[]): Promise<Map<number, CallContext>> {
+  const ids = [...new Set(companyIds)];
+  if (!ids.length) return new Map();
+  const [firms, staff, running] = await Promise.all([
+    db.select({ id: companies.id, name: companies.name, phone: companies.phone }).from(companies).where(inArray(companies.id, ids)),
+    db.select().from(contacts).where(inArray(contacts.companyId, ids)).orderBy(asc(contacts.id)),
+    db
+      .select({ id: deals.id, title: deals.title, companyId: deals.companyId, contactId: deals.contactId })
+      .from(deals)
+      .where(and(inArray(deals.companyId, ids), inArray(deals.stage, [...ACTIVE_STAGES])))
+      .orderBy(desc(deals.stageChangedAt)),
+  ]);
+  return new Map(
+    firms.map((f) => {
+      const own = running.filter((d) => d.companyId === f.id);
+      return [
+        f.id,
+        {
+          id: f.id,
+          name: f.name.trim(),
+          phone: f.phone,
+          staff: staff.filter((p) => p.companyId === f.id),
+          preferredId: own.find((d) => d.contactId)?.contactId ?? null,
+          projects: own.map((d) => ({ id: d.id, title: d.title })),
+        },
+      ];
+    }),
+  );
+}
+
+export function companyCall(ctx: CallContext): CallTarget {
+  return { companyId: ctx.id, title: ctx.name, numbers: collectNumbers(ctx.staff, ctx.preferredId, ctx.phone), projects: ctx.projects };
+}
+
+// Person: ihre Nummern oben, darunter die übrigen ihrer Firma
+export function personCall(ctx: CallContext | undefined, person: Person): CallTarget {
+  const name = [person.firstName, person.lastName].filter(Boolean).join(" ");
+  const staff = ctx ? [person, ...ctx.staff.filter((p) => p.id !== person.id)] : [person];
+  return {
+    companyId: ctx?.id ?? null,
+    title: ctx ? `${ctx.name} · ${name}` : name,
+    person: name,
+    numbers: collectNumbers(staff, person.id, ctx?.phone ?? null, true),
+    projects: ctx?.projects ?? [],
+  };
+}
+
+// Nummern für „Anruf“ im Vorgang (dessen Ansprechpartner zuerst) bzw. in der Firma (Ansprechpartner des zuletzt bewegten laufenden Vorgangs)
+export async function phoneNumbers(companyId: number, dealId?: number | null): Promise<PhoneNumber[]> {
+  const [[company], staff] = await Promise.all([
+    db.select({ phone: companies.phone }).from(companies).where(eq(companies.id, companyId)),
+    db.select().from(contacts).where(eq(contacts.companyId, companyId)).orderBy(asc(contacts.id)),
+  ]);
+  const [deal] = await db
+    .select({ contactId: deals.contactId })
+    .from(deals)
+    .where(dealId ? eq(deals.id, dealId) : and(eq(deals.companyId, companyId), inArray(deals.stage, [...ACTIVE_STAGES]), isNotNull(deals.contactId)))
+    .orderBy(desc(deals.stageChangedAt))
+    .limit(1);
+  return collectNumbers(staff, deal?.contactId, company?.phone ?? null);
+}
+
 // Startseite „Zuletzt aktiv“: Firmen mit Notiz/Anruf in den letzten 30 Tagen und alle mit laufendem Vorgang,
 // sortiert nach der letzten Notiz, dem letzten Anruf oder der letzten Mail (beide Richtungen)
 export type RecentCompany = {
@@ -97,7 +193,7 @@ export type RecentCompany = {
   contact: string | null;
   phone: string | null;
   // alle Nummern der Firma, Ansprechpartner aus dem Vorgang zuerst, Handy vor Festnetz, Zentrale zuletzt
-  numbers: { label: string; number: string }[];
+  numbers: PhoneNumber[];
   last: Date | null;
   projects: { id: number; title: string }[];
 };
@@ -143,18 +239,7 @@ export async function recentCompanies(): Promise<RecentCompany[]> {
       const staff = people.filter((p) => p.companyId === f.id);
       // Ansprechpartner aus dem Vorgang, sonst der erste der Firma
       const person = staff.find((p) => own.some((d) => d.contactId === p.id)) ?? staff[0] ?? null;
-      const ordered = person ? [person, ...staff.filter((p) => p.id !== person.id)] : staff;
-      const numbers: { label: string; number: string }[] = [];
-      const add = (label: string, number: string | null) => {
-        const clean = number?.trim();
-        if (clean && !numbers.some((n) => n.number.replace(/\D/g, "") === clean.replace(/\D/g, ""))) numbers.push({ label, number: clean });
-      };
-      for (const p of ordered) {
-        const who = [p.firstName, p.lastName].filter(Boolean).join(" ");
-        add(`${who} · Handy`, p.mobile);
-        add(`${who} · Festnetz`, p.phone);
-      }
-      add("Zentrale", f.phone);
+      const numbers = collectNumbers(staff, person?.id, f.phone);
       return {
         id: f.id,
         name: f.name.trim(),

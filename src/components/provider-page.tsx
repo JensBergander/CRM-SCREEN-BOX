@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { listCompanies, primaryContacts, serviceTags } from "@/lib/queries";
+import { callContexts, companyCall, listCompanies, primaryContacts, serviceTags } from "@/lib/queries";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { KIND_TONE, TONE_SOFT } from "@/lib/tones";
 import { ContactActions } from "@/components/contact-actions";
@@ -30,6 +30,7 @@ export async function ProviderPage({ params }: { params: Record<string, string |
   const count = new Map(used.map((u) => [u.tag, u.n]));
   const tags = [...options, ...used.map((u) => u.tag).filter((t) => !options.includes(t))].map((t) => ({ tag: t, n: count.get(t) ?? 0 }));
   const people = await primaryContacts(rows.map((r) => r.id));
+  const calls = await callContexts(rows.map((r) => r.id));
 
   const chip = (on: boolean) =>
     `inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium ${on ? "border-ink bg-ink text-surface" : "border-line bg-surface"}`;
@@ -83,7 +84,7 @@ export async function ProviderPage({ params }: { params: Record<string, string |
                     <Link key={x} href={href(x)} className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${TONE_SOFT[KIND_TONE[kind]]}`}>{x}</Link>
                   ))}
                 </div>
-                <ContactActions name={r.name} phone={person?.phone ?? r.phone} email={person?.email ?? r.email} />
+                <ContactActions name={r.name} call={companyCall(calls.get(r.id)!)} email={person?.email ?? r.email} />
               </li>
             );
           })}

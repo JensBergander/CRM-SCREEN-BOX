@@ -547,7 +547,8 @@ export async function addActivityAction(
   await getCurrentUser();
   const body = text(form, "body")?.trim();
   if (!body) return { error: "Bitte etwas eintragen." };
-  const type = form.get("type") === "anruf" ? "anruf" : "notiz";
+  const unreached = form.get("unreached") === "1";
+  const type = unreached || form.get("type") === "anruf" ? "anruf" : "notiz";
   // Auf der Firmenseite kommt das Projekt aus den Pills („Nur Firma“ = leer)
   const dealId = target.dealId ?? (await dealOfCompany(Number(text(form, "dealId")) || null, target.companyId));
   await db.insert(activities).values({ ...target, dealId, type, body });
@@ -557,7 +558,8 @@ export async function addActivityAction(
     const companyId = target.companyId ?? (dealId ? (await db.select({ c: deals.companyId }).from(deals).where(eq(deals.id, dealId)))[0]?.c ?? null : null);
     const name = companyId ? await companyName(companyId) : null;
     const first = body.split(/\n|(?<=[.!?])\s/)[0].slice(0, 120);
-    await db.insert(tasks).values({ title: `${name ? `${name.trim()}: ` : ""}nachfassen – ${first}`.slice(0, 255), dueDate: followUp, companyId, dealId });
+    const todo = unreached ? "erneut anrufen" : `nachfassen – ${first}`;
+    await db.insert(tasks).values({ title: `${name ? `${name.trim()}: ` : ""}${todo}`.slice(0, 255), dueDate: followUp, companyId, dealId });
   }
   refresh();
   return {};
