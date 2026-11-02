@@ -96,6 +96,8 @@ export type RecentCompany = {
   name: string;
   contact: string | null;
   phone: string | null;
+  // alle Nummern der Firma, Ansprechpartner aus dem Vorgang zuerst, Handy vor Festnetz, Zentrale zuletzt
+  numbers: { label: string; number: string }[];
   last: Date | null;
   projects: { id: number; title: string }[];
 };
@@ -138,13 +140,27 @@ export async function recentCompanies(): Promise<RecentCompany[]> {
     .filter((f) => f.kind !== "wettbewerber")
     .map((f) => {
       const own = running.filter((d) => d.companyId === f.id);
+      const staff = people.filter((p) => p.companyId === f.id);
       // Ansprechpartner aus dem Vorgang, sonst der erste der Firma
-      const person = people.find((p) => own.some((d) => d.contactId === p.id)) ?? people.find((p) => p.companyId === f.id) ?? null;
+      const person = staff.find((p) => own.some((d) => d.contactId === p.id)) ?? staff[0] ?? null;
+      const ordered = person ? [person, ...staff.filter((p) => p.id !== person.id)] : staff;
+      const numbers: { label: string; number: string }[] = [];
+      const add = (label: string, number: string | null) => {
+        const clean = number?.trim();
+        if (clean && !numbers.some((n) => n.number.replace(/\D/g, "") === clean.replace(/\D/g, ""))) numbers.push({ label, number: clean });
+      };
+      for (const p of ordered) {
+        const who = [p.firstName, p.lastName].filter(Boolean).join(" ");
+        add(`${who} · Handy`, p.mobile);
+        add(`${who} · Festnetz`, p.phone);
+      }
+      add("Zentrale", f.phone);
       return {
         id: f.id,
         name: f.name.trim(),
         contact: person ? [person.firstName, person.lastName].filter(Boolean).join(" ") : null,
-        phone: person?.mobile ?? person?.phone ?? f.phone,
+        phone: numbers[0]?.number ?? null,
+        numbers,
         last: lastOf.get(f.id) ?? null,
         projects: own.map((d) => ({ id: d.id, title: d.title })),
       };
