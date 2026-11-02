@@ -3,6 +3,7 @@ import { companyOptions, getActivity, getMail } from "@/lib/queries";
 import { DealForm } from "@/components/deal-form";
 import { RatingHint } from "@/components/rating-hint";
 import { PageHeader } from "@/components/ui";
+import { BackButton } from "@/components/back-button";
 
 export default async function NewDealPage({ searchParams }: PageProps<"/vorgaenge/neu">) {
   const params = await searchParams;
@@ -25,6 +26,7 @@ export default async function NewDealPage({ searchParams }: PageProps<"/vorgaeng
 
   return (
     <div className="flex flex-col gap-6">
+      <BackButton fallback="/vorgaenge" label="Vorgänge" />
       <PageHeader
         area="vorgaenge"
         title={quick ? "Schnellauftrag" : "Neuer Vorgang"}

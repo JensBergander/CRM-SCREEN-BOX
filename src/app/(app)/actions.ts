@@ -31,7 +31,7 @@ import { createQuotationDraft } from "@/lib/lexware-draft";
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
-import { projectsFor, type ProjectOption } from "@/lib/queries";
+import { companyName, projectsFor, type ProjectOption } from "@/lib/queries";
 import { hintProps, ratingFor } from "@/lib/rating";
 import { autocomplete, placeDetails, resolveAddress, type Place } from "@/lib/places";
 
@@ -153,7 +153,7 @@ export async function moveDealAction(
     await db.update(deals).set({ competitorId: await resolveCompetitor(lost.competitor) }).where(eq(deals.id, dealId));
   }
   // Gleich in Lexware nach passendem Angebot bzw. Rechnung schauen, statt auf den nächsten Cronjob zu warten
-  if (["angebot", "beauftragt", "erledigt"].includes(stage)) {
+  if (["angebot", "beauftragt", "bearbeitung", "erledigt"].includes(stage)) {
     try {
       await quickReconcile();
     } catch (e) {
@@ -450,7 +450,7 @@ export async function mergeCompanyAction(fromId: number, intoId: number): Promis
 }
 
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)
-export async function advanceDealAction(dealId: number, stage: "angebot" | "beauftragt" | "erledigt" | "rechnung" | "bezahlt") {
+export async function advanceDealAction(dealId: number, stage: "angebot" | "beauftragt" | "bearbeitung" | "erledigt" | "rechnung" | "bezahlt") {
   await moveDealAction(dealId, stage);
 }
 
@@ -551,6 +551,14 @@ export async function addActivityAction(
   // Auf der Firmenseite kommt das Projekt aus den Pills („Nur Firma“ = leer)
   const dealId = target.dealId ?? (await dealOfCompany(Number(text(form, "dealId")) || null, target.companyId));
   await db.insert(activities).values({ ...target, dealId, type, body });
+  // Wiedervorlage aus dem Popup: Aufgabe „Firma: nachfassen – erster Satz“
+  const followUp = text(form, "followUp");
+  if (followUp && /^\d{4}-\d{2}-\d{2}$/.test(followUp)) {
+    const companyId = target.companyId ?? (dealId ? (await db.select({ c: deals.companyId }).from(deals).where(eq(deals.id, dealId)))[0]?.c ?? null : null);
+    const name = companyId ? await companyName(companyId) : null;
+    const first = body.split(/\n|(?<=[.!?])\s/)[0].slice(0, 120);
+    await db.insert(tasks).values({ title: `${name ? `${name.trim()}: ` : ""}nachfassen – ${first}`.slice(0, 255), dueDate: followUp, companyId, dealId });
+  }
   refresh();
   return {};
 }

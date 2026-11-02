@@ -188,7 +188,7 @@ async function linkNumber(deal: Deal, v: LexwareVoucher, used: Set<string | null
 export async function waitingDeals(companyId: number, type: string) {
   const open = await db.select().from(deals).where(and(eq(deals.companyId, companyId), notInArray(deals.stage, ["verloren", "bezahlt"])));
   return type === "invoice"
-    ? open.filter((d) => !d.invoiceNumber && ["beauftragt", "erledigt"].includes(d.stage))
+    ? open.filter((d) => !d.invoiceNumber && ["beauftragt", "bearbeitung", "erledigt"].includes(d.stage))
     : open.filter((d) => !d.offerNumber && ["anfrage", "angebot"].includes(d.stage));
 }
 
@@ -313,7 +313,7 @@ export async function reconcileDeals(): Promise<string[]> {
     }
 
     // 3. Rechnung verknüpfen: nur wenn sie aus dem verknüpften Angebot erstellt wurde; alles andere wird nachgefragt
-    if (!current.invoiceNumber && offer && ["angebot", "beauftragt", "erledigt"].includes(current.stage)) {
+    if (!current.invoiceNumber && offer && ["angebot", "beauftragt", "bearbeitung", "erledigt"].includes(current.stage)) {
       const fromOffer = mine.filter((v) => v.type === "invoice" && !used.has(v.number) && v.quotationId === offer.id);
       if (fromOffer.length === 1) {
         await linkNumber(current, fromOffer[0], used);

@@ -3,7 +3,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { MapPin } from "lucide-react";
 import { addDaysIso, ageLabel, daysSince, euro, mapsUrl, todayIso } from "@/lib/format";
 import { upcomingProductionDays } from "@/lib/schedule";
-import { getDashboard, pendingVouchers } from "@/lib/queries";
+import { getDashboard, pendingVouchers, recentCompanies } from "@/lib/queries";
+import { RecentCompanies } from "@/components/recent-companies";
 import { lexwareUrl } from "@/lib/lexware-sync";
 import { VoucherQuestions } from "@/components/voucher-questions";
 import { TaskList } from "@/components/task-list";
@@ -20,11 +21,12 @@ function greeting(date: Date) {
 }
 
 export default async function StartPage() {
-  const [user, data, upcoming, questions] = await Promise.all([
+  const [user, data, upcoming, questions, recent] = await Promise.all([
     getCurrentUser(),
     getDashboard(),
     upcomingProductionDays(todayIso(), addDaysIso(todayIso(), 14)),
     pendingVouchers(),
+    recentCompanies(),
   ]);
   const now = new Date();
   const today = new Intl.DateTimeFormat("de-DE", {
@@ -45,7 +47,7 @@ export default async function StartPage() {
       hot: data.billing.length > 0,
     },
     { label: "Angebote nachfassen", value: String(data.followUps.length), hint: "über 10 Tage ohne Antwort", dot: "bg-sales" },
-    { label: "Laufende Projekte", value: String(data.beauftragt), hint: "in Phase Beauftragt", dot: "bg-accent" },
+    { label: "Laufende Projekte", value: String(data.beauftragt), hint: "Beauftragt und in Bearbeitung", dot: "bg-accent" },
     { label: "Offene Angebote", value: euro(data.offers.total ?? 0), hint: `${data.offers.n} Angebote verschickt`, dot: "bg-sales" },
   ];
 
@@ -142,6 +144,10 @@ export default async function StartPage() {
             )}
             </div>
           ))}
+        </Card>
+
+        <Card title="Zuletzt aktiv" aside={<span className="text-xs text-muted">Kunden mit Notiz, Anruf oder laufendem Vorgang</span>}>
+          <RecentCompanies items={recent} />
         </Card>
 
         <Card title="Heute zu tun" aside={<Link href="/aufgaben" className="text-[13px] text-muted">Alle Aufgaben</Link>}>

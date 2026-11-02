@@ -13,7 +13,7 @@ type Section = { title: string; rows: { text: string; detail: string; href: stri
 export async function buildDigest(): Promise<{ sections: Section[]; total: number }> {
   const today = todayIso();
   const base = APP_URL();
-  const dealRows = (stage: "erledigt" | "beauftragt" | "angebot" | "rechnung", olderThanDays: number) =>
+  const dealRows = (stage: "erledigt" | "beauftragt" | "bearbeitung" | "angebot" | "rechnung", olderThanDays: number) =>
     db
       .select({ id: deals.id, title: deals.title, amountNet: deals.amountNet, since: deals.stageChangedAt, company: companies.name, invoiceNumber: deals.invoiceNumber })
       .from(deals)
@@ -21,9 +21,10 @@ export async function buildDigest(): Promise<{ sections: Section[]; total: numbe
       .where(and(eq(deals.stage, stage), lt(deals.stageChangedAt, new Date(`${addDaysIso(today, -olderThanDays)}T23:59:59Z`))))
       .orderBy(asc(deals.stageChangedAt));
 
-  const [billing, running, offers, invoiced, tasks, mails, questions] = await Promise.all([
+  const [billing, running, working, offers, invoiced, tasks, mails, questions] = await Promise.all([
     dealRows("erledigt", 0),
     dealRows("beauftragt", 14),
+    dealRows("bearbeitung", 21),
     dealRows("angebot", 10),
     dealRows("rechnung", 14),
     listTasks({ open: true, dueUntil: today }),
@@ -58,6 +59,7 @@ export async function buildDigest(): Promise<{ sections: Section[]; total: numbe
       rows: invoiced.map((d) => deal(d, `${d.invoiceNumber ?? "ohne Nr."}${statusOf.get(d.invoiceNumber ?? "") === "overdue" ? " · in Lexware überfällig" : ""}`)),
     },
     { title: "Seit über 14 Tagen beauftragt", rows: running.map((d) => deal(d, `seit ${daysSince(d.since)} Tagen`)) },
+    { title: "Seit über 21 Tagen in Bearbeitung", rows: working.map((d) => deal(d, `seit ${daysSince(d.since)} Tagen`)) },
     { title: "Angebote ohne Rückmeldung (über 10 Tage)", rows: offers.map((d) => deal(d, `verschickt vor ${daysSince(d.since)} Tagen`)) },
     {
       title: "Fällige und überfällige Aufgaben",

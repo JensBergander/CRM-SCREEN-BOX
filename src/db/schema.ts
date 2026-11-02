@@ -24,6 +24,8 @@ export const STAGES = [
   "anfrage",
   "angebot",
   "beauftragt",
+  // nach dem ersten Drehtag bzw. ab Beginn der Postproduktion (automatisch), sonst von Hand
+  "bearbeitung",
   "erledigt",
   "rechnung",
   "bezahlt",

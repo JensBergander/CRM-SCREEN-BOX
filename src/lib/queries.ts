@@ -81,12 +81,75 @@ export async function getDashboard() {
       .where(and(eq(deals.stage, "angebot"), lt(deals.stageChangedAt, followUpBefore)))
       .orderBy(asc(deals.stageChangedAt)),
     listTasks({ open: true, dueUntil: today }),
-    db.select({ n: count() }).from(deals).where(eq(deals.stage, "beauftragt")),
+    db.select({ n: count() }).from(deals).where(inArray(deals.stage, ["beauftragt", "bearbeitung"])),
     db.select({ n: count(), total: sum(deals.amountNet) }).from(deals).where(eq(deals.stage, "angebot")),
     listInbox("offen").then((rows) => rows.slice(0, 5)),
   ]);
 
   return { billing, followUps, todayTasks, beauftragt: beauftragt.n, offers, mails };
+}
+
+// Startseite „Zuletzt aktiv“: Firmen mit Notiz/Anruf in den letzten 30 Tagen und alle mit laufendem Vorgang,
+// sortiert nach der letzten Notiz, dem letzten Anruf oder der letzten Mail (beide Richtungen)
+export type RecentCompany = {
+  id: number;
+  name: string;
+  contact: string | null;
+  phone: string | null;
+  last: Date | null;
+  projects: { id: number; title: string }[];
+};
+
+export async function recentCompanies(): Promise<RecentCompany[]> {
+  const since = new Date(Date.now() - 30 * 86_400_000);
+  const [running, noted] = await Promise.all([
+    db
+      .select({ id: deals.id, title: deals.title, companyId: deals.companyId, contactId: deals.contactId })
+      .from(deals)
+      .innerJoin(companies, eq(companies.id, deals.companyId))
+      .where(and(inArray(deals.stage, [...ACTIVE_STAGES]), ne(companies.kind, "wettbewerber")))
+      .orderBy(desc(deals.stageChangedAt)),
+    db
+      .selectDistinct({ companyId: activities.companyId })
+      .from(activities)
+      .where(and(inArray(activities.type, ["notiz", "anruf"]), sql`${activities.createdAt} >= ${since}`, isNotNull(activities.companyId))),
+  ]);
+  const ids = [...new Set([...running.map((d) => d.companyId), ...noted.map((n) => n.companyId!)])];
+  if (!ids.length) return [];
+
+  const [firms, people, acts, mails] = await Promise.all([
+    db.select({ id: companies.id, name: companies.name, phone: companies.phone, kind: companies.kind }).from(companies).where(inArray(companies.id, ids)),
+    db.select().from(contacts).where(inArray(contacts.companyId, ids)).orderBy(asc(contacts.id)),
+    db
+      .select({ companyId: activities.companyId, last: max(activities.createdAt) })
+      .from(activities)
+      .where(and(inArray(activities.companyId, ids), inArray(activities.type, ["notiz", "anruf"])))
+      .groupBy(activities.companyId),
+    db.select({ companyId: emails.companyId, last: max(emails.receivedAt) }).from(emails).where(inArray(emails.companyId, ids)).groupBy(emails.companyId),
+  ]);
+
+  const lastOf = new Map<number, Date>();
+  for (const r of [...acts, ...mails]) {
+    if (!r.companyId || !r.last) continue;
+    const at = new Date(r.last);
+    if (!lastOf.has(r.companyId) || at > lastOf.get(r.companyId)!) lastOf.set(r.companyId, at);
+  }
+  return firms
+    .filter((f) => f.kind !== "wettbewerber")
+    .map((f) => {
+      const own = running.filter((d) => d.companyId === f.id);
+      // Ansprechpartner aus dem Vorgang, sonst der erste der Firma
+      const person = people.find((p) => own.some((d) => d.contactId === p.id)) ?? people.find((p) => p.companyId === f.id) ?? null;
+      return {
+        id: f.id,
+        name: f.name.trim(),
+        contact: person ? [person.firstName, person.lastName].filter(Boolean).join(" ") : null,
+        phone: person?.mobile ?? person?.phone ?? f.phone,
+        last: lastOf.get(f.id) ?? null,
+        projects: own.map((d) => ({ id: d.id, title: d.title })),
+      };
+    })
+    .sort((a, b) => (b.last?.getTime() ?? 0) - (a.last?.getTime() ?? 0) || a.name.localeCompare(b.name, "de"));
 }
 
 // Felder für das Lexware-Badge
@@ -120,7 +183,7 @@ export async function getDeal(id: number) {
   };
 }
 
-export const ACTIVE_STAGES = ["anfrage", "angebot", "beauftragt", "erledigt", "rechnung"] as const;
+export const ACTIVE_STAGES = ["anfrage", "angebot", "beauftragt", "bearbeitung", "erledigt", "rechnung"] as const;
 
 // company: Kunde des Projekts, wenn die Liste Projekte mehrerer Kunden enthält (bei Lieferanten)
 export type ProjectOption = { id: number; title: string; number: string | null; active: boolean; company?: string };
@@ -497,7 +560,7 @@ export async function vouchersForDeal(deal: { offerNumber: string | null; invoic
   // Rückfragen: neue Belege, die zu diesem Vorgang gehören könnten
   const waitsFor = (v: (typeof all)[number]) =>
     v.type === "invoice"
-      ? !deal.invoiceNumber && ["beauftragt", "erledigt"].includes(deal.stage)
+      ? !deal.invoiceNumber && ["beauftragt", "bearbeitung", "erledigt"].includes(deal.stage)
       : !deal.offerNumber && ["anfrage", "angebot"].includes(deal.stage);
   const twoMonthsAgo = new Date(Date.now() - 61 * 86_400_000);
   return {

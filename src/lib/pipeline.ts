@@ -52,7 +52,7 @@ async function addAutoTask(
 async function applyStageEffects(tx: Tx, dealId: number, to: Stage, from: Stage | null) {
   const [deal] = await tx.select().from(deals).where(eq(deals.id, dealId));
 
-  if (!deal.number && ["beauftragt", "erledigt", "rechnung", "bezahlt"].includes(to)) {
+  if (!deal.number && ["beauftragt", "bearbeitung", "erledigt", "rechnung", "bezahlt"].includes(to)) {
     await tx.update(deals).set({ number: await nextDealNumber(tx) }).where(eq(deals.id, dealId));
   }
 
@@ -95,6 +95,23 @@ export async function createDeal(input: NewDeal): Promise<number> {
     await applyStageEffects(tx, result.insertId, input.stage, null);
     return result.insertId;
   });
+}
+
+// Nach dem ersten Drehtag bzw. ab Beginn der Postproduktion ist ein beauftragter Vorgang „In Bearbeitung“.
+// Automatisch nur vorwärts; von Hand lässt sich jede Phase setzen.
+export async function startWork(): Promise<number> {
+  const today = todayIso();
+  const due = await db
+    .select({ id: deals.id })
+    .from(deals)
+    .where(
+      and(
+        eq(deals.stage, "beauftragt"),
+        sql`(${deals.postStart} <= ${today} or exists (select 1 from production_days p where p.deal_id = ${deals.id} and p.day < ${today}))`,
+      ),
+    );
+  for (const d of due) await changeStage(d.id, "bearbeitung");
+  return due.length;
 }
 
 export async function changeStage(

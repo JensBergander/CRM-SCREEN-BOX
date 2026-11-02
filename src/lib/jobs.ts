@@ -6,6 +6,7 @@ import { syncLexwareContactsIfDue } from "./lexware";
 import { cleanupPdfs, reconcileDeals, syncVouchers } from "./lexware-sync";
 import { mailboxes } from "./graph";
 import { syncMailboxes } from "./mail";
+import { startWork } from "./pipeline";
 import { retryWebsiteSync, websiteConfigured } from "./website";
 
 // Alles, was regelmäßig laufen soll; jeder Teil scheitert für sich allein
@@ -18,6 +19,7 @@ export async function runJobs() {
       result[name] = { error: e instanceof Error ? e.message : String(e) };
     }
   };
+  await step("bearbeitung", startWork);
   if (mailboxes().length) {
     await step("mail", syncMailboxes);
     await step("autoantwort", sendAutoReplies);

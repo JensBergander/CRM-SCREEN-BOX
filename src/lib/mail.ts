@@ -176,7 +176,7 @@ async function storeMessage(mailbox: string, message: GraphMessage, patterns: Se
     .onDuplicateKeyUpdate({ set: { webLink: sql`values(${emails.webLink})` } });
 }
 
-const ACTIVE = ["anfrage", "angebot", "beauftragt", "erledigt", "rechnung"] as const;
+const ACTIVE = ["anfrage", "angebot", "beauftragt", "bearbeitung", "erledigt", "rechnung"] as const;
 
 // Antwort in einer Unterhaltung, deren frühere Mail schon einem laufenden Projekt zugeordnet ist: gleiches Projekt
 async function dealOfConversation(conversationId: string | undefined, companyId: number): Promise<number | null> {

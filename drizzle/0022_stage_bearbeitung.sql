@@ -1,0 +1,1 @@
+ALTER TABLE `deals` MODIFY COLUMN `stage` enum('anfrage','angebot','beauftragt','bearbeitung','erledigt','rechnung','bezahlt','verloren') NOT NULL DEFAULT 'anfrage';

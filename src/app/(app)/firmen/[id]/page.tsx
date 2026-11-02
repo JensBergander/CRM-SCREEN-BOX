@@ -17,6 +17,7 @@ import { Timeline } from "@/components/timeline";
 import { Badge, btnPrimary, btnSecondary, Card, Empty, LexwareBadge, Row } from "@/components/ui";
 import { LexwareActions } from "@/components/lexware-actions";
 import { OlderMails } from "@/components/older-mails";
+import { BackButton } from "@/components/back-button";
 import { MergeCompany } from "@/components/merge-company";
 import { mergeCandidates } from "@/lib/merge";
 
@@ -46,8 +47,10 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
       ];
   const tagLink = supplier ? { href: "/lieferanten", param: "kategorie" } : null;
 
+  const list = { kunde: ["/firmen", "Firmen"], lieferant: ["/lieferanten", "Lieferanten"], wettbewerber: ["/wettbewerber", "Wettbewerber"] }[company.kind];
   return (
     <div className="flex flex-col gap-6">
+      <BackButton fallback={list[0]} label={list[1]} />
       <header className="flex flex-wrap items-end gap-4">
         <div className="min-w-0 flex-[1_1_320px]">
           <p className="text-[13px] text-muted">

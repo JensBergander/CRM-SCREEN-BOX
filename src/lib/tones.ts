@@ -7,6 +7,7 @@ export type Tone =
   | "lead"
   | "sales"
   | "accent"
+  | "work"
   | "done"
   | "invoice"
   | "ok"
@@ -21,6 +22,7 @@ export const TONE_DOT: Record<Tone, string> = {
   lead: "bg-lead",
   sales: "bg-sales",
   accent: "bg-accent",
+  work: "bg-work",
   done: "bg-done",
   invoice: "bg-invoice",
   ok: "bg-ok",
@@ -36,6 +38,7 @@ export const TONE_SOFT: Record<Tone, string> = {
   lead: "bg-lead-soft text-lead-ink",
   sales: "bg-sales-soft text-sales-ink",
   accent: "bg-accent-soft text-accent-ink",
+  work: "bg-work-soft text-work-ink",
   done: "bg-done-soft text-done-ink",
   invoice: "bg-invoice-soft text-invoice-ink",
   ok: "bg-ok-soft text-ok-ink",
@@ -51,6 +54,7 @@ export const TONE_TEXT: Record<Tone, string> = {
   lead: "text-lead",
   sales: "text-sales",
   accent: "text-accent",
+  work: "text-work",
   done: "text-done",
   invoice: "text-invoice",
   ok: "text-ok",
@@ -66,6 +70,7 @@ export const TONE_WASH: Record<Tone, { idle: string; drag: string }> = {
   lead: { idle: "bg-lead-soft/60", drag: "bg-lead-soft" },
   sales: { idle: "bg-sales-soft/60", drag: "bg-sales-soft" },
   accent: { idle: "bg-accent-soft/60", drag: "bg-accent-soft" },
+  work: { idle: "bg-work-soft/60", drag: "bg-work-soft" },
   done: { idle: "bg-done-soft/60", drag: "bg-done-soft" },
   invoice: { idle: "bg-invoice-soft/60", drag: "bg-invoice-soft" },
   ok: { idle: "bg-ok-soft/60", drag: "bg-ok-soft" },
@@ -74,11 +79,12 @@ export const TONE_WASH: Record<Tone, { idle: string; drag: string }> = {
   rival: { idle: "bg-rival-soft/60", drag: "bg-rival-soft" },
 };
 
-// Phasen nach Temperatur: kalt (Anfrage) → Produktion (orange) → Geld (grün)
+// Phasen nach Temperatur: kalt (Anfrage) → Produktion (orange, dann Petrol in der Bearbeitung) → Geld (grün)
 export const STAGE_TONE: Record<Stage, Tone> = {
   anfrage: "lead",
   angebot: "sales",
   beauftragt: "accent",
+  bearbeitung: "work",
   erledigt: "done",
   rechnung: "invoice",
   bezahlt: "ok",

@@ -29,6 +29,10 @@
   --invoice: #8b6bd9;
   --invoice-soft: #f1ecfb;
   --invoice-ink: #5b3fa6;
+  /* In Bearbeitung: kühles Petrol, klar unterscheidbar vom Bezahlt-Grün */
+  --work: #0f8b8d;
+  --work-soft: #e2f3f3;
+  --work-ink: #0b6567;
   --ok: #34a869;
   --ok-soft: #e6f4ec;
   --ok-ink: #1e7b4d;
@@ -77,6 +81,9 @@
     --invoice: #a68bf0;
     --invoice-soft: #251d3a;
     --invoice-ink: #c4b1f5;
+    --work: #2bb3b5;
+    --work-soft: #0f2d2e;
+    --work-ink: #7fd3d4;
     --ok: #3fbf79;
     --ok-soft: #12301f;
     --ok-ink: #7fd6a3;
@@ -122,6 +129,9 @@
   --color-invoice: var(--invoice);
   --color-invoice-soft: var(--invoice-soft);
   --color-invoice-ink: var(--invoice-ink);
+  --color-work: var(--work);
+  --color-work-soft: var(--work-soft);
+  --color-work-ink: var(--work-ink);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
   --color-ok-ink: var(--ok-ink);

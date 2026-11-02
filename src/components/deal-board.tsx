@@ -12,7 +12,7 @@ import { PlanningDialog } from "./planning";
 import { Badge, btnPrimary, btnQuiet, Field, Input, Select, Textarea } from "./ui";
 
 // Ab wann eine Karte in ihrer Phase als „hängt“ markiert wird (Tage)
-const STALE_AFTER: Partial<Record<Stage, number>> = { angebot: 10, beauftragt: 14, erledigt: 7, rechnung: 14 };
+const STALE_AFTER: Partial<Record<Stage, number>> = { angebot: 10, beauftragt: 14, bearbeitung: 21, erledigt: 7, rechnung: 14 };
 
 export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; competitors?: string[] }) {
   const [, startTransition] = useTransition();
@@ -51,7 +51,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
   return (
     <>
       <div className="overflow-x-auto pb-2">
-        <div className="grid min-w-[1320px] grid-cols-6 items-start gap-3.5">
+        <div className="grid min-w-[1540px] grid-cols-7 items-start gap-3.5">
           {BOARD_STAGES.map((stage) => {
             const cards = optimistic.filter((d) => d.stage === stage);
             const total = cards.reduce((s, d) => s + Number(d.amountNet ?? 0), 0);

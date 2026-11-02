@@ -6,7 +6,7 @@ import { todayIso } from "./format";
 
 // Beauftragte Produktionen als Event auf screen-box.de/admin/events (Treffpunkt /treffen).
 // Zeitraum und Ort führt das CRM; Name und „öffentlich“ nur, solange sie auf der Website niemand geändert hat.
-export const CONFIRMED: Stage[] = ["beauftragt", "erledigt", "rechnung", "bezahlt"];
+export const CONFIRMED: Stage[] = ["beauftragt", "bearbeitung", "erledigt", "rechnung", "bezahlt"];
 
 const BASE = (process.env.WEBSITE_URL ?? "https://screen-box.de").replace(/\/$/, "");
 export const WEBSITE_EVENTS_URL = `${BASE}/admin/events`;

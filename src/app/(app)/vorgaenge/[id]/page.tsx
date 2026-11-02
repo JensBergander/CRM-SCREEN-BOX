@@ -19,6 +19,7 @@ import { Badge, btnSecondary, Card, LexwareBadge } from "@/components/ui";
 import { STAGE_TONE } from "@/lib/tones";
 import { CONFIRMED, parseCandidates, WEBSITE_EVENTS_URL, websiteConfigured, websiteImageUrl } from "@/lib/website";
 import { EventPhoto } from "@/components/event-photo";
+import { BackButton } from "@/components/back-button";
 import { WebsiteEventPanel } from "@/components/website-event";
 
 export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
@@ -36,6 +37,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
 
   return (
     <div className="flex flex-col gap-6">
+      <BackButton fallback="/vorgaenge" label="Vorgänge" />
       {planen === "1" && <AutoPlanningDialog dealId={deal.id} title={`${data.companyName} · ${deal.title}`} />}
       {!["verloren", "bezahlt"].includes(deal.stage) && <RatingHint companyId={deal.companyId} />}
       <header className="flex flex-col gap-2">
