@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { companies, contacts, deals, emails, mailIgnore, mailSync } from "@/db/schema";
 import { graphGet, mailboxes } from "./graph";
@@ -137,10 +137,12 @@ async function storeMessage(mailbox: string, message: GraphMessage, patterns: Se
   // Schon bekannt, nur verschoben (Outlook vergibt dabei eine neue ID): Zuordnung behalten, ID und Link nachführen
   const messageId = message.internetMessageId?.slice(0, 255);
   if (messageId) {
+    // Zuerst den Eintrag mit genau dieser Outlook-ID; zwei Kopien derselben Mail können schon je einen Eintrag haben
     const [known] = await db
-      .select({ id: emails.id, companyId: emails.companyId })
+      .select({ id: emails.id, graphId: emails.graphId, companyId: emails.companyId })
       .from(emails)
-      .where(and(eq(emails.mailbox, mailbox), eq(emails.internetMessageId, messageId)))
+      .where(and(eq(emails.mailbox, mailbox), or(eq(emails.graphId, message.id), eq(emails.internetMessageId, messageId))))
+      .orderBy(sql`${emails.graphId} = ${message.id} desc`)
       .limit(1);
     if (known) {
       // bisher ohne Firma: jetzt zuordnen
@@ -219,8 +221,13 @@ export async function syncMailboxes(): Promise<SyncResult> {
           const at = new Date(message.lastModifiedDateTime ?? message.receivedDateTime);
           if (at > latest) latest = at;
           if (message.parentFolderId && skip.has(message.parentFolderId)) continue;
-          await storeMessage(mailbox, message, patterns);
-          fetched++;
+          // eine einzelne fehlerhafte Mail darf den Abruf nicht aufhalten
+          try {
+            await storeMessage(mailbox, message, patterns);
+            fetched++;
+          } catch (e) {
+            console.error(`Mail ${message.internetMessageId ?? message.id} konnte nicht gespeichert werden:`, e);
+          }
         }
         next = data["@odata.nextLink"];
       }
@@ -272,7 +279,11 @@ export async function loadOlderMails(companyId: number): Promise<number> {
           if (message.isDraft || (message.parentFolderId && skip.has(message.parentFolderId))) continue;
           const people = [message.from, ...(message.toRecipients ?? []), ...(message.ccRecipients ?? [])];
           if (!people.some((p) => belongs(p?.emailAddress?.address))) continue;
-          await storeMessage(mailbox, message, patterns, companyId);
+          try {
+            await storeMessage(mailbox, message, patterns, companyId);
+          } catch (e) {
+            console.error(`Mail ${message.internetMessageId ?? message.id} konnte nicht gespeichert werden:`, e);
+          }
         }
         next = data["@odata.nextLink"];
       }
