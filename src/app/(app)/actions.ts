@@ -23,6 +23,7 @@ import { loadOlderMails, matchAddress, rematchOpenMails, syncMailboxes, type Syn
 import { graphSend, mailboxes, messageText } from "@/lib/graph";
 import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
 import { mergeCompanies, mergePeople } from "@/lib/merge";
+import { saveDisplayName } from "@/lib/profile";
 import { deleteDealWebsite, linkWebsiteEvent, ownWebsiteEvent, setWebsitePublic, syncDealWebsite, uploadWebsiteImage } from "@/lib/website";
 import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
@@ -1197,4 +1198,14 @@ export async function searchPeopleAction(query: string, exceptId: number): Promi
         .where(inArray(contacts.personId, rows.map((p) => p.id)))
     : [];
   return rows.map((p) => ({ id: p.id, name: fullName(p), firms: links.filter((l) => l.personId === p.id).map((l) => l.name?.trim() ?? "ohne Firma").join(", ") || "ohne Firma" }));
+}
+
+// Einstellungen: eigener Anzeigename für Begrüßung und Seitenleiste
+export async function saveDisplayNameAction(_: FormState, form: FormData): Promise<FormState> {
+  const user = await getCurrentUser();
+  const name = text(form, "name")?.trim() ?? "";
+  if (!name) return { error: "Bitte einen Namen angeben." };
+  await saveDisplayName(user.email, name);
+  refresh();
+  return {};
 }

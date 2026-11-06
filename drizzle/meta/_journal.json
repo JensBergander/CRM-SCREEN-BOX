@@ -169,6 +169,13 @@
       "when": 1794001493956,
       "tag": "0023_contacts_people",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1794005483292,
+      "tag": "0024_display_name",
+      "breakpoints": true
     }
   ]
 }

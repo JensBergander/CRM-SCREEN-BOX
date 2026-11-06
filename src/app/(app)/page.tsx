@@ -10,15 +10,9 @@ import { VoucherQuestions } from "@/components/voucher-questions";
 import { TaskList } from "@/components/task-list";
 import { Badge, btnQuiet, Card, Empty, PageHeader, Row } from "@/components/ui";
 import { advanceDealAction } from "./actions";
+import { dayLine, greeting } from "@/lib/greeting";
+import { displayName, firstNameOf } from "@/lib/profile";
 
-function greeting(date: Date) {
-  const hour = Number(
-    new Intl.DateTimeFormat("de-DE", { hour: "numeric", timeZone: "Europe/Berlin" }).format(date),
-  );
-  if (hour < 11) return "Guten Morgen";
-  if (hour < 18) return "Hallo";
-  return "Guten Abend";
-}
 
 export default async function StartPage() {
   const [user, data, upcoming, questions, recent] = await Promise.all([
@@ -29,12 +23,12 @@ export default async function StartPage() {
     recentCompanies(),
   ]);
   const now = new Date();
-  const today = new Intl.DateTimeFormat("de-DE", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    timeZone: "Europe/Berlin",
-  }).format(now);
+  const name = firstNameOf(await displayName(user));
+  const sub = dayLine(now, {
+    shootingToday: upcoming.filter((d) => String(d.day).slice(0, 10) === todayIso()).length,
+    overdue: data.todayTasks.filter((t) => t.dueDate && t.dueDate < todayIso()).length,
+    billing: data.billing.length,
+  });
   const billingSum = data.billing.reduce((s, d) => s + Number(d.amountNet ?? 0), 0);
   const oldestBilling = data.billing[0] ? daysSince(data.billing[0].stageChangedAt) : null;
 
@@ -53,7 +47,7 @@ export default async function StartPage() {
 
   return (
     <div className="flex flex-col gap-7">
-      <PageHeader title={`${greeting(now)}, ${user.name.split(" ")[0]}`} sub={today}>
+      <PageHeader title={greeting(now, name)} sub={sub}>
         <Link href="/vorgaenge/neu" className="inline-flex min-h-11 items-center rounded-full border border-ink px-5 text-sm font-semibold">
           Neuer Vorgang
         </Link>

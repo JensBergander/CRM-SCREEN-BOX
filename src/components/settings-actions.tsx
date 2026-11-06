@@ -1,8 +1,23 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { saveAutoReplyAction, saveFolderTemplateAction, saveServiceTagsAction, sendDigestAction, syncLexwareAction } from "@/app/(app)/actions";
+import { saveAutoReplyAction, saveDisplayNameAction, saveFolderTemplateAction, saveServiceTagsAction, sendDigestAction, syncLexwareAction } from "@/app/(app)/actions";
 import { btnPrimary, btnQuiet, FormError, Input, Textarea } from "./ui";
+
+export function DisplayNameForm({ name }: { name: string | null }) {
+  const [state, action, pending] = useActionState(saveDisplayNameAction, undefined);
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-3 px-5 pb-5">
+      <label className="flex min-w-0 flex-[1_1_260px] flex-col gap-1.5 text-[13px] font-semibold text-muted">
+        So begrüßt dich das CRM
+        <Input name="name" defaultValue={name ?? ""} placeholder="z. B. Jens Bergander" required />
+      </label>
+      <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Speichern"}</button>
+      {state && !state.error && !pending && <span className="text-sm text-muted">Gespeichert</span>}
+      <FormError message={state?.error} />
+    </form>
+  );
+}
 
 export function AutoReplyForm({ settings, sent }: { settings: { enabled: boolean; domain: string; text: string; since: string | null }; sent: number }) {
   const [state, action, pending] = useActionState(saveAutoReplyAction, undefined);

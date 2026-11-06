@@ -3,14 +3,17 @@ import { db } from "@/db";
 import { mailIgnore } from "@/db/schema";
 import { DuplicateList, LexwareImport } from "@/components/lexware-import";
 import { duplicates, lastContactSync } from "@/lib/lexware";
-import { AutoReplyForm, DigestButton, FolderTemplateForm, LexwareSyncButton, ServiceTagsForm } from "@/components/settings-actions";
+import { AutoReplyForm, DigestButton, DisplayNameForm, FolderTemplateForm, LexwareSyncButton, ServiceTagsForm } from "@/components/settings-actions";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { autoReplyCount, autoReplySettings } from "@/lib/autoreply";
 import { folderTemplate } from "@/lib/folders";
 import { btnQuiet, Card, Empty, PageHeader, Row } from "@/components/ui";
 import { removeIgnoreAction } from "../actions";
+import { getCurrentUser } from "@/lib/auth";
+import { displayName } from "@/lib/profile";
 
 export default async function SettingsPage() {
+  const user = await getCurrentUser();
   const [ignored, dupes, lastSync] = await Promise.all([
     db.select().from(mailIgnore).orderBy(asc(mailIgnore.pattern)),
     duplicates(),
@@ -20,6 +23,9 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader area="einstellungen" title="Einstellungen" />
+      <Card title="Dein Name" aside={<span className="text-xs text-muted">{user.email}</span>} className="max-w-2xl">
+        <DisplayNameForm name={await displayName(user)} />
+      </Card>
       <Card title="Lexware Office" className="max-w-2xl">
         <LexwareImport configured={!!process.env.LEXWARE_API_KEY} lastSync={lastSync} />
         <p className="px-5 pb-2 text-sm text-muted">
