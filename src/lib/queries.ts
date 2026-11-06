@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lt, lte, max, ne, or, sql, sum, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, companies, contacts, people, dealSuppliers, deals, emails, lexwareVouchers, mailSync, productionDays, tasks, voucherFiles, type CompanyKind, type Email } from "@/db/schema";
+import { activities, activityPeople, companies, contacts, people, dealSuppliers, taskPeople, deals, emails, lexwareVouchers, mailSync, productionDays, tasks, voucherFiles, type CompanyKind, type Email } from "@/db/schema";
 import { lexwareUrl, waitingDeals, type LineItem } from "./lexware-sync";
 import { addDaysIso, todayIso } from "./format";
 import { contactCols, current, fullName, selectContacts } from "./people";
@@ -141,6 +141,9 @@ export type CallTarget = {
   person?: string;
   numbers: PhoneNumber[];
   emails?: MailAddress[];
+  // „Mit wem?“ im Popup nach dem Anruf: aktuelle Kontakte der Firma, die angeklickte Person vorausgewählt
+  people?: { id: number; name: string }[];
+  personId?: number;
   projects: { id: number; title: string }[];
 };
 type CallContext = { id: number; name: string; phone: string | null; email: string | null; staff: Person[]; preferredId: number | null; projects: { id: number; title: string }[] };
@@ -177,12 +180,17 @@ export async function callContexts(companyIds: number[]): Promise<Map<number, Ca
   );
 }
 
+// Personen für „Mit wem?“, ohne Doppelte (eine Person kann zweimal bei derselben Firma stehen)
+export const pickPeople = (staff: Person[]) =>
+  staff.filter((p, i) => staff.findIndex((q) => q.personId === p.personId) === i).map((p) => ({ id: p.personId, name: personName(p) }));
+
 export function companyCall(ctx: CallContext): CallTarget {
   return {
     companyId: ctx.id,
     title: ctx.name,
     numbers: collectNumbers(ctx.staff, ctx.preferredId, ctx.phone),
     emails: collectEmails(ctx.staff, ctx.preferredId, ctx.email),
+    people: pickPeople(ctx.staff),
     projects: ctx.projects,
   };
 }
@@ -197,6 +205,8 @@ export function personCall(ctx: CallContext | undefined, person: Person): CallTa
     person: name,
     numbers: collectNumbers(staff, person.id, ctx?.phone ?? null, true),
     emails: collectEmails(staff, person.id, ctx?.email ?? null, true),
+    people: pickPeople(staff),
+    personId: person.personId,
     projects: ctx?.projects ?? [],
   };
 }
@@ -225,6 +235,7 @@ export type RecentCompany = {
   phone: string | null;
   // alle Nummern der Firma, Ansprechpartner aus dem Vorgang zuerst, Handy vor Festnetz, Zentrale zuletzt
   numbers: PhoneNumber[];
+  people: { id: number; name: string }[];
   last: Date | null;
   projects: { id: number; title: string }[];
 };
@@ -277,6 +288,7 @@ export async function recentCompanies(): Promise<RecentCompany[]> {
         contact: person ? personName(person) : null,
         phone: numbers[0]?.number ?? null,
         numbers,
+        people: pickPeople(staff),
         last: lastOf.get(f.id) ?? null,
         projects: own.map((d) => ({ id: d.id, title: d.title })),
       };
@@ -729,4 +741,103 @@ export async function contactsForCompanies(ids: number[]) {
     .from(contacts)
     .innerJoin(people, eq(people.id, contacts.personId))
     .where(and(inArray(contacts.companyId, ids), current));
+}
+
+// Kontaktseite: Person mit allen Firmenzuordnungen und allem, was ausdrücklich an ihr hängt.
+// Mails: über die Zuordnung (beim Abruf erkannt) oder eine ihrer Adressen als Absender/Empfänger – nie über den Namen geraten.
+export async function getPerson(id: number) {
+  const [person] = await db.select().from(people).where(eq(people.id, id));
+  if (!person) return null;
+  const links = await db
+    .select({ contact: contacts, company: { id: companies.id, name: companies.name, kind: companies.kind, phone: companies.phone }, lexware: lexwareFields })
+    .from(contacts)
+    .leftJoin(companies, eq(companies.id, contacts.companyId))
+    .where(eq(contacts.personId, id))
+    .orderBy(sql`${contacts.endedAt} is not null`, asc(contacts.id));
+  const contactIds = links.map((l) => l.contact.id);
+  const addresses = [...new Set(links.map((l) => l.contact.email?.trim().toLowerCase()).filter((m): m is string => !!m))];
+
+  const [timeline, personEmails, personTasks, personDeals] = await Promise.all([
+    db
+      .select({ activity: activities })
+      .from(activityPeople)
+      .innerJoin(activities, eq(activities.id, activityPeople.activityId))
+      .where(eq(activityPeople.personId, id))
+      .orderBy(desc(activities.createdAt))
+      .limit(200)
+      .then((rows) => rows.map((r) => r.activity)),
+    db
+      .select()
+      .from(emails)
+      .where(
+        and(
+          ne(emails.status, "ignoriert"),
+          or(
+            inArray(emails.contactId, contactIds.concat(0)),
+            addresses.length ? inArray(sql`lower(${emails.fromAddress})`, addresses) : undefined,
+            ...addresses.map((a) => like(sql`lower(${emails.toAddresses})`, `%${a}%`)),
+          ),
+        ),
+      )
+      .orderBy(desc(emails.receivedAt))
+      .limit(200),
+    db
+      .select(openTaskFields)
+      .from(taskPeople)
+      .innerJoin(tasks, eq(tasks.id, taskPeople.taskId))
+      .leftJoin(companies, eq(companies.id, tasks.companyId))
+      .leftJoin(deals, eq(deals.id, tasks.dealId))
+      .where(eq(taskPeople.personId, id))
+      .orderBy(sql`${tasks.doneAt} is not null`, sql`${tasks.dueDate} is null`, asc(tasks.dueDate)),
+    db
+      .select({ id: deals.id, title: deals.title, stage: deals.stage, number: deals.number, companyName: companies.name })
+      .from(deals)
+      .innerJoin(companies, eq(companies.id, deals.companyId))
+      .where(inArray(deals.contactId, contactIds.concat(0)))
+      .orderBy(desc(deals.stageChangedAt)),
+  ]);
+
+  const lastActivity = timeline[0]?.createdAt ?? null;
+  const lastMail = personEmails[0]?.receivedAt ?? null;
+  const lastContact = lastActivity && lastMail ? (lastActivity > lastMail ? lastActivity : lastMail) : lastActivity ?? lastMail;
+  return { person, links, timeline, emails: personEmails, tasks: personTasks, deals: personDeals, lastContact };
+}
+
+// Löschen nur, wenn nichts an der Person hängt und sie nicht aus Lexware kommt
+export async function personTraces(id: number) {
+  const ids = (await db.select({ id: contacts.id, lx: contacts.fromLexware }).from(contacts).where(eq(contacts.personId, id)));
+  const contactIds = ids.map((c) => c.id).concat(0);
+  const [[a], [t], [d], [m]] = await Promise.all([
+    db.select({ n: count() }).from(activityPeople).where(eq(activityPeople.personId, id)),
+    db.select({ n: count() }).from(taskPeople).where(eq(taskPeople.personId, id)),
+    db.select({ n: count() }).from(deals).where(inArray(deals.contactId, contactIds)),
+    db.select({ n: count() }).from(emails).where(inArray(emails.contactId, contactIds)),
+  ]);
+  return { lexware: ids.some((c) => c.lx), count: a.n + t.n + d.n + m.n };
+}
+
+// Mit wem? Personen zu Notizen/Anrufen, für die Anzeige in der Zeitleiste
+export async function peopleOfActivities(activityIds: number[]): Promise<Record<number, { id: number; name: string }[]>> {
+  if (!activityIds.length) return {};
+  const rows = await db
+    .select({ activityId: activityPeople.activityId, id: people.id, firstName: people.firstName, lastName: people.lastName })
+    .from(activityPeople)
+    .innerJoin(people, eq(people.id, activityPeople.personId))
+    .where(inArray(activityPeople.activityId, activityIds));
+  const map: Record<number, { id: number; name: string }[]> = {};
+  for (const r of rows) (map[r.activityId] ??= []).push({ id: r.id, name: fullName(r) });
+  return map;
+}
+
+// Aktuelle Kontakte einer Firma für „Mit wem?“
+export async function companyPeople(companyId: number) {
+  return pickPeople(await selectContacts().where(and(eq(contacts.companyId, companyId), current)).orderBy(sql`coalesce(${people.lastName}, ${people.firstName})`));
+}
+
+// Auswahl „Ansprechpartner“ im Vorgang: aktuelle Kontakte der Firma (Zuordnungs-ID), dazu der bisher gesetzte, falls inzwischen „früher“
+export async function contactOptions(companyId: number, keep?: number | null) {
+  const rows = await selectContacts()
+    .where(and(eq(contacts.companyId, companyId), keep ? or(current, eq(contacts.id, keep)) : current))
+    .orderBy(sql`coalesce(${people.lastName}, ${people.firstName})`);
+  return rows.map((c) => ({ id: c.id, personId: c.personId, name: `${fullName(c)}${c.endedAt ? " (früher)" : ""}` }));
 }

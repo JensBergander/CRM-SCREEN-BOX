@@ -2,11 +2,15 @@
 
 import { useActionState } from "react";
 import { createDealAction } from "@/app/(app)/actions";
+import { ContactSelect } from "./people-picker";
 import { btnAccent, btnPrimary, Field, FormError, Input, Select, Textarea } from "./ui";
 
-export function DealForm({ companies, preset, quick, today, fromMail, fromNote }: {
+export function DealForm({ companies, preset, quick, today, fromMail, fromNote, contacts = [], contactId }: {
   companies: { id: number; name: string }[];
   preset?: { id: number; name: string } | null;
+  // Ansprechpartner: nur wenn die Firma feststeht (aus Firma, Mail oder Notiz)
+  contacts?: { id: number; name: string }[];
+  contactId?: number | null;
   quick: boolean;
   today: string;
   fromMail?: { id: number; subject: string } | null;
@@ -37,6 +41,12 @@ export function DealForm({ companies, preset, quick, today, fromMail, fromNote }
           ))}
         </datalist>
       </Field>
+
+      {preset && (
+        <Field label="Ansprechpartner" hint="optional">
+          <ContactSelect options={contacts} defaultValue={contactId} />
+        </Field>
+      )}
 
       <Field label={quick ? "Was ist zu tun?" : "Vorgang"}>
         <Input

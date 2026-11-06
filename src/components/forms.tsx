@@ -18,6 +18,7 @@ import { LostDialog } from "./deal-board";
 import { PlanningDialog } from "./planning";
 import { AddressSearch } from "./place-input";
 import { RunningDot } from "./timeline";
+import { ContactSelect, PeoplePicker, type PickPerson } from "./people-picker";
 import { ActivityDialog, type ActivityKind } from "./activity-dialog";
 import { dial, NumberMenu } from "./call-menu";
 import type { PhoneNumber } from "@/lib/queries";
@@ -32,6 +33,17 @@ export function useResetOnSuccess(state: { error?: string } | undefined, pending
     wasPending.current = pending;
   }, [pending, state]);
   return ref;
+}
+
+// Zählt erfolgreiche Absendungen; als key setzt das z. B. die Personen-Auswahl zurück
+function useSuccessRound(state: { error?: string } | undefined, pending: boolean) {
+  const wasPending = useRef(false);
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    if (wasPending.current && !pending && state && !state.error) setRound((r) => r + 1);
+    wasPending.current = pending;
+  }, [pending, state]);
+  return round;
 }
 
 const FLOW: Stage[] = ["anfrage", "angebot", "beauftragt", "bearbeitung", "erledigt", "rechnung", "bezahlt"];
@@ -110,7 +122,7 @@ export function CompetitorForm({ dealId, current, competitors }: { dealId: numbe
         <Input name="competitor" defaultValue={current ?? ""} list={`competitors-${dealId}`} autoComplete="off" placeholder="noch unbekannt" />
       </label>
       <datalist id={`competitors-${dealId}`}>
-        {competitors.map((c) => <option key={c} value={c} />)}
+        {[...new Set(competitors)].map((c) => <option key={c} value={c} />)}
       </datalist>
       <button type="submit" disabled={pending} className={btnQuiet}>{pending ? "Speichert …" : "Speichern"}</button>
       {state && !state.error && !pending && <span className="text-sm text-muted">Gespeichert</span>}
@@ -118,12 +130,15 @@ export function CompetitorForm({ dealId, current, competitors }: { dealId: numbe
   );
 }
 
-export function EditDealForm({ deal }: { deal: Deal }) {
+export function EditDealForm({ deal, contacts }: { deal: Deal; contacts: { id: number; name: string }[] }) {
   const [state, action, pending] = useActionState(updateDealAction.bind(null, deal.id), undefined);
   return (
     <form action={action} className="flex flex-col gap-4 px-5 pb-5 pt-2">
       <Field label="Vorgang">
         <Input name="title" defaultValue={deal.title} required />
+      </Field>
+      <Field label="Ansprechpartner">
+        <ContactSelect options={contacts} defaultValue={deal.contactId} />
       </Field>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
         <Field label="Betrag netto (€)">
@@ -155,9 +170,12 @@ export function EditDealForm({ deal }: { deal: Deal }) {
   );
 }
 
-export function ActivityForm({ companyId, dealId, projects = [], numbers = [] }: {
+export function ActivityForm({ companyId, dealId, projects = [], numbers = [], people = [], initialPeople = [] }: {
   companyId: number | null;
   dealId: number | null;
+  // „Mit:“ – Kontakte der Firma; vorausgewählt z. B. die Person der Kontaktseite oder der Ansprechpartner des Vorgangs
+  people?: PickPerson[];
+  initialPeople?: number[];
   // Nummern für „Anruf“ bei leerem Feld: wählen und das große Fenster öffnen
   numbers?: PhoneNumber[];
   // aktive Projekte der Firma; die erste Pill ist vorausgewählt
@@ -165,9 +183,10 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [] }:
 }) {
   const [state, action, pending] = useActionState(addActivityAction.bind(null, { companyId, dealId }), undefined);
   const ref = useResetOnSuccess(state, pending);
+  const round = useSuccessRound(state, pending);
   const [target, setTarget] = useState<string>(projects[0] ? String(projects[0].id) : "");
   // „Notiz“/„Anruf“ bei leerem Feld: großes Fenster statt Pflichtfeld-Meldung
-  const [dialog, setDialog] = useState<{ kind: ActivityKind; notice?: string } | null>(null);
+  const [dialog, setDialog] = useState<{ kind: ActivityKind; notice?: string; personId?: number } | null>(null);
   const [menu, setMenu] = useState(false);
   const closeMenu = useCallback(() => setMenu(false), []);
   const callButton = useRef<HTMLButtonElement>(null);
@@ -202,7 +221,7 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [] }:
               onPick={(n) => {
                 dial(n.number);
                 setMenu(false);
-                setDialog({ kind: "anruf" });
+                setDialog({ kind: "anruf", personId: n.personId });
               }}
             />
           )}
@@ -215,9 +234,12 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [] }:
           projects={projects}
           initialKind={dialog.kind}
           notice={dialog.notice}
+          people={people}
+          initialPeople={dialog.personId ? [dialog.personId] : initialPeople}
           onClose={() => setDialog(null)}
         />
       )}
+      {people.length > 0 && <PeoplePicker key={round} people={people} initial={initialPeople} small />}
       {!dealId && projects.length > 0 && (
         <div role="radiogroup" aria-label="Zuordnen zu" className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-xs text-muted">Zu:</span>
@@ -235,9 +257,10 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [] }:
   );
 }
 
-export function TaskForm({ companyId, dealId }: { companyId?: number | null; dealId?: number | null }) {
+export function TaskForm({ companyId, dealId, people = [], initialPeople = [] }: { companyId?: number | null; dealId?: number | null; people?: PickPerson[]; initialPeople?: number[] }) {
   const [state, action, pending] = useActionState(createTaskAction, undefined);
   const ref = useResetOnSuccess(state, pending);
+  const round = useSuccessRound(state, pending);
   return (
     <form ref={ref} action={action} className="flex flex-wrap items-end gap-2 border-t border-line-soft px-5 py-3.5">
       {companyId && <input type="hidden" name="companyId" value={companyId} />}
@@ -251,6 +274,11 @@ export function TaskForm({ companyId, dealId }: { companyId?: number | null; dea
         <Input name="dueDate" type="date" className="w-auto" />
       </label>
       <button type="submit" disabled={pending} className={btnQuiet}>Hinzufügen</button>
+      {people.length > 0 && (
+        <div className="basis-full">
+          <PeoplePicker key={round} people={people} initial={initialPeople} small />
+        </div>
+      )}
       <FormError message={state?.error} />
     </form>
   );

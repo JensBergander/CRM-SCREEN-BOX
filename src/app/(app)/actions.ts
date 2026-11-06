@@ -5,7 +5,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { activities, appState, companies, COMPANY_KINDS, contacts, people, dealSuppliers, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks } from "@/db/schema";
+import { activities, activityPeople, appState, companies, COMPANY_KINDS, contacts, people, dealSuppliers, taskPeople, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, tidyMailText, todayIso } from "@/lib/format";
 import {
@@ -32,7 +32,7 @@ import { cleanName, createContact, sameName, selectContacts } from "@/lib/people
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
-import { companyName, projectsFor, type ProjectOption } from "@/lib/queries";
+import { companyName, personTraces, projectsFor, type ProjectOption } from "@/lib/queries";
 import { hintProps, ratingFor } from "@/lib/rating";
 import { autocomplete, placeDetails, resolveAddress, type Place } from "@/lib/places";
 
@@ -102,7 +102,7 @@ export async function createDealAction(_: FormState, form: FormData): Promise<Fo
   const id = await createDeal({
     ...parsed.data,
     companyId,
-    contactId: Number(text(form, "contactId")) || mail?.contactId || null,
+    contactId: (await contactFromForm(form, companyId)) || mail?.contactId || null,
     compareOnly: form.get("compareOnly") === "on",
     quick,
   });
@@ -130,9 +130,11 @@ export async function updateDealAction(dealId: number, _: FormState, form: FormD
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const offerNumber = text(form, "offerNumber")?.trim() || null;
   const invoiceNumber = text(form, "invoiceNumber")?.trim() || null;
+  const [current] = await db.select({ companyId: deals.companyId }).from(deals).where(eq(deals.id, dealId));
+  const contactId = current ? await contactFromForm(form, current.companyId) : undefined;
   await db
     .update(deals)
-    .set({ ...parsed.data, offerNumber, invoiceNumber, compareOnly: form.get("compareOnly") === "on" })
+    .set({ ...parsed.data, offerNumber, invoiceNumber, compareOnly: form.get("compareOnly") === "on", ...(contactId !== undefined && { contactId }) })
     .where(eq(deals.id, dealId));
   await resolveVoucherQuestions([offerNumber, invoiceNumber]);
   refresh();
@@ -552,18 +554,49 @@ export async function addActivityAction(
   const type = unreached || form.get("type") === "anruf" ? "anruf" : "notiz";
   // Auf der Firmenseite kommt das Projekt aus den Pills („Nur Firma“ = leer)
   const dealId = target.dealId ?? (await dealOfCompany(Number(text(form, "dealId")) || null, target.companyId));
-  await db.insert(activities).values({ ...target, dealId, type, body });
-  // Wiedervorlage aus dem Popup: Aufgabe „Firma: nachfassen – erster Satz“
+  const [inserted] = await db.insert(activities).values({ ...target, dealId, type, body });
+  const companyId = target.companyId ?? (dealId ? (await db.select({ c: deals.companyId }).from(deals).where(eq(deals.id, dealId)))[0]?.c ?? null : null);
+  const personIds = await peopleFromForm(form, companyId);
+  if (personIds.length) await db.insert(activityPeople).values(personIds.map((personId) => ({ activityId: inserted.insertId, personId })));
+  // Wiedervorlage aus dem Popup: Aufgabe „Firma: nachfassen – erster Satz“, mit denselben Personen
   const followUp = text(form, "followUp");
   if (followUp && /^\d{4}-\d{2}-\d{2}$/.test(followUp)) {
-    const companyId = target.companyId ?? (dealId ? (await db.select({ c: deals.companyId }).from(deals).where(eq(deals.id, dealId)))[0]?.c ?? null : null);
     const name = companyId ? await companyName(companyId) : null;
     const first = body.split(/\n|(?<=[.!?])\s/)[0].slice(0, 120);
     const todo = unreached ? "erneut anrufen" : `nachfassen – ${first}`;
-    await db.insert(tasks).values({ title: `${name ? `${name.trim()}: ` : ""}${todo}`.slice(0, 255), dueDate: followUp, companyId, dealId });
+    const [task] = await db.insert(tasks).values({ title: `${name ? `${name.trim()}: ` : ""}${todo}`.slice(0, 255), dueDate: followUp, companyId, dealId });
+    if (personIds.length) await db.insert(taskPeople).values(personIds.map((personId) => ({ taskId: task.insertId, personId })));
   }
   refresh();
   return {};
+}
+
+// Ansprechpartner aus dem Formular: gewählter Kontakt der Firma (contactId) oder neu eingetippter Name (newContact)
+async function contactFromForm(form: FormData, companyId: number): Promise<number | null | undefined> {
+  if (!form.has("contactId") && !form.has("newContact")) return undefined;
+  const name = text(form, "newContact")?.trim();
+  if (name) {
+    const parts = name.split(/\s+/).slice(0, 6);
+    const [firstName, lastName] = parts.length === 1 ? [parts[0], null] : [parts.slice(0, -1).join(" "), parts[parts.length - 1]];
+    return (await createContact({ companyId, firstName: firstName.slice(0, 120), lastName: lastName?.slice(0, 120) ?? null })).contactId;
+  }
+  const id = Number(text(form, "contactId")) || null;
+  if (!id) return null;
+  const [own] = await db.select({ id: contacts.id }).from(contacts).where(and(eq(contacts.id, id), eq(contacts.companyId, companyId)));
+  return own?.id ?? null;
+}
+
+// „Mit wem?“ aus dem Formular: ausgewählte Personen (personId) und neu eingetippte Namen (newPerson),
+// die als Kontakt der Firma angelegt werden. Ein Wort = Vorname („Alex“), sonst das letzte Wort als Nachname.
+async function peopleFromForm(form: FormData, companyId: number | null): Promise<number[]> {
+  const ids = form.getAll("personId").map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  for (const raw of form.getAll("newPerson").map(String)) {
+    const parts = raw.trim().split(/\s+/).filter(Boolean).slice(0, 6);
+    if (!parts.length) continue;
+    const [firstName, lastName] = parts.length === 1 ? [parts[0], null] : [parts.slice(0, -1).join(" "), parts[parts.length - 1]];
+    ids.push((await createContact({ companyId, firstName: firstName.slice(0, 120), lastName: lastName?.slice(0, 120) ?? null })).personId);
+  }
+  return [...new Set(ids)];
 }
 
 // Gehört der Vorgang zur Firma? Sonst keine Zuordnung. Lieferanten dürfen jedem Kundenprojekt zugeordnet werden
@@ -630,12 +663,15 @@ export async function createTaskAction(_: FormState, form: FormData): Promise<Fo
   await getCurrentUser();
   const title = text(form, "title")?.trim();
   if (!title) return { error: "Bitte die Aufgabe beschreiben." };
-  await db.insert(tasks).values({
+  const companyId = Number(text(form, "companyId")) || null;
+  const [task] = await db.insert(tasks).values({
     title,
     dueDate: text(form, "dueDate") || null,
-    companyId: Number(text(form, "companyId")) || null,
+    companyId,
     dealId: Number(text(form, "dealId")) || null,
   });
+  const personIds = await peopleFromForm(form, companyId);
+  if (personIds.length) await db.insert(taskPeople).values(personIds.map((personId) => ({ taskId: task.insertId, personId })));
   refresh();
   return {};
 }
@@ -953,4 +989,91 @@ export async function searchLexwareAction(query: string): Promise<LexwareHit[] |
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Lexware ist gerade nicht erreichbar." };
   }
+}
+
+// ── Kontakte (Personen) ──────────────────────────────────────────────────────
+
+// Neue Person von der Kontaktliste aus; Firma optional (wählen, neu eintippen oder leer lassen)
+export async function createPersonAction(_: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const value = (key: string) => text(form, key)?.trim() || null;
+  const firstName = cleanName(value("firstName"));
+  const lastName = cleanName(value("lastName"));
+  if (!firstName && !lastName) return { error: "Bitte Vor- oder Nachnamen angeben." };
+  const companyId = await resolveCompany(form);
+  const { personId } = await createContact({
+    companyId,
+    firstName,
+    lastName,
+    email: value("email"),
+    phone: value("phone"),
+    mobile: value("mobile"),
+    position: value("position"),
+  });
+  redirect(`/kontakte/${personId}`);
+}
+
+// Person bearbeiten: Name, Handy, Notizen und je Firmenzuordnung Position, Mail, Festnetz, „früher“.
+// Bei Lexware-Kontakten führt Lexware Name, Mail und Telefon; diese Felder bleiben dann wie sie sind.
+export async function updatePersonAction(personId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const value = (key: string) => text(form, key)?.trim() || null;
+  const links = await db.select().from(contacts).where(eq(contacts.personId, personId));
+  const lexware = links.some((l) => l.fromLexware);
+  const [person] = await db.select().from(people).where(eq(people.id, personId));
+  if (!person) return { error: "Kontakt nicht gefunden." };
+
+  const firstName = lexware ? person.firstName : cleanName(value("firstName"));
+  const lastName = lexware ? person.lastName : cleanName(value("lastName"));
+  if (!firstName && !lastName) return { error: "Bitte Vor- oder Nachnamen angeben." };
+  await db.update(people).set({ firstName, lastName, mobile: value("mobile"), notes: value("notes") }).where(eq(people.id, personId));
+
+  for (const l of links) {
+    const key = (field: string) => `c${l.id}_${field}`;
+    if (!form.has(key("position"))) continue;
+    const ended = form.get(key("ended")) === "on";
+    await db
+      .update(contacts)
+      .set({
+        position: value(key("position")),
+        // „Lexware führt, CRM ergänzt“: fehlt der Wert in Lexware, darf das CRM ihn füllen
+        email: l.fromLexware && l.email ? l.email : value(key("email")),
+        phone: l.fromLexware && l.phone ? l.phone : value(key("phone")),
+        endedAt: ended ? l.endedAt ?? new Date() : null,
+      })
+      .where(eq(contacts.id, l.id));
+  }
+  refresh();
+  return {};
+}
+
+// Weitere Firma zuordnen (z. B. nach einem Wechsel oder bei Freien, die für mehrere arbeiten)
+export async function addAffiliationAction(personId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const value = (key: string) => text(form, key)?.trim() || null;
+  const companyId = await resolveCompany(form);
+  if (!companyId) return { error: "Bitte eine Firma auswählen oder neu eingeben." };
+  const [existing] = await db.select().from(contacts).where(and(eq(contacts.personId, personId), eq(contacts.companyId, companyId)));
+  if (existing) {
+    // war „früher“ dort: wieder aktuell
+    await db.update(contacts).set({ endedAt: null }).where(eq(contacts.id, existing.id));
+  } else {
+    // Zuordnung „ohne Firma“ wird zur ersten echten Firma, statt daneben stehen zu bleiben
+    const [loose] = await db.select().from(contacts).where(and(eq(contacts.personId, personId), isNull(contacts.companyId)));
+    const fields = { companyId, position: value("position"), email: value("email"), phone: value("phone") };
+    if (loose) await db.update(contacts).set({ ...fields, email: fields.email ?? loose.email, phone: fields.phone ?? loose.phone }).where(eq(contacts.id, loose.id));
+    else await db.insert(contacts).values({ personId, ...fields });
+  }
+  refresh();
+  return {};
+}
+
+// Löschen nur ohne Spuren und nicht bei Lexware-Kontakten; sonst bleiben „früher“ oder Zusammenführen
+export async function deletePersonAction(personId: number): Promise<FormState> {
+  await getCurrentUser();
+  const traces = await personTraces(personId);
+  if (traces.lexware) return { error: "Dieser Kontakt kommt aus Lexware und kann nur dort entfernt werden." };
+  if (traces.count) return { error: "An diesem Kontakt hängen schon Einträge. Bitte zusammenführen oder bei der Firma auf „früher“ setzen." };
+  await db.delete(people).where(eq(people.id, personId));
+  redirect("/kontakte");
 }

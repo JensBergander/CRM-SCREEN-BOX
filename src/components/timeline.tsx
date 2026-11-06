@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   ArrowRightLeft,
   CheckSquare,
@@ -22,7 +22,16 @@ import { btnQuiet, Empty, FormError, Input } from "./ui";
 
 const ICON = { notiz: MessageSquare, anruf: Phone, phase: ArrowRightLeft, mail: Mail };
 const LABEL = { notiz: "Notiz", anruf: "Anruf", phase: "Phase", mail: "Mail" };
-const FILTERS = { alle: "Alle", mails: "Mails", notizen: "Notizen & Anrufe" } as const;
+const FILTERS = { alle: "Alle", notizen: "Notizen", anrufe: "Anrufe", mails: "Mails" } as const;
+type Filter = keyof typeof FILTERS | "aufgaben";
+
+// Passt ein Eintrag zum Filter? Phasenwechsel stehen nur unter „Alle“; vom CRM verschickte Mails unter „Mails“
+function matches(item: Item, filter: Filter) {
+  if (filter === "alle") return true;
+  if (filter === "mails") return item.kind === "email" || item.activity.type === "mail";
+  if (item.kind === "email") return false;
+  return filter === "notizen" ? item.activity.type === "notiz" : filter === "anrufe" ? item.activity.type === "anruf" : false;
+}
 
 // company: Kunde des Projekts, wenn Projekte mehrerer Kunden zur Wahl stehen (bei Lieferanten)
 export type Project = { id: number; title: string; number: string | null; active: boolean; company?: string };
@@ -273,6 +282,8 @@ export function Timeline({
   projects = [],
   projectFilter = false,
   today = "",
+  peopleOf = {},
+  tasks,
 }: {
   items: Activity[];
   emails?: Email[];
@@ -282,9 +293,13 @@ export function Timeline({
   projects?: Project[];
   projectFilter?: boolean;
   today?: string;
+  // Mit wem? Personen je Notiz/Anruf (Aktivitäts-ID → Personen), verlinkt auf die Kontaktseite
+  peopleOf?: Record<number, { id: number; name: string }[]>;
+  // optionaler Filter „Aufgaben“ (z. B. auf der Kontaktseite): zeigt statt der Einträge diese Liste
+  tasks?: { count: number; content: ReactNode };
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<keyof typeof FILTERS>("alle");
+  const [filter, setFilter] = useState<Filter>("alle");
   const [project, setProject] = useState<number | "alle" | "ohne">("alle");
 
   const merged = useMemo<Item[]>(
@@ -310,7 +325,7 @@ export function Timeline({
   const q = query.trim().toLowerCase();
   const visible = merged.filter(
     (item) =>
-      (filter === "alle" || (filter === "mails" ? item.kind === "email" : item.kind === "activity")) &&
+      matches(item, filter) &&
       (project === "alle" || (project === "ohne" ? !dealOf(item) : dealOf(item) === project)) &&
       (!q || item.text.toLowerCase().includes(q)),
   );
@@ -334,10 +349,15 @@ export function Timeline({
             </label>
             <div role="group" aria-label="Art" className="flex rounded-full bg-line p-1">
               {Object.entries(FILTERS).map(([key, label]) => (
-                <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key as keyof typeof FILTERS)} className={chip(filter === key)}>
+                <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key as Filter)} className={chip(filter === key)}>
                   {label}
                 </button>
               ))}
+              {tasks && (
+                <button type="button" aria-pressed={filter === "aufgaben"} onClick={() => setFilter("aufgaben")} className={chip(filter === "aufgaben")}>
+                  Aufgaben{tasks.count > 0 && ` ${tasks.count}`}
+                </button>
+              )}
             </div>
           </div>
           {projectFilter && filterProjects.length > 0 && (
@@ -361,9 +381,10 @@ export function Timeline({
               ))}
             </div>
           )}
-          {(q || filter !== "alle" || project !== "alle") && <span className="text-xs text-muted">{visible.length} von {merged.length}</span>}
+          {(q || (filter !== "alle" && filter !== "aufgaben") || project !== "alle") && <span className="text-xs text-muted">{visible.length} von {merged.length}</span>}
         </div>
       )}
+      {filter === "aufgaben" && tasks ? tasks.content : <>
       {visible.length === 0 && <Empty>{merged.length ? "Nichts gefunden." : "Noch keine Einträge."}</Empty>}
       <ol>
         {visible.map((item) => {
@@ -382,6 +403,17 @@ export function Timeline({
                   {lost ? "Verloren" : LABEL[a.type]} · {relativeTime(a.createdAt)}
                 </p>
                 <p className="whitespace-pre-line text-sm">{a.body}</p>
+                {peopleOf[a.id]?.length > 0 && (
+                  <p className="mt-1 text-xs text-muted">
+                    Mit{" "}
+                    {peopleOf[a.id].map((p, i) => (
+                      <span key={p.id}>
+                        {i > 0 && ", "}
+                        <Link href={`/kontakte/${p.id}`} className="font-semibold text-ink hover:underline">{p.name}</Link>
+                      </span>
+                    ))}
+                  </p>
+                )}
                 {a.type !== "phase" && (
                   <EntryActions
                     entry={{ kind: "activity", id: a.id, dealId: a.dealId, companyId: a.companyId, title: a.body.split("\n")[0] }}
@@ -395,6 +427,7 @@ export function Timeline({
           );
         })}
       </ol>
+      </>}
     </>
   );
 }

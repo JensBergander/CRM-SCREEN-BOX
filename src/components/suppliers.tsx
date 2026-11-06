@@ -97,7 +97,7 @@ export function SupplierCard({ dealId, amountNet, rows, options }: { dealId: num
           <Input name="name" list={listId} placeholder="Lieferant wählen oder neu" autoComplete="off" required />
         </label>
         <datalist id={listId}>
-          {options.map((o) => <option key={o} value={o} />)}
+          {[...new Set(options)].map((o) => <option key={o} value={o} />)}
         </datalist>
         <label className="min-w-0 flex-[1_1_160px]">
           <span className="sr-only">Notiz</span>

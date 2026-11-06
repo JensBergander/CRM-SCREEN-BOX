@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PhoneMissed, X } from "lucide-react";
 import { addActivityAction } from "@/app/(app)/actions";
+import { PeoplePicker, type PickPerson } from "./people-picker";
 import { RunningDot } from "./timeline";
 import { btnPrimary, btnQuiet, FormError, Textarea } from "./ui";
 
@@ -36,6 +37,8 @@ export function ActivityDialog({
   initialBody = "",
   notice,
   person,
+  people = [],
+  initialPeople = [],
   onClose,
 }: {
   companyId: number | null;
@@ -49,6 +52,9 @@ export function ActivityDialog({
   notice?: string;
   // angerufene Person, für „… telefonisch nicht erreicht“
   person?: string;
+  // „Mit wem?“: Kontakte der Firma; vorausgewählt z. B. die angerufene Person
+  people?: PickPerson[];
+  initialPeople?: number[];
   onClose: () => void;
 }) {
   const [state, action, pending] = useActionState(addActivityAction.bind(null, { companyId, dealId }), undefined);
@@ -119,6 +125,8 @@ export function ActivityDialog({
             </label>
           ))}
         </div>
+
+        <PeoplePicker people={people} initial={initialPeople} />
 
         <label>
           <span className="sr-only">Text</span>

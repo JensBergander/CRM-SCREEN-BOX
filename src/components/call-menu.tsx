@@ -107,7 +107,8 @@ function Missing({ text, companyId }: { text: string; companyId: number | null }
 // Nach dem Wählen öffnet sich „Anruf festhalten“.
 export function CallAction({ target, className }: { target: CallTarget; className: string }) {
   const [menu, setMenu] = useState(false);
-  const [dialog, setDialog] = useState(false);
+  // geöffnetes Popup, mit der Person hinter der gewählten Nummer
+  const [dialog, setDialog] = useState<{ personId?: number } | null>(null);
   const button = useRef<HTMLElement>(null);
   const close = useCallback(() => setMenu(false), []);
   const { numbers } = target;
@@ -120,15 +121,17 @@ export function CallAction({ target, className }: { target: CallTarget; classNam
       projects={target.projects}
       title={target.title}
       person={target.person}
+      people={target.people}
+      initialPeople={dialog.personId ? [dialog.personId] : []}
       initialKind="anruf"
-      onClose={() => setDialog(false)}
+      onClose={() => setDialog(null)}
     />
   );
 
   if (direct(numbers)) {
     return (
       <>
-        <a href={telHref(numbers[0].number)} onClick={() => setDialog(true)} aria-label={`${who} anrufen: ${numbers[0].number}`} title={numbers[0].number} className={className}>
+        <a href={telHref(numbers[0].number)} onClick={() => setDialog({ personId: numbers[0].personId })} aria-label={`${who} anrufen: ${numbers[0].number}`} title={numbers[0].number} className={className}>
           <Phone size={16} aria-hidden="true" />
         </a>
         {popup}
@@ -157,7 +160,7 @@ export function CallAction({ target, className }: { target: CallTarget; classNam
               onPick={(c) => {
                 dial(c.value);
                 setMenu(false);
-                setDialog(true);
+                setDialog({ personId: numbers.find((n) => n.number === c.value)?.personId });
               }}
             />
           ) : (

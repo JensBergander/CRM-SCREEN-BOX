@@ -8,7 +8,7 @@ import { MIN_OFFERS, ratingFor } from "@/lib/rating";
 import { AssessmentCard } from "@/components/rating";
 import { InlineTitle } from "@/components/inline-title";
 import { renameCompanyAction } from "../../actions";
-import { callContexts, companyCall, companyName, dealsWonBy, personCall, phoneNumbers, getCompany, projectsOfSupplier } from "@/lib/queries";
+import { pickPeople, callContexts, companyCall, companyName, dealsWonBy, personCall, peopleOfActivities, phoneNumbers, getCompany, projectsOfSupplier } from "@/lib/queries";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
 import { fullName } from "@/lib/people";
@@ -135,8 +135,8 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
         <Card title="Zeitleiste" aside={<OlderMails companyId={company.id} />}>
           {/* Lieferanten: Notizen nur zur Firma; Mails ordnest du über die Zeitleiste einem Kundenprojekt zu */}
-          <ActivityForm companyId={company.id} dealId={null} projects={supplier ? [] : data.projects.filter((p) => p.active)} numbers={await phoneNumbers(company.id)} />
-          <Timeline items={data.timeline} emails={data.emails} senders={data.senders} searchable projects={data.projects} projectFilter today={todayIso()} />
+          <ActivityForm companyId={company.id} dealId={null} projects={supplier ? [] : data.projects.filter((p) => p.active)} numbers={await phoneNumbers(company.id)} people={pickPeople(data.contacts.filter((c) => !c.endedAt))} />
+          <Timeline items={data.timeline} peopleOf={await peopleOfActivities(data.timeline.map((a) => a.id))} emails={data.emails} senders={data.senders} searchable projects={data.projects} projectFilter today={todayIso()} />
         </Card>
 
         <div className="flex flex-col gap-5">
@@ -227,7 +227,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
 
           <Card title="Offene Aufgaben">
             <TaskList tasks={data.tasks} today={todayIso()} empty="Keine offenen Aufgaben." />
-            <TaskForm companyId={company.id} />
+            <TaskForm companyId={company.id} people={pickPeople(data.contacts.filter((c) => !c.endedAt))} />
           </Card>
         </div>
       </div>

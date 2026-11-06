@@ -35,7 +35,7 @@ export function RecentCompanies({ items }: { items: RecentCompany[] }) {
                 {[c.contact, c.phone, lastLabel(c.last)].filter(Boolean).join(" · ") || "kein Ansprechpartner"}
               </p>
             </Link>
-            <CallAction target={{ companyId: c.id, title: [c.name, c.contact].filter(Boolean).join(" · "), numbers: c.numbers, projects: c.projects }} className={icon} />
+            <CallAction target={{ companyId: c.id, title: [c.name, c.contact].filter(Boolean).join(" · "), numbers: c.numbers, people: c.people, projects: c.projects }} className={icon} />
             <button type="button" onClick={() => setDialog({ company: c, kind: "notiz" })} aria-label={`Notiz oder Anruf zu ${c.name} festhalten`} title="Notiz oder Anruf festhalten" className={icon}>
               <StickyNote size={18} aria-hidden="true" />
             </button>
@@ -53,6 +53,7 @@ export function RecentCompanies({ items }: { items: RecentCompany[] }) {
           dealId={null}
           projects={dialog.company.projects}
           title={[dialog.company.name, dialog.company.contact].filter(Boolean).join(" · ")}
+          people={dialog.company.people}
           initialKind={dialog.kind}
           onClose={() => setDialog(null)}
         />

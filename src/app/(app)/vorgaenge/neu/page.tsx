@@ -1,5 +1,5 @@
 import { todayIso } from "@/lib/format";
-import { companyOptions, getActivity, getMail } from "@/lib/queries";
+import { companyOptions, contactOptions, getActivity, getMail, peopleOfActivities } from "@/lib/queries";
 import { DealForm } from "@/components/deal-form";
 import { RatingHint } from "@/components/rating-hint";
 import { PageHeader } from "@/components/ui";
@@ -24,6 +24,15 @@ export default async function NewDealPage({ searchParams }: PageProps<"/vorgaeng
     : null;
   const fromNote = note ? { id: note.id, title: note.body.split("\n")[0].slice(0, 200) } : null;
 
+  // Ansprechpartner vorauswählen: Absender der Mail, sonst die (einzige) Person der Notiz, sonst den einzigen Kontakt der Firma
+  const contacts = preset ? await contactOptions(preset.id) : [];
+  const notePeople = note ? (await peopleOfActivities([note.id]))[note.id] ?? [] : [];
+  const fromPerson = notePeople.length === 1 ? contacts.find((c) => c.personId === notePeople[0].id)?.id : undefined;
+  const contactId =
+    (mailRow?.mail.contactId && contacts.some((c) => c.id === mailRow.mail.contactId) ? mailRow.mail.contactId : undefined) ??
+    fromPerson ??
+    (contacts.length === 1 ? contacts[0].id : null);
+
   return (
     <div className="flex flex-col gap-6">
       <BackButton fallback="/vorgaenge" label="Vorgänge" />
@@ -41,7 +50,7 @@ export default async function NewDealPage({ searchParams }: PageProps<"/vorgaeng
         }
       />
       {preset && <RatingHint companyId={preset.id} />}
-      <DealForm companies={companies} preset={preset} quick={quick} today={todayIso()} fromMail={fromMail} fromNote={fromNote} />
+      <DealForm companies={companies} preset={preset} quick={quick} today={todayIso()} fromMail={fromMail} fromNote={fromNote} contacts={contacts} contactId={contactId} />
     </div>
   );
 }

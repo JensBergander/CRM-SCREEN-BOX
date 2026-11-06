@@ -4,7 +4,7 @@ import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_LABEL } from "@/lib/labels";
 import { FolderPlus } from "lucide-react";
 import { folderLink } from "@/lib/folders";
-import { companyName, competitorNames, phoneNumbers, getDeal, supplierNames, suppliersForDeal, vouchersForDeal } from "@/lib/queries";
+import { companyName, competitorNames, phoneNumbers, peopleOfActivities, companyPeople, contactOptions, getDeal, supplierNames, suppliersForDeal, vouchersForDeal } from "@/lib/queries";
 import { RatingHint } from "@/components/rating-hint";
 import { InlineTitle } from "@/components/inline-title";
 import { loadPlanningAction, renameDealAction } from "../../actions";
@@ -20,6 +20,7 @@ import { STAGE_TONE } from "@/lib/tones";
 import { CONFIRMED, parseCandidates, WEBSITE_EVENTS_URL, websiteConfigured, websiteImageUrl } from "@/lib/website";
 import { EventPhoto } from "@/components/event-photo";
 import { BackButton } from "@/components/back-button";
+import { fullName } from "@/lib/people";
 import { WebsiteEventPanel } from "@/components/website-event";
 
 export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
@@ -33,7 +34,9 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
   const competitors = await competitorNames();
   const competitor = deal.competitorId ? await companyName(deal.competitorId) : null;
   const folder = data.folderName ? await folderLink(deal, data.folderName) : null;
-  const [suppliers, supplierOptions] = await Promise.all([suppliersForDeal(deal.id), supplierNames()]);
+  const [suppliers, supplierOptions, staff] = await Promise.all([suppliersForDeal(deal.id), supplierNames(), companyPeople(deal.companyId)]);
+  // Ansprechpartner des Vorgangs ist bei Notizen und Aufgaben vorausgewählt
+  const contactPerson = data.contact?.personId ? [data.contact.personId] : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,6 +47,12 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
         <p className="text-[13px] text-muted">
           <Link href={`/firmen/${deal.companyId}`} className="font-semibold text-ink hover:underline">{data.companyName}</Link>{" "}
           <LexwareBadge company={data.lexware} />
+          {data.contact?.personId && (
+            <>
+              {" "}· mit{" "}
+              <Link href={`/kontakte/${data.contact.personId}`} className="font-semibold text-ink hover:underline">{fullName(data.contact)}</Link>
+            </>
+          )}
           {deal.number && <> · Nr. {deal.number}</>}
           {deal.projectDate && <> · {dateDe(deal.projectDate)}</>}
         </p>
@@ -97,11 +106,11 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
         <div className="flex flex-col gap-5">
           <Card title="Aufgaben">
             <TaskList tasks={data.tasks} today={todayIso()} empty="Keine Aufgaben zu diesem Vorgang." />
-            <TaskForm companyId={deal.companyId} dealId={deal.id} />
+            <TaskForm companyId={deal.companyId} dealId={deal.id} people={staff} initialPeople={contactPerson} />
           </Card>
           <Card title="Verlauf">
-            <ActivityForm companyId={deal.companyId} dealId={deal.id} numbers={await phoneNumbers(deal.companyId, deal.id)} />
-            <Timeline items={data.timeline} emails={data.emails} senders={data.senders} searchable projects={data.projects} today={todayIso()} />
+            <ActivityForm companyId={deal.companyId} dealId={deal.id} numbers={await phoneNumbers(deal.companyId, deal.id)} people={staff} initialPeople={contactPerson} />
+            <Timeline items={data.timeline} peopleOf={await peopleOfActivities(data.timeline.map((a) => a.id))} emails={data.emails} senders={data.senders} searchable projects={data.projects} today={todayIso()} />
           </Card>
         </div>
         <div className="flex flex-col gap-5">
@@ -145,7 +154,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
             )}
           </Card>
           <Card title="Details">
-            <EditDealForm key={deal.title} deal={deal} />
+            <EditDealForm key={`${deal.title}-${deal.contactId}`} deal={deal} contacts={await contactOptions(deal.companyId, deal.contactId)} />
           </Card>
         </div>
       </div>
