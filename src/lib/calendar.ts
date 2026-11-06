@@ -2,6 +2,7 @@ import "server-only";
 import { asc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { companies, contacts, deals, productionDays } from "@/db/schema";
+import { selectContacts } from "./people";
 import { graphSend, mailboxes } from "./graph";
 import { CONFIRMED } from "./website";
 
@@ -102,7 +103,7 @@ export async function syncDealCalendar(dealId: number): Promise<void> {
     .where(eq(deals.id, dealId));
   if (!row) return;
   const days = await db.select().from(productionDays).where(eq(productionDays.dealId, dealId)).orderBy(asc(productionDays.day), asc(productionDays.startTime));
-  const [contact] = row.deal.contactId ? await db.select().from(contacts).where(eq(contacts.id, row.deal.contactId)) : [];
+  const [contact] = row.deal.contactId ? await selectContacts().where(eq(contacts.id, row.deal.contactId)) : [];
   const ctx: Context = {
     deal: row.deal,
     companyName: row.companyName,

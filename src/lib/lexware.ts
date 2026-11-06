@@ -1,7 +1,8 @@
 import "server-only";
 import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { appState, companies, contacts, type Company, type CompanyKind } from "@/db/schema";
+import { appState, companies, contacts, people as peopleTable, type Company, type CompanyKind } from "@/db/schema";
+import { cleanName, createContact, sameName, selectContacts } from "./people";
 import { suggestFolderName, todayIso } from "./format";
 
 const API = "https://api.lexware.io/v1";
@@ -90,15 +91,17 @@ const phonesOf = (lx: LexwareContact) => Object.values(lx.phoneNumbers ?? {}).fl
 
 // Ansprechpartner einer Lexware-Firma bzw. die Person selbst
 function peopleOf(lx: LexwareContact) {
+  // Platzhalter wie „-“ als Nachname werden nicht übernommen
   if (lx.person) {
-    return [{ firstName: lx.person.firstName ?? null, lastName: lx.person.lastName, email: emailsOf(lx)[0] ?? null, phone: phonesOf(lx)[0] ?? null }];
+    return [{ firstName: cleanName(lx.person.firstName), lastName: cleanName(lx.person.lastName), email: emailsOf(lx)[0] ?? null, phone: phonesOf(lx)[0] ?? null }];
   }
   return (lx.company?.contactPersons ?? [])
-    .filter((p) => p.lastName)
-    .map((p) => ({ firstName: p.firstName ?? null, lastName: p.lastName, email: p.emailAddress ?? null, phone: p.phoneNumber ?? null }));
+    .map((p) => ({ firstName: cleanName(p.firstName), lastName: cleanName(p.lastName), email: p.emailAddress ?? null, phone: p.phoneNumber ?? null }))
+    .filter((p) => p.firstName || p.lastName);
 }
 
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+
 
 // Stammdaten aus Lexware übernehmen: Lexware gewinnt. Mail und Telefon behält das CRM nur, wenn Lexware keine hat.
 // CRM-eigene Felder (Notizen, Ordner, Bewertung, Kategorien, Mail-Domain, Firmenart) bleiben unberührt.
@@ -127,37 +130,42 @@ async function applyContact(lx: LexwareContact, company: Company) {
     .where(eq(companies.id, company.id));
 
   // Ansprechpartner: vorhandene wiederfinden (erst Lexware-markierte, dann Mail, dann Name), sonst neu anlegen
-  const known = await db.select().from(contacts).where(eq(contacts.companyId, company.id));
+  const known = await selectContacts().where(eq(contacts.companyId, company.id));
   const matched = new Set<number>();
   let created = 0;
   for (const p of people) {
     const free = known.filter((c) => !matched.has(c.id));
-    const sameName = (c: (typeof known)[number]) =>
-      same(c.lastName, p.lastName) && (!c.firstName || !p.firstName || same(c.firstName, p.firstName));
     const hit =
-      free.find((c) => c.fromLexware && sameName(c)) ??
+      free.find((c) => c.fromLexware && sameName(c, p)) ??
       free.find((c) => same(c.email, p.email)) ??
-      free.find(sameName);
+      free.find((c) => sameName(c, p));
     if (hit) {
       matched.add(hit.id);
+      // Lexware führt beim Namen; fehlt dort etwas, bleibt der Wert aus dem CRM
+      await db
+        .update(peopleTable)
+        .set({ firstName: p.firstName ?? hit.firstName, lastName: p.lastName ?? hit.lastName })
+        .where(eq(peopleTable.id, hit.personId));
       await db
         .update(contacts)
-        .set({
-          firstName: p.firstName ?? hit.firstName,
-          lastName: p.lastName,
-          email: p.email ?? hit.email,
-          phone: p.phone ?? hit.phone,
-          fromLexware: true,
-        })
+        .set({ email: p.email ?? hit.email, phone: p.phone ?? hit.phone, fromLexware: true })
         .where(eq(contacts.id, hit.id));
-    } else {
-      await db.insert(contacts).values({ companyId: company.id, ...p, fromLexware: true });
-      created++;
+      continue;
     }
+    // Dieselbe Person bei einer anderen Firma (gleiche Mail und gleicher Name): neue Zuordnung statt neuer Person
+    const [elsewhere] = p.email ? await selectContacts().where(sql`lower(${contacts.email}) = ${p.email.toLowerCase()}`) : [];
+    if (elsewhere && sameName(elsewhere, p)) {
+      await db.insert(contacts).values({ personId: elsewhere.personId, companyId: company.id, email: p.email, phone: p.phone, fromLexware: true });
+    } else {
+      await createContact({ companyId: company.id, ...p, fromLexware: true });
+    }
+    created++;
   }
-  // In Lexware entfernte Ansprechpartner werden normale CRM-Kontakte
-  const gone = known.filter((c) => c.fromLexware && !matched.has(c.id)).map((c) => c.id);
-  if (gone.length) await db.update(contacts).set({ fromLexware: false }).where(inArray(contacts.id, gone));
+  // In Lexware entfernte Ansprechpartner werden normale CRM-Kontakte; die Zuordnung zur Firma wird „früher“
+  const gone = known.filter((c) => c.fromLexware && !matched.has(c.id));
+  for (const c of gone) {
+    await db.update(contacts).set({ fromLexware: false, endedAt: c.endedAt ?? new Date() }).where(eq(contacts.id, c.id));
+  }
   return created;
 }
 
@@ -363,7 +371,7 @@ export async function createInLexware(companyId: number, opts: { customer: boole
   const company = await companyById(companyId);
   if (company.lexwareId) throw new Error("Diese Firma ist schon mit Lexware verknüpft.");
   if (!opts.customer && !opts.vendor) throw new Error("Bitte Kunde und/oder Lieferant wählen.");
-  const people = await db.select().from(contacts).where(eq(contacts.companyId, companyId));
+  const people = await selectContacts().where(and(eq(contacts.companyId, companyId), isNull(contacts.endedAt)));
 
   const body: Record<string, unknown> = {
     version: 0,
@@ -380,8 +388,9 @@ export async function createInLexware(companyId: number, opts: { customer: boole
     body.company = {
       name: company.name,
       contactPersons: people.slice(0, 20).map((p, i) => ({
-        firstName: p.firstName ?? undefined,
-        lastName: p.lastName,
+        // Lexware verlangt einen Nachnamen; hat die Person nur einen Vornamen, steht er dort
+        firstName: p.lastName ? p.firstName ?? undefined : undefined,
+        lastName: p.lastName ?? p.firstName ?? "",
         emailAddress: p.email ?? undefined,
         phoneNumber: p.phone ?? p.mobile ?? undefined,
         primary: i === 0,

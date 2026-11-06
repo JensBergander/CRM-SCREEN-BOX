@@ -128,7 +128,7 @@ function MailPanel({ row, companies, tagOptions, onClose }: { row: InboxRow; com
         {data.projects.length > 0 && <ProjectPicker projects={data.projects} companyName={data.company?.name ?? ""} />}
         <div className="grid grid-cols-2 gap-2">
           <Input name="firstName" aria-label="Vorname" placeholder="Vorname" defaultValue={s.firstName} />
-          <Input name="lastName" aria-label="Nachname" placeholder="Nachname" defaultValue={s.lastName} required />
+          <Input name="lastName" aria-label="Nachname" placeholder="Nachname" defaultValue={s.lastName} />
         </div>
         <Input name="position" aria-label="Position" placeholder="Position / Tätigkeit" defaultValue={s.position} />
         <Input name="email" type="email" aria-label="E-Mail" placeholder="E-Mail" defaultValue={s.email} />

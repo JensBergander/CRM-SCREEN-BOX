@@ -270,7 +270,7 @@ export function ContactForm({ companyId }: { companyId: number }) {
   return (
     <form ref={ref} action={action} className="grid grid-cols-2 gap-3 border-t border-line-soft px-5 py-4">
       <Input name="firstName" placeholder="Vorname" aria-label="Vorname" />
-      <Input name="lastName" placeholder="Nachname" aria-label="Nachname" required />
+      <Input name="lastName" placeholder="Nachname" aria-label="Nachname" />
       <Input name="email" type="email" placeholder="E-Mail" aria-label="E-Mail" className="col-span-2" />
       <Input name="phone" placeholder="Telefon" aria-label="Telefon" />
       <Input name="mobile" placeholder="Mobil" aria-label="Mobil" />

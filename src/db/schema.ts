@@ -9,6 +9,7 @@ import {
   int,
   mysqlEnum,
   mysqlTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -90,23 +91,40 @@ export const companies = mysqlTable(
   (t) => [index("companies_name_idx").on(t.name), index("companies_domain_idx").on(t.emailDomain)],
 );
 
+// Eine Person; sie kann bei mehreren Firmen sein (siehe contacts). Ein Name reicht: Vor- oder Nachname.
+export const people = mysqlTable(
+  "people",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    firstName: varchar("first_name", { length: 120 }),
+    lastName: varchar("last_name", { length: 120 }),
+    mobile: varchar("mobile", { length: 64 }),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [index("people_last_name_idx").on(t.lastName)],
+);
+
+// Zuordnung einer Person zu einer Firma (oder ohne Firma): Position, Firmen-Mail, Festnetz.
+// Vorgänge und Mails verweisen auf diese Zuordnung, Notizen und Aufgaben auf die Person.
 export const contacts = mysqlTable(
   "contacts",
   {
     id: int("id").autoincrement().primaryKey(),
+    personId: int("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
     companyId: int("company_id").references(() => companies.id, { onDelete: "set null" }),
-    firstName: varchar("first_name", { length: 120 }),
-    lastName: varchar("last_name", { length: 120 }).notNull(),
     email: varchar("email", { length: 255 }),
     phone: varchar("phone", { length: 64 }),
-    mobile: varchar("mobile", { length: 64 }),
     position: varchar("position", { length: 120 }),
-    notes: text("notes"),
     // Ansprechpartner aus Lexware: Name, Mail und Telefon kommen beim Abgleich von dort
     fromLexware: boolean("from_lexware").notNull().default(false),
+    // „früher“: arbeitet nicht mehr dort; bleibt mit Historie, aber nicht mehr im Telefonmenü der Firma
+    endedAt: timestamp("ended_at"),
     ...timestamps,
   },
-  (t) => [index("contacts_company_idx").on(t.companyId), index("contacts_email_idx").on(t.email)],
+  (t) => [index("contacts_company_idx").on(t.companyId), index("contacts_email_idx").on(t.email), index("contacts_person_idx").on(t.personId)],
 );
 
 export const deals = mysqlTable(
@@ -234,6 +252,33 @@ export const activities = mysqlTable(
   (t) => [index("activities_company_idx").on(t.companyId, t.createdAt)],
 );
 
+// Mit wem? Personen an Notizen/Anrufen und Aufgaben (freiwillig, mehrere möglich, nie geraten)
+export const activityPeople = mysqlTable(
+  "activity_people",
+  {
+    activityId: int("activity_id")
+      .notNull()
+      .references(() => activities.id, { onDelete: "cascade" }),
+    personId: int("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.activityId, t.personId] }), index("activity_people_person_idx").on(t.personId)],
+);
+
+export const taskPeople = mysqlTable(
+  "task_people",
+  {
+    taskId: int("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    personId: int("person_id")
+      .notNull()
+      .references(() => people.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.taskId, t.personId] }), index("task_people_person_idx").on(t.personId)],
+);
+
 export const MAIL_STATUS = ["neu", "zugeordnet", "ignoriert"] as const;
 
 export const emails = mysqlTable(
@@ -342,6 +387,7 @@ export type LexwareVoucher = typeof lexwareVouchers.$inferSelect;
 export type Email = typeof emails.$inferSelect;
 export type Company = typeof companies.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
+export type PersonRow = typeof people.$inferSelect;
 export type Deal = typeof deals.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type DealSupplier = typeof dealSuppliers.$inferSelect;

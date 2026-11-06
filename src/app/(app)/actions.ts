@@ -1,11 +1,11 @@
 "use server";
 
-import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { activities, appState, companies, COMPANY_KINDS, contacts, dealSuppliers, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks } from "@/db/schema";
+import { activities, appState, companies, COMPANY_KINDS, contacts, people, dealSuppliers, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, tidyMailText, todayIso } from "@/lib/format";
 import {
@@ -28,6 +28,7 @@ import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
 import { archiveVoucher, createDealFromVoucher, linkVoucher, quickReconcile, reconcileDeals, resolveVoucherQuestions, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
+import { cleanName, createContact, sameName, selectContacts } from "@/lib/people";
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
@@ -511,21 +512,23 @@ export async function updateCompanyAction(companyId: number, _: FormState, form:
   return {};
 }
 
+// Neuer Ansprechpartner: ein Name reicht (Vor- oder Nachname). Mit personId wird eine vorhandene Person
+// der Firma zugeordnet statt einer neuen angelegt (Vorschlag „gibt es schon“).
 export async function createContactAction(companyId: number | null, _: FormState, form: FormData): Promise<FormState> {
   await getCurrentUser();
-  const lastName = text(form, "lastName")?.trim();
-  if (!lastName) return { error: "Der Nachname fehlt." };
-  const email = text(form, "email")?.trim() || null;
+  const value = (key: string) => text(form, key)?.trim() || null;
+  const email = value("email");
   const targetCompany = companyId ?? (Number(text(form, "companyId")) || null);
-  await db.insert(contacts).values({
-    companyId: targetCompany,
-    firstName: text(form, "firstName")?.trim() || null,
-    lastName,
-    email,
-    phone: text(form, "phone")?.trim() || null,
-    mobile: text(form, "mobile")?.trim() || null,
-    position: text(form, "position")?.trim() || null,
-  });
+  const existing = Number(text(form, "personId")) || null;
+  if (existing) {
+    await db.insert(contacts).values({ personId: existing, companyId: targetCompany, email, phone: value("phone"), position: value("position") });
+    if (value("mobile")) await db.update(people).set({ mobile: value("mobile") }).where(and(eq(people.id, existing), isNull(people.mobile)));
+  } else {
+    const firstName = cleanName(value("firstName"));
+    const lastName = cleanName(value("lastName"));
+    if (!firstName && !lastName) return { error: "Bitte Vor- oder Nachnamen angeben." };
+    await createContact({ companyId: targetCompany, firstName, lastName, email, phone: value("phone"), mobile: value("mobile"), position: value("position") });
+  }
   // Erste bekannte Firmen-Domain gleich mitlernen
   if (targetCompany && domainOf(email)) {
     const [company] = await db.select({ d: companies.emailDomain }).from(companies).where(eq(companies.id, targetCompany));
@@ -712,8 +715,9 @@ export async function loadMailForContactAction(mailId: number): Promise<MailForC
 // Vorhandene Einträge werden nur ergänzt, nie überschrieben.
 export async function createContactFromMailAction(mailId: number, _: FormState, form: FormData): Promise<FormState> {
   await getCurrentUser();
-  const lastName = text(form, "lastName")?.trim();
-  if (!lastName) return { error: "Der Nachname fehlt." };
+  const firstName = cleanName(text(form, "firstName"));
+  const lastName = cleanName(text(form, "lastName"));
+  if (!firstName && !lastName) return { error: "Bitte Vor- oder Nachnamen angeben." };
   const companyId = await resolveCompany(form);
   if (!companyId) return { error: "Bitte eine Firma bzw. den Namen des Lieferanten angeben." };
   const value = (key: string) => text(form, key)?.trim() || null;
@@ -727,32 +731,30 @@ export async function createContactFromMailAction(mailId: number, _: FormState, 
   if (form.get("learnDomain") === "on" && !company.emailDomain && domainOf(email)) fill.emailDomain = domainOf(email);
   if (Object.keys(fill).length) await db.update(companies).set(fill).where(eq(companies.id, companyId));
 
-  const person = {
-    firstName: value("firstName"),
-    lastName,
-    position: value("position"),
-    phone: value("phone"),
-    mobile: value("mobile"),
-  };
+  const person = { firstName, lastName, position: value("position"), phone: value("phone"), mobile: value("mobile") };
   // Erst über die Mailadresse suchen, sonst denselben Namen in der Firma ohne Adresse (z. B. aus Lexware importiert)
-  const [byEmail] = email ? await db.select().from(contacts).where(eq(contacts.email, email)) : [];
+  const [byEmail] = email ? await selectContacts().where(sql`lower(${contacts.email}) = ${email}`) : [];
   const [byName] = byEmail
     ? []
-    : (await db.select().from(contacts).where(and(eq(contacts.companyId, companyId), eq(contacts.lastName, lastName), isNull(contacts.email)))).filter(
-        (c) => !c.firstName || !person.firstName || c.firstName.toLowerCase() === person.firstName.toLowerCase(),
-      );
+    : (await selectContacts().where(and(eq(contacts.companyId, companyId), isNull(contacts.email)))).filter((c) => sameName(c, person));
   const known = byEmail ?? byName;
   let contactId: number;
   if (known) {
     contactId = known.id;
-    const update: Partial<typeof contacts.$inferInsert> = {};
-    for (const key of ["firstName", "position", "phone", "mobile"] as const) if (!known[key] && person[key]) update[key] = person[key];
-    if (!known.companyId) update.companyId = companyId;
-    if (!known.email && email) update.email = email;
-    if (Object.keys(update).length) await db.update(contacts).set(update).where(eq(contacts.id, known.id));
+    // nur ergänzen, nie überschreiben
+    const own: Partial<typeof contacts.$inferInsert> = {};
+    if (!known.position && person.position) own.position = person.position;
+    if (!known.phone && person.phone) own.phone = person.phone;
+    if (!known.companyId) own.companyId = companyId;
+    if (!known.email && email) own.email = email;
+    if (Object.keys(own).length) await db.update(contacts).set(own).where(eq(contacts.id, known.id));
+    const personal: Partial<typeof people.$inferInsert> = {};
+    if (!known.firstName && person.firstName) personal.firstName = person.firstName;
+    if (!known.lastName && person.lastName) personal.lastName = person.lastName;
+    if (!known.mobile && person.mobile) personal.mobile = person.mobile;
+    if (Object.keys(personal).length) await db.update(people).set(personal).where(eq(people.id, known.personId));
   } else {
-    const [inserted] = await db.insert(contacts).values({ ...person, companyId, email });
-    contactId = inserted.insertId;
+    contactId = (await createContact({ ...person, companyId, email })).contactId;
   }
 
   await db.update(emails).set({ companyId, contactId, status: "zugeordnet" }).where(eq(emails.id, mailId));

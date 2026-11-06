@@ -11,6 +11,7 @@ import { renameCompanyAction } from "../../actions";
 import { callContexts, companyCall, companyName, dealsWonBy, personCall, phoneNumbers, getCompany, projectsOfSupplier } from "@/lib/queries";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
+import { fullName } from "@/lib/people";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
@@ -205,16 +206,19 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           <Card title="Kontakte">
             {data.contacts.length === 0 && <Empty>Noch keine Kontakte.</Empty>}
             {data.contacts.map((c) => {
-              const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
+              const name = fullName(c);
               return (
                 <Row key={c.id}>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">{name}</p>
+                  <div className={`min-w-0 flex-1 ${c.endedAt ? "opacity-60" : ""}`}>
+                    <p className="text-sm font-semibold">
+                      <Link href={`/kontakte/${c.personId}`} className="hover:underline">{name}</Link>
+                      {c.endedAt && <span className="ml-2 text-[11px] font-semibold text-muted">früher</span>}
+                    </p>
                     <p className="truncate text-xs text-muted">
                       {[c.position, c.phone, c.mobile && `mobil ${c.mobile}`, c.email].filter(Boolean).join(" · ") || "–"}
                     </p>
                   </div>
-                  <ContactActions call={personCall(call, c)} />
+                  {!c.endedAt && <ContactActions call={personCall(call, c)} />}
                 </Row>
               );
             })}

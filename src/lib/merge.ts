@@ -1,7 +1,61 @@
 import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, companies, contacts, dealSuppliers, deals, emails, tasks } from "@/db/schema";
+import { activities, activityPeople, companies, contacts, dealSuppliers, deals, emails, people, taskPeople, tasks } from "@/db/schema";
+import { contactCols } from "./people";
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Zwei Zuordnungen zur selben Firma zu einer machen: Vorgänge und Mails zeigen danach auf die bleibende
+async function mergeAffiliation(tx: Tx, fromId: number, intoId: number) {
+  const [from] = await tx.select().from(contacts).where(eq(contacts.id, fromId));
+  const [into] = await tx.select().from(contacts).where(eq(contacts.id, intoId));
+  await tx.update(deals).set({ contactId: intoId }).where(eq(deals.contactId, fromId));
+  await tx.update(emails).set({ contactId: intoId }).where(eq(emails.contactId, fromId));
+  await tx
+    .update(contacts)
+    .set({
+      email: into.email ?? from.email,
+      phone: into.phone ?? from.phone,
+      position: into.position ?? from.position,
+      fromLexware: into.fromLexware || from.fromLexware,
+      endedAt: into.endedAt && from.endedAt ? into.endedAt : null,
+    })
+    .where(eq(contacts.id, intoId));
+  await tx.delete(contacts).where(eq(contacts.id, fromId));
+}
+
+// Doppelte Person in eine andere überführen: Firmenzuordnungen, Notizen, Aufgaben, Vorgänge und Mails wandern mit
+export async function mergePeopleTx(tx: Tx, fromId: number, intoId: number) {
+  if (fromId === intoId) return;
+  const [from] = await tx.select().from(people).where(eq(people.id, fromId));
+  const [into] = await tx.select().from(people).where(eq(people.id, intoId));
+  if (!from || !into) return;
+  const theirs = await tx.select().from(contacts).where(eq(contacts.personId, fromId));
+  const ours = await tx.select().from(contacts).where(eq(contacts.personId, intoId));
+  for (const c of theirs) {
+    const same = ours.find((o) => o.companyId === c.companyId);
+    if (same) await mergeAffiliation(tx, c.id, same.id);
+    else await tx.update(contacts).set({ personId: intoId }).where(eq(contacts.id, c.id));
+  }
+  await tx.execute(sql`insert ignore into ${activityPeople} (activity_id, person_id) select activity_id, ${intoId} from ${activityPeople} where person_id = ${fromId}`);
+  await tx.execute(sql`insert ignore into ${taskPeople} (task_id, person_id) select task_id, ${intoId} from ${taskPeople} where person_id = ${fromId}`);
+  await tx
+    .update(people)
+    .set({
+      firstName: into.firstName ?? from.firstName,
+      lastName: into.lastName ?? from.lastName,
+      mobile: into.mobile ?? from.mobile,
+      notes: [into.notes, from.notes].filter(Boolean).join("\n\n") || null,
+    })
+    .where(eq(people.id, intoId));
+  // löscht per Fremdschlüssel auch die restlichen Einträge in activity_people/task_people
+  await tx.delete(people).where(eq(people.id, fromId));
+}
+
+export async function mergePeople(fromId: number, intoId: number) {
+  await db.transaction((tx) => mergePeopleTx(tx, fromId, intoId));
+}
 
 // Doppelte Firma in eine andere überführen und danach löschen. Die Firma mit Lexware-Nummer bleibt immer;
 // haben beide eine, gibt es sie auch in Lexware doppelt, und der tägliche Abgleich würde sie wieder anlegen.
@@ -17,26 +71,19 @@ export async function mergeCompanies(fromId: number, intoId: number): Promise<{ 
 
   await db.transaction(async (tx) => {
     // Ansprechpartner: gleiche Mail = dieselbe Person, sonst einfach umhängen
-    const theirs = await tx.select().from(contacts).where(eq(contacts.companyId, from.id));
-    const ours = await tx.select().from(contacts).where(eq(contacts.companyId, into.id));
+    // dieselbe Person schon in beiden Firmen: eine Zuordnung genügt
+    const theirs = await tx.select(contactCols).from(contacts).innerJoin(people, eq(people.id, contacts.personId)).where(eq(contacts.companyId, from.id));
+    const ours = await tx.select(contactCols).from(contacts).innerJoin(people, eq(people.id, contacts.personId)).where(eq(contacts.companyId, into.id));
     for (const c of theirs) {
-      const same = c.email && ours.find((o) => o.email?.toLowerCase() === c.email!.toLowerCase());
+      const same =
+        ours.find((o) => o.personId === c.personId) ??
+        (c.email ? ours.find((o) => o.email?.toLowerCase() === c.email!.toLowerCase()) : undefined);
       if (!same) {
         await tx.update(contacts).set({ companyId: into.id }).where(eq(contacts.id, c.id));
         continue;
       }
-      await tx.update(deals).set({ contactId: same.id }).where(eq(deals.contactId, c.id));
-      await tx.update(emails).set({ contactId: same.id }).where(eq(emails.contactId, c.id));
-      await tx
-        .update(contacts)
-        .set({
-          phone: same.phone ?? c.phone,
-          mobile: same.mobile ?? c.mobile,
-          position: same.position ?? c.position,
-          notes: [same.notes, c.notes].filter(Boolean).join("\n\n") || null,
-        })
-        .where(eq(contacts.id, same.id));
-      await tx.delete(contacts).where(eq(contacts.id, c.id));
+      await mergeAffiliation(tx, c.id, same.id);
+      await mergePeopleTx(tx, c.personId, same.personId);
     }
 
     await tx.update(deals).set({ companyId: into.id }).where(eq(deals.companyId, from.id));
