@@ -199,11 +199,12 @@ async function handleFreshVouchers(): Promise<string[]> {
   const used = new Set(
     (await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals)).flatMap((d) => [d.o, d.i]).filter(Boolean),
   );
-  // Offene Rückfragen zu Belegen, deren Nummer inzwischen an einem Vorgang steht (z. B. von Hand eingetragen), sind erledigt
-  const answered = (await db.select({ number: lexwareVouchers.number }).from(lexwareVouchers).where(eq(lexwareVouchers.pending, true)))
-    .map((v) => v.number)
-    .filter((n) => used.has(n));
-  if (answered.length) await db.update(lexwareVouchers).set({ pending: false }).where(inArray(lexwareVouchers.number, answered));
+  // Offene Rückfragen zu Belegen, deren Nummer inzwischen an einem Vorgang derselben Firma steht (z. B. von Hand eingetragen), sind erledigt
+  const keys = await usedVoucherKeys();
+  const answered = (await db.select({ id: lexwareVouchers.id, number: lexwareVouchers.number, contactId: lexwareVouchers.contactId }).from(lexwareVouchers).where(eq(lexwareVouchers.pending, true)))
+    .filter((v) => keys.has(`${v.contactId}|${v.number}`))
+    .map((v) => v.id);
+  if (answered.length) await db.update(lexwareVouchers).set({ pending: false }).where(inArray(lexwareVouchers.id, answered));
 
   const fresh = await db
     .select()
@@ -275,10 +276,25 @@ export async function archiveVoucher(voucherId: string) {
 }
 
 // Nummern, die von Hand an einem Vorgang eingetragen wurden: offene Rückfragen zu diesen Belegen sind damit beantwortet
-export async function resolveVoucherQuestions(numbers: (string | null)[]) {
+// Nur Belege der Firma des Vorgangs: eine vertippte oder fremde Nummer beantwortet keine Rückfrage einer anderen Firma
+export async function resolveVoucherQuestions(numbers: (string | null)[], companyId: number) {
   const list = numbers.filter((n): n is string => !!n);
   if (!list.length) return;
-  await db.update(lexwareVouchers).set({ pending: false, fresh: false, archived: false }).where(inArray(lexwareVouchers.number, list));
+  const [company] = await db.select({ lexwareId: companies.lexwareId }).from(companies).where(eq(companies.id, companyId));
+  if (!company?.lexwareId) return;
+  await db
+    .update(lexwareVouchers)
+    .set({ pending: false, fresh: false, archived: false })
+    .where(and(inArray(lexwareVouchers.number, list), eq(lexwareVouchers.contactId, company.lexwareId)));
+}
+
+// Nummern an Vorgängen, je Lexware-Kontakt der Firma („lexwareId|Nummer“)
+export async function usedVoucherKeys() {
+  const rows = await db
+    .select({ lx: companies.lexwareId, o: deals.offerNumber, i: deals.invoiceNumber })
+    .from(deals)
+    .innerJoin(companies, eq(companies.id, deals.companyId));
+  return new Set(rows.flatMap((r) => [r.o, r.i].filter(Boolean).map((n) => `${r.lx}|${n}`)));
 }
 
 // Lexware-Belege mit Vorgängen abgleichen; ändert nur eindeutige Fälle

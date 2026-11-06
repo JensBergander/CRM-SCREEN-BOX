@@ -2,9 +2,9 @@ import "server-only";
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lt, lte, max, ne, or, sql, sum, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { activities, activityPeople, companies, contacts, people, dealSuppliers, taskPeople, deals, emails, lexwareVouchers, mailSync, productionDays, tasks, voucherFiles, type CompanyKind, type Email } from "@/db/schema";
-import { lexwareUrl, waitingDeals, type LineItem } from "./lexware-sync";
+import { lexwareUrl, usedVoucherKeys, waitingDeals, type LineItem } from "./lexware-sync";
 import { addDaysIso, todayIso } from "./format";
-import { contactCols, current, fullName, selectContacts } from "./people";
+import { contactCols, current, fullName, likeWord, selectContacts } from "./people";
 
 const dealWithCompany = {
   id: deals.id,
@@ -458,7 +458,7 @@ export async function companyOptions(forDeals = false) {
 function wordSearch(query: string | undefined, fields: (word: string) => SQL[]): SQL | undefined {
   const words = (query ?? "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return undefined;
-  return and(...words.map((w) => or(...fields(`%${w}%`))));
+  return and(...words.map((w) => or(...fields(likeWord(w)))));
 }
 
 export async function listCompanies(query?: string, kind: CompanyKind | "alle" = "kunde", tag?: string) {
@@ -582,7 +582,7 @@ export async function listContacts(query?: string) {
   const persons = await db
     .select()
     .from(people)
-    .where(words.length ? and(...words.map((w) => hit(`%${w}%`))) : undefined)
+    .where(words.length ? and(...words.map((w) => hit(likeWord(w)))) : undefined)
     .orderBy(sql`coalesce(${people.lastName}, ${people.firstName})`, asc(people.firstName))
     .limit(500);
   if (!persons.length) return [];
@@ -679,12 +679,10 @@ export async function pendingVouchers() {
     .innerJoin(companies, eq(companies.lexwareId, lexwareVouchers.contactId))
     .where(eq(lexwareVouchers.pending, true))
     .orderBy(desc(lexwareVouchers.voucherDate));
-  // Belege, deren Nummer schon an einem Vorgang steht, sind zugeordnet, auch wenn die Rückfrage noch offen markiert ist
-  const used = new Set(
-    (await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals)).flatMap((d) => [d.o, d.i]).filter(Boolean),
-  );
+  // Belege, deren Nummer schon an einem Vorgang dieser Firma steht, sind zugeordnet, auch wenn die Rückfrage noch offen markiert ist
+  const used = await usedVoucherKeys();
   return Promise.all(
-    rows.filter((r) => !used.has(r.voucher.number)).map(async (r) => ({ ...r, deals: (await waitingDeals(r.companyId, r.voucher.type)).map((d) => ({ id: d.id, title: d.title, stage: d.stage })) })),
+    rows.filter((r) => !used.has(`${r.voucher.contactId}|${r.voucher.number}`)).map(async (r) => ({ ...r, deals: (await waitingDeals(r.companyId, r.voucher.type)).map((d) => ({ id: d.id, title: d.title, stage: d.stage })) })),
   );
 }
 
@@ -775,7 +773,8 @@ export async function getPerson(id: number) {
           or(
             inArray(emails.contactId, contactIds.concat(0)),
             addresses.length ? inArray(sql`lower(${emails.fromAddress})`, addresses) : undefined,
-            ...addresses.map((a) => like(sql`lower(${emails.toAddresses})`, `%${a}%`)),
+            // ganze Adresse in der Empfängerliste („a@x.de, b@y.de“), kein Teiltreffer
+            ...addresses.map((a) => sql`find_in_set(${a}, replace(lower(${emails.toAddresses}), ', ', ',')) > 0`),
           ),
         ),
       )

@@ -99,6 +99,8 @@ export async function matchAddress(address: string | null | undefined) {
     .select({ id: contacts.id, companyId: contacts.companyId })
     .from(contacts)
     .where(sql`lower(${contacts.email}) = ${lower}`)
+    // dieselbe Mail bei mehreren Firmen (z. B. nach einem Wechsel): die aktuelle, dann die neueste Zuordnung
+    .orderBy(sql`${contacts.endedAt} is not null`, desc(contacts.id))
     .limit(1);
   if (contact?.companyId) return { companyId: contact.companyId, contactId: contact.id };
 

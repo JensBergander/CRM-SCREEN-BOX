@@ -292,11 +292,10 @@ export function ContactForm({ companyId }: { companyId: number }) {
   const same = useSameName(companyId);
   const existing = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    // versteckte Felder setzt reset() nicht zurück
-    if (!pending && state && !state.error) {
-      same.clear();
-      if (existing.current) existing.current.value = "";
-    }
+    if (pending || !state) return;
+    // versteckte Felder setzt reset() nicht zurück; auch nach einem Fehler nicht weiter die gewählte Person mitschicken
+    if (existing.current) existing.current.value = "";
+    if (!state.error) same.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending, state]);
   if (!open) {

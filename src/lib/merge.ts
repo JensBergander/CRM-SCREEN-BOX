@@ -2,14 +2,32 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { activities, activityPeople, companies, contacts, dealSuppliers, deals, emails, people, taskPeople, tasks } from "@/db/schema";
-import { contactCols } from "./people";
+import { compatibleNames, contactCols } from "./people";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Abweichende Werte, die beim Zusammenführen keinen Platz mehr haben, als Notiz an der Person behalten
+const differs = (kept: string | null, dropped: string | null) =>
+  !!dropped && !!kept && kept.replace(/\s/g, "").toLowerCase() !== dropped.replace(/\s/g, "").toLowerCase();
+
+async function keepInNotes(tx: Tx, personId: number, lines: string[]) {
+  if (!lines.length) return;
+  const [p] = await tx.select({ notes: people.notes }).from(people).where(eq(people.id, personId));
+  if (!p) return;
+  const notes = [p.notes, `Beim Zusammenführen übernommen: ${lines.join(", ")}`].filter(Boolean).join("\n\n");
+  await tx.update(people).set({ notes }).where(eq(people.id, personId));
+}
 
 // Zwei Zuordnungen zur selben Firma zu einer machen: Vorgänge und Mails zeigen danach auf die bleibende
 async function mergeAffiliation(tx: Tx, fromId: number, intoId: number) {
   const [from] = await tx.select().from(contacts).where(eq(contacts.id, fromId));
   const [into] = await tx.select().from(contacts).where(eq(contacts.id, intoId));
+  // schon in diesem Durchlauf zusammengeführt
+  if (!from || !into) return;
+  await keepInNotes(tx, into.personId, [
+    ...(differs(into.email, from.email) ? [`Mail ${from.email}`] : []),
+    ...(differs(into.phone, from.phone) ? [`Festnetz ${from.phone}`] : []),
+  ]);
   await tx.update(deals).set({ contactId: intoId }).where(eq(deals.contactId, fromId));
   await tx.update(emails).set({ contactId: intoId }).where(eq(emails.contactId, fromId));
   await tx
@@ -40,13 +58,15 @@ export async function mergePeopleTx(tx: Tx, fromId: number, intoId: number) {
   }
   await tx.execute(sql`insert ignore into ${activityPeople} (activity_id, person_id) select activity_id, ${intoId} from ${activityPeople} where person_id = ${fromId}`);
   await tx.execute(sql`insert ignore into ${taskPeople} (task_id, person_id) select task_id, ${intoId} from ${taskPeople} where person_id = ${fromId}`);
+  const [current] = await tx.select({ notes: people.notes }).from(people).where(eq(people.id, intoId));
+  const lost = differs(into.mobile, from.mobile) ? [`Beim Zusammenführen übernommen: Handy ${from.mobile}`] : [];
   await tx
     .update(people)
     .set({
       firstName: into.firstName ?? from.firstName,
       lastName: into.lastName ?? from.lastName,
       mobile: into.mobile ?? from.mobile,
-      notes: [into.notes, from.notes].filter(Boolean).join("\n\n") || null,
+      notes: [current?.notes, from.notes, ...lost].filter(Boolean).join("\n\n") || null,
     })
     .where(eq(people.id, intoId));
   // löscht per Fremdschlüssel auch die restlichen Einträge in activity_people/task_people
@@ -75,9 +95,10 @@ export async function mergeCompanies(fromId: number, intoId: number): Promise<{ 
     const theirs = await tx.select(contactCols).from(contacts).innerJoin(people, eq(people.id, contacts.personId)).where(eq(contacts.companyId, from.id));
     const ours = await tx.select(contactCols).from(contacts).innerJoin(people, eq(people.id, contacts.personId)).where(eq(contacts.companyId, into.id));
     for (const c of theirs) {
+      // gleiche Mail nur, wenn die Namen zusammenpassen (eine geteilte info@-Adresse macht aus zwei Menschen keinen)
       const same =
         ours.find((o) => o.personId === c.personId) ??
-        (c.email ? ours.find((o) => o.email?.toLowerCase() === c.email!.toLowerCase()) : undefined);
+        (c.email ? ours.find((o) => o.email?.toLowerCase() === c.email!.toLowerCase() && compatibleNames(o, c)) : undefined);
       if (!same) {
         await tx.update(contacts).set({ companyId: into.id }).where(eq(contacts.id, c.id));
         continue;

@@ -24,6 +24,7 @@ import { mergeCandidates } from "@/lib/merge";
 
 export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">) {
   const { id } = await params;
+  if (!/^\d+$/.test(id)) notFound();
   const data = await getCompany(Number(id));
   if (!data) notFound();
   const { company, stats } = data;

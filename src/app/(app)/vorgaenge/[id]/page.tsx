@@ -25,6 +25,7 @@ import { WebsiteEventPanel } from "@/components/website-event";
 
 export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
   const { id } = await params;
+  if (!/^\d+$/.test(id)) notFound();
   const { planen } = await searchParams;
   const data = await getDeal(Number(id));
   if (!data) notFound();

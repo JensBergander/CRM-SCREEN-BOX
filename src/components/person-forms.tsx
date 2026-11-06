@@ -362,10 +362,19 @@ export function MergePerson({ person }: { person: { id: number; name: string } }
 // Hinweis „gibt es schon“ beim Anlegen: prüft nach Eingabe des Namens auf gleichnamige Personen
 export function useSameName(companyId?: number | null) {
   const [matches, setMatches] = useState<PersonMatch[]>([]);
+  // nur die Antwort auf die letzte Anfrage zählt; clear() verwirft auch noch laufende
+  const latest = useRef(0);
   const check = (form: HTMLFormElement | null) => {
     if (!form) return;
     const data = new FormData(form);
-    findPeopleAction(String(data.get("firstName") ?? ""), String(data.get("lastName") ?? ""), companyId).then(setMatches);
+    const ticket = ++latest.current;
+    findPeopleAction(String(data.get("firstName") ?? ""), String(data.get("lastName") ?? ""), companyId).then((rows) => {
+      if (ticket === latest.current) setMatches(rows);
+    });
   };
-  return { matches, check, clear: () => setMatches([]) };
+  const clear = () => {
+    latest.current++;
+    setMatches([]);
+  };
+  return { matches, check, clear };
 }

@@ -18,6 +18,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
   const { id } = await params;
   const { tab: rawTab } = await searchParams;
   const tab: keyof typeof TABS = rawTab === "aktivitaeten" ? "aktivitaeten" : "ueber";
+  if (!/^\d+$/.test(id)) notFound();
   const data = await getPerson(Number(id));
   if (!data) notFound();
   const { person, links } = data;

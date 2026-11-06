@@ -8,23 +8,28 @@ CREATE TABLE `people` (
 	`notes` text,
 	`created_at` timestamp NOT NULL DEFAULT (now()),
 	`updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	`legacy_contact_id` int,
 	CONSTRAINT `people_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-INSERT INTO `people` (`first_name`, `last_name`, `mobile`, `notes`, `created_at`, `updated_at`, `legacy_contact_id`)
-SELECT NULLIF(TRIM(`first_name`), ''), NULLIF(TRIM(`last_name`), ''), `mobile`, `notes`, `created_at`, `updated_at`, `id` FROM `contacts`;
+-- Jede Person bekommt die ID ihres bisherigen Kontakts; so braucht die Zuordnung danach keinen Abgleich
+INSERT INTO `people` (`id`, `first_name`, `last_name`, `mobile`, `notes`, `created_at`, `updated_at`)
+SELECT `id`, NULLIF(TRIM(`first_name`), ''), NULLIF(TRIM(`last_name`), ''), `mobile`, `notes`, `created_at`, `updated_at` FROM `contacts`;
 --> statement-breakpoint
--- Platzhalter statt Nachname (z. B. „Arne -“): einmalig leeren, wenn ein Vorname da ist
+-- Platzhalter statt Nachname (z. B. „Arne -“): einmalig leeren, wenn ein Vorname da ist (gleiche Regel wie cleanName im Code)
 UPDATE `people` SET `last_name` = NULL
 WHERE `first_name` IS NOT NULL
-  AND LOWER(TRIM(`last_name`)) IN ('-', '–', '—', '--', '.', '..', '...', '?', '??', 'x', 'xx', 'xxx', 'unbekannt', 'n.n.', 'n. n.', 'nn', 'n/a');
+  AND LOWER(`last_name`) REGEXP '^(-+|–|—|\\.+|\\?+|x+|unbekannt|n\\. ?n\\.|nn|n/a)$';
+--> statement-breakpoint
+-- Platzhalter statt Vorname leeren, wenn ein Nachname da ist
+UPDATE `people` SET `first_name` = NULL
+WHERE `last_name` IS NOT NULL
+  AND LOWER(`first_name`) REGEXP '^(-+|–|—|\\.+|\\?+|x+|unbekannt|n\\. ?n\\.|nn|n/a)$';
 --> statement-breakpoint
 ALTER TABLE `contacts` ADD `person_id` int;
 --> statement-breakpoint
 ALTER TABLE `contacts` ADD `ended_at` timestamp NULL;
 --> statement-breakpoint
-UPDATE `contacts` c JOIN `people` p ON p.`legacy_contact_id` = c.`id` SET c.`person_id` = p.`id`, c.`updated_at` = c.`updated_at`;
+UPDATE `contacts` SET `person_id` = `id`;
 --> statement-breakpoint
 ALTER TABLE `contacts` MODIFY COLUMN `person_id` int NOT NULL;
 --> statement-breakpoint
@@ -33,8 +38,6 @@ ALTER TABLE `contacts` ADD CONSTRAINT `contacts_person_id_people_id_fk` FOREIGN 
 CREATE INDEX `contacts_person_idx` ON `contacts` (`person_id`);
 --> statement-breakpoint
 ALTER TABLE `contacts` DROP COLUMN `first_name`, DROP COLUMN `last_name`, DROP COLUMN `mobile`, DROP COLUMN `notes`;
---> statement-breakpoint
-ALTER TABLE `people` DROP COLUMN `legacy_contact_id`;
 --> statement-breakpoint
 CREATE INDEX `people_last_name_idx` ON `people` (`last_name`);
 --> statement-breakpoint

@@ -41,6 +41,9 @@ export const selectContacts = () => db.select(contactCols).from(contacts).innerJ
 export const current = isNull(contacts.endedAt);
 export const currentAt = (companyId: number) => and(eq(contacts.companyId, companyId), current);
 
+// Eingabe für LIKE: % und _ als normale Zeichen suchen
+export const likeWord = (w: string) => `%${w.replace(/[\\%_]/g, "\\$&")}%`;
+
 export const fullName = (p: { firstName: string | null; lastName: string | null }) =>
   [p.firstName, p.lastName].filter(Boolean).join(" ") || "Ohne Namen";
 
@@ -54,11 +57,24 @@ export const cleanName = (value: string | null | undefined) => {
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
 type Named = { firstName: string | null; lastName: string | null };
-// Gleicher Name: Nachnamen gleich und Vornamen nicht widersprüchlich; ohne Nachnamen müssen die Vornamen gleich sein
+// nur ein Name bekannt (egal ob als Vor- oder Nachname, z. B. „Alex“, in Lexware als Nachname)
+const single = (p: Named) => (p.firstName && p.lastName ? null : p.firstName ?? p.lastName);
+
+// Gleicher Name: Nachnamen gleich und Vornamen nicht widersprüchlich; hat jemand nur einen Namen, muss der gleich sein
 export const sameName = (a: Named, b: Named) =>
-  a.lastName && b.lastName
+  a.lastName && b.lastName && !(single(a) && single(b))
     ? same(a.lastName, b.lastName) && (!a.firstName || !b.firstName || same(a.firstName, b.firstName))
-    : !a.lastName && !b.lastName && same(a.firstName, b.firstName);
+    : !!single(a) && !!single(b) && same(single(a), single(b));
+
+// Namen widersprechen sich nicht (für Treffer über die Mail): fehlende Namen sind kein Widerspruch,
+// „Jens“ passt zu „Jens Bergander“, „Arne Meier“ nicht zu „Sabine Meier“
+export function compatibleNames(a: Named, b: Named) {
+  const words = (p: Named) => [p.firstName, p.lastName].filter(Boolean).join(" ").toLowerCase().split(/\s+/).filter(Boolean);
+  const [x, y] = [words(a), words(b)];
+  if (!x.length || !y.length) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  return short.every((w) => long.includes(w));
+}
 
 export type NewContact = {
   companyId: number | null;

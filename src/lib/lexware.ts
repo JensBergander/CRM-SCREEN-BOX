@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { appState, companies, contacts, people as peopleTable, type Company, type CompanyKind } from "@/db/schema";
-import { cleanName, createContact, sameName, selectContacts } from "./people";
+import { cleanName, compatibleNames, createContact, sameName, selectContacts } from "./people";
 import { suggestFolderName, todayIso } from "./format";
 
 const API = "https://api.lexware.io/v1";
@@ -93,7 +93,9 @@ const phonesOf = (lx: LexwareContact) => Object.values(lx.phoneNumbers ?? {}).fl
 function peopleOf(lx: LexwareContact) {
   // Platzhalter wie „-“ als Nachname werden nicht übernommen
   if (lx.person) {
-    return [{ firstName: cleanName(lx.person.firstName), lastName: cleanName(lx.person.lastName), email: emailsOf(lx)[0] ?? null, phone: phonesOf(lx)[0] ?? null }];
+    return [{ firstName: cleanName(lx.person.firstName), lastName: cleanName(lx.person.lastName), email: emailsOf(lx)[0] ?? null, phone: phonesOf(lx)[0] ?? null }].filter(
+      (p) => p.firstName || p.lastName,
+    );
   }
   return (lx.company?.contactPersons ?? [])
     .map((p) => ({ firstName: cleanName(p.firstName), lastName: cleanName(p.lastName), email: p.emailAddress ?? null, phone: p.phoneNumber ?? null }))
@@ -135,9 +137,10 @@ async function applyContact(lx: LexwareContact, company: Company) {
   let created = 0;
   for (const p of people) {
     const free = known.filter((c) => !matched.has(c.id));
+    // über die Mail nur, wenn sich die Namen nicht widersprechen (geteilte Adressen wie info@)
     const hit =
       free.find((c) => c.fromLexware && sameName(c, p)) ??
-      free.find((c) => same(c.email, p.email)) ??
+      free.find((c) => same(c.email, p.email) && compatibleNames(c, p)) ??
       free.find((c) => sameName(c, p));
     if (hit) {
       matched.add(hit.id);
@@ -148,13 +151,15 @@ async function applyContact(lx: LexwareContact, company: Company) {
         .where(eq(peopleTable.id, hit.personId));
       await db
         .update(contacts)
-        .set({ email: p.email ?? hit.email, phone: p.phone ?? hit.phone, fromLexware: true })
+        // war die Zuordnung „früher“, weil Lexware den Ansprechpartner entfernt hatte, ist sie wieder aktuell;
+        // ein von Hand gesetztes „früher“ bei einem Lexware-Kontakt bleibt
+        .set({ email: p.email ?? hit.email, phone: p.phone ?? hit.phone, fromLexware: true, endedAt: hit.fromLexware ? hit.endedAt : null })
         .where(eq(contacts.id, hit.id));
       continue;
     }
     // Dieselbe Person bei einer anderen Firma (gleiche Mail und gleicher Name): neue Zuordnung statt neuer Person
     const [elsewhere] = p.email ? await selectContacts().where(sql`lower(${contacts.email}) = ${p.email.toLowerCase()}`) : [];
-    if (elsewhere && sameName(elsewhere, p)) {
+    if (elsewhere && compatibleNames(elsewhere, p) && (sameName(elsewhere, p) || !elsewhere.firstName || !elsewhere.lastName)) {
       await db.insert(contacts).values({ personId: elsewhere.personId, companyId: company.id, email: p.email, phone: p.phone, fromLexware: true });
     } else {
       await createContact({ companyId: company.id, ...p, fromLexware: true });

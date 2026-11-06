@@ -28,7 +28,7 @@ import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
 import { archiveVoucher, createDealFromVoucher, linkVoucher, quickReconcile, reconcileDeals, resolveVoucherQuestions, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
-import { cleanName, createContact, fullName, sameName, selectContacts } from "@/lib/people";
+import { cleanName, compatibleNames, createContact, fullName, likeWord, sameName, selectContacts } from "@/lib/people";
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
@@ -102,7 +102,8 @@ export async function createDealAction(_: FormState, form: FormData): Promise<Fo
   const id = await createDeal({
     ...parsed.data,
     companyId,
-    contactId: (await contactFromForm(form, companyId)) || mail?.contactId || null,
+    // „niemand Bestimmtes“ zählt; den Absender der Mail nur, wenn das Feld fehlt und er zur Firma gehört
+    contactId: await dealContact(form, companyId, mail?.contactId ?? null),
     compareOnly: form.get("compareOnly") === "on",
     quick,
   });
@@ -130,13 +131,13 @@ export async function updateDealAction(dealId: number, _: FormState, form: FormD
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const offerNumber = text(form, "offerNumber")?.trim() || null;
   const invoiceNumber = text(form, "invoiceNumber")?.trim() || null;
-  const [current] = await db.select({ companyId: deals.companyId }).from(deals).where(eq(deals.id, dealId));
-  const contactId = current ? await contactFromForm(form, current.companyId) : undefined;
+  const [current] = await db.select({ companyId: deals.companyId, contactId: deals.contactId }).from(deals).where(eq(deals.id, dealId));
+  const contactId = current ? await contactFromForm(form, current.companyId, current.contactId) : undefined;
   await db
     .update(deals)
     .set({ ...parsed.data, offerNumber, invoiceNumber, compareOnly: form.get("compareOnly") === "on", ...(contactId !== undefined && { contactId }) })
     .where(eq(deals.id, dealId));
-  await resolveVoucherQuestions([offerNumber, invoiceNumber]);
+  if (current) await resolveVoucherQuestions([offerNumber, invoiceNumber], current.companyId);
   refresh();
   return {};
 }
@@ -523,7 +524,9 @@ export async function createContactAction(companyId: number | null, _: FormState
   const targetCompany = companyId ?? (Number(text(form, "companyId")) || null);
   const existing = Number(text(form, "personId")) || null;
   if (existing) {
-    await db.insert(contacts).values({ personId: existing, companyId: targetCompany, email, phone: value("phone"), position: value("position") });
+    const [person] = await db.select({ id: people.id }).from(people).where(eq(people.id, existing));
+    if (!person) return { error: "Diese Person gibt es nicht mehr. Bitte die Seite neu laden." };
+    await affiliate(existing, targetCompany, { email, phone: value("phone"), position: value("position") });
     if (value("mobile")) await db.update(people).set({ mobile: value("mobile") }).where(and(eq(people.id, existing), isNull(people.mobile)));
   } else {
     const firstName = cleanName(value("firstName"));
@@ -531,10 +534,8 @@ export async function createContactAction(companyId: number | null, _: FormState
     if (!firstName && !lastName) return { error: "Bitte Vor- oder Nachnamen angeben." };
     // Gleiche Mail und gleicher Name bei einer anderen Firma: dieselbe Person, nur eine weitere Zuordnung
     const [same] = email ? (await selectContacts().where(sql`lower(${contacts.email}) = ${email.toLowerCase()}`)).filter((c) => sameName(c, { firstName, lastName })) : [];
-    if (same && same.companyId === targetCompany) {
-      // steht schon bei dieser Firma
-    } else if (same) {
-      await db.insert(contacts).values({ personId: same.personId, companyId: targetCompany, email, phone: value("phone"), position: value("position") });
+    if (same) {
+      await affiliate(same.personId, targetCompany, { email, phone: value("phone"), position: value("position") });
     } else {
       await createContact({ companyId: targetCompany, firstName, lastName, email, phone: value("phone"), mobile: value("mobile"), position: value("position") });
     }
@@ -579,8 +580,33 @@ export async function addActivityAction(
   return {};
 }
 
+// Person einer Firma zuordnen: vorhandene Zuordnung wiederverwenden (war sie „früher“, ist sie wieder aktuell)
+// und nur leere Felder ergänzen, sonst eine neue anlegen. Liefert die Zuordnungs-ID.
+async function affiliate(personId: number, companyId: number | null, fields: { email?: string | null; phone?: string | null; position?: string | null } = {}) {
+  const [existing] = await db
+    .select()
+    .from(contacts)
+    .where(and(eq(contacts.personId, personId), companyId ? eq(contacts.companyId, companyId) : isNull(contacts.companyId)))
+    .orderBy(sql`${contacts.endedAt} is not null`, asc(contacts.id))
+    .limit(1);
+  if (existing) {
+    await db
+      .update(contacts)
+      .set({
+        endedAt: null,
+        email: existing.email ?? fields.email ?? null,
+        phone: existing.phone ?? fields.phone ?? null,
+        position: existing.position ?? fields.position ?? null,
+      })
+      .where(eq(contacts.id, existing.id));
+    return existing.id;
+  }
+  const [row] = await db.insert(contacts).values({ personId, companyId, email: fields.email ?? null, phone: fields.phone ?? null, position: fields.position ?? null });
+  return row.insertId;
+}
+
 // Ansprechpartner aus dem Formular: gewählter Kontakt der Firma (contactId) oder neu eingetippter Name (newContact)
-async function contactFromForm(form: FormData, companyId: number): Promise<number | null | undefined> {
+async function contactFromForm(form: FormData, companyId: number, keep?: number | null): Promise<number | null | undefined> {
   if (!form.has("contactId") && !form.has("newContact")) return undefined;
   const name = text(form, "newContact")?.trim();
   if (name) {
@@ -590,14 +616,26 @@ async function contactFromForm(form: FormData, companyId: number): Promise<numbe
   }
   const id = Number(text(form, "contactId")) || null;
   if (!id) return null;
+  // der bisherige Ansprechpartner bleibt gültig, auch wenn er (aus alten Daten) bei einer anderen Firma steht
+  if (keep && id === keep) return id;
   const [own] = await db.select({ id: contacts.id }).from(contacts).where(and(eq(contacts.id, id), eq(contacts.companyId, companyId)));
+  return own?.id ?? null;
+}
+
+async function dealContact(form: FormData, companyId: number, fromMail: number | null): Promise<number | null> {
+  const chosen = await contactFromForm(form, companyId);
+  if (chosen !== undefined) return chosen;
+  if (!fromMail) return null;
+  const [own] = await db.select({ id: contacts.id }).from(contacts).where(and(eq(contacts.id, fromMail), eq(contacts.companyId, companyId)));
   return own?.id ?? null;
 }
 
 // „Mit wem?“ aus dem Formular: ausgewählte Personen (personId) und neu eingetippte Namen (newPerson),
 // die als Kontakt der Firma angelegt werden. Ein Wort = Vorname („Alex“), sonst das letzte Wort als Nachname.
 async function peopleFromForm(form: FormData, companyId: number | null): Promise<number[]> {
-  const ids = form.getAll("personId").map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  const asked = [...new Set(form.getAll("personId").map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  // nur Personen, die es (noch) gibt – z. B. nicht eine, die in einem anderen Tab zusammengeführt wurde
+  const ids = asked.length ? (await db.select({ id: people.id }).from(people).where(inArray(people.id, asked))).map((p) => p.id) : [];
   for (const raw of form.getAll("newPerson").map(String)) {
     const parts = raw.trim().split(/\s+/).filter(Boolean).slice(0, 6);
     if (!parts.length) continue;
@@ -777,11 +815,18 @@ export async function createContactFromMailAction(mailId: number, _: FormState, 
 
   const person = { firstName, lastName, position: value("position"), phone: value("phone"), mobile: value("mobile") };
   // Erst über die Mailadresse suchen, sonst denselben Namen in der Firma ohne Adresse (z. B. aus Lexware importiert)
-  const [byEmail] = email ? await selectContacts().where(sql`lower(${contacts.email}) = ${email}`) : [];
+  // über die Mail nur, wenn die Namen nicht widersprechen (geteilte Adressen wie info@)
+  const [byEmail] = email
+    ? (await selectContacts().where(sql`lower(${contacts.email}) = ${email}`).orderBy(sql`${contacts.endedAt} is not null`, desc(contacts.id))).filter((c) => compatibleNames(c, person))
+    : [];
   const [byName] = byEmail
     ? []
     : (await selectContacts().where(and(eq(contacts.companyId, companyId), isNull(contacts.email)))).filter((c) => sameName(c, person));
-  const known = byEmail ?? byName;
+  const found = byEmail ?? byName;
+  // Gefundene Person bei einer anderen Firma oder dort „früher“: die Mail gehört zur Zuordnung bei dieser Firma
+  const known = found && (found.companyId !== companyId || found.endedAt)
+    ? { ...found, id: await affiliate(found.personId, companyId, { email, phone: person.phone, position: person.position }), companyId, email: found.companyId === companyId ? found.email : email }
+    : found;
   let contactId: number;
   if (known) {
     contactId = known.id;
@@ -1131,7 +1176,7 @@ export async function searchPeopleAction(query: string, exceptId: number): Promi
   const rows = await db
     .select()
     .from(people)
-    .where(and(ne(people.id, exceptId), ...words.map((w) => or(like(people.firstName, `%${w}%`), like(people.lastName, `%${w}%`)))))
+    .where(and(ne(people.id, exceptId), ...words.map((w) => or(like(people.firstName, likeWord(w)), like(people.lastName, likeWord(w))))))
     .limit(8);
   const links = rows.length
     ? await db
