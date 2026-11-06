@@ -1,8 +1,8 @@
 import "server-only";
-import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { appState, companies, contacts, people as peopleTable, type Company, type CompanyKind } from "@/db/schema";
-import { cleanName, compatibleNames, createContact, sameName, selectContacts } from "./people";
+import { cleanName, compatibleNames, createContact, mergeNames, sameName, selectContacts } from "./people";
 import { suggestFolderName, todayIso } from "./format";
 
 const API = "https://api.lexware.io/v1";
@@ -147,7 +147,7 @@ async function applyContact(lx: LexwareContact, company: Company) {
       // Lexware führt beim Namen; fehlt dort etwas, bleibt der Wert aus dem CRM
       await db
         .update(peopleTable)
-        .set({ firstName: p.firstName ?? hit.firstName, lastName: p.lastName ?? hit.lastName })
+        .set(mergeNames(p, hit))
         .where(eq(peopleTable.id, hit.personId));
       await db
         .update(contacts)
@@ -157,9 +157,14 @@ async function applyContact(lx: LexwareContact, company: Company) {
         .where(eq(contacts.id, hit.id));
       continue;
     }
-    // Dieselbe Person bei einer anderen Firma (gleiche Mail und gleicher Name): neue Zuordnung statt neuer Person
-    const [elsewhere] = p.email ? await selectContacts().where(sql`lower(${contacts.email}) = ${p.email.toLowerCase()}`) : [];
-    if (elsewhere && compatibleNames(elsewhere, p) && (sameName(elsewhere, p) || !elsewhere.firstName || !elsewhere.lastName)) {
+    // Dieselbe Person bei einer ANDEREN Firma (gleiche Mail, passender Name): neue Zuordnung statt neuer Person.
+    // Bei derselben Firma nie: zwei Ansprechpartner mit gemeinsamer Adresse bleiben zwei Menschen.
+    const [elsewhere] = p.email
+      ? (await selectContacts().where(and(sql`lower(${contacts.email}) = ${p.email.toLowerCase()}`, ne(contacts.companyId, company.id)))).filter(
+          (c) => compatibleNames(c, p) && (sameName(c, p) || !c.firstName || !c.lastName),
+        )
+      : [];
+    if (elsewhere) {
       await db.insert(contacts).values({ personId: elsewhere.personId, companyId: company.id, email: p.email, phone: p.phone, fromLexware: true });
     } else {
       await createContact({ companyId: company.id, ...p, fromLexware: true });

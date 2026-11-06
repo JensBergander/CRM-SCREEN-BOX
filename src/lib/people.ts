@@ -66,6 +66,20 @@ export const sameName = (a: Named, b: Named) =>
     ? same(a.lastName, b.lastName) && (!a.firstName || !b.firstName || same(a.firstName, b.firstName))
     : !!single(a) && !!single(b) && same(single(a), single(b));
 
+// Namen zweier Datensätze derselben Person zusammenlegen: primary gewinnt, fallback ergänzt – ohne „Alex Alex“,
+// wenn derselbe Name einmal als Vor- und einmal als Nachname steht
+export function mergeNames(primary: Named, fallback: Named): Named {
+  if (primary.firstName && primary.lastName) return { firstName: primary.firstName, lastName: primary.lastName };
+  const word = single(primary);
+  if (!word) return { firstName: fallback.firstName, lastName: fallback.lastName };
+  const other = [fallback.firstName, fallback.lastName].filter(Boolean).map((n) => n!.toLowerCase());
+  // der eine Name steckt schon im vollständigeren Datensatz: den behalten
+  if (fallback.firstName && fallback.lastName && other.includes(word.toLowerCase())) return { firstName: fallback.firstName, lastName: fallback.lastName };
+  // beide haben nur denselben einen Namen: die Stelle von primary gilt
+  if (other.length === 1 && other[0] === word.toLowerCase()) return { firstName: primary.firstName, lastName: primary.lastName };
+  return { firstName: primary.firstName ?? fallback.firstName, lastName: primary.lastName ?? fallback.lastName };
+}
+
 // Namen widersprechen sich nicht (für Treffer über die Mail): fehlende Namen sind kein Widerspruch,
 // „Jens“ passt zu „Jens Bergander“, „Arne Meier“ nicht zu „Sabine Meier“
 export function compatibleNames(a: Named, b: Named) {

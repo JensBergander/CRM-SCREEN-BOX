@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { activities, activityPeople, companies, contacts, dealSuppliers, deals, emails, people, taskPeople, tasks } from "@/db/schema";
-import { compatibleNames, contactCols } from "./people";
+import { compatibleNames, contactCols, mergeNames } from "./people";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -63,8 +63,7 @@ export async function mergePeopleTx(tx: Tx, fromId: number, intoId: number) {
   await tx
     .update(people)
     .set({
-      firstName: into.firstName ?? from.firstName,
-      lastName: into.lastName ?? from.lastName,
+      ...mergeNames(into, from),
       mobile: into.mobile ?? from.mobile,
       notes: [current?.notes, from.notes, ...lost].filter(Boolean).join("\n\n") || null,
     })

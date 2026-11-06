@@ -28,7 +28,7 @@ import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
 import { archiveVoucher, createDealFromVoucher, linkVoucher, quickReconcile, reconcileDeals, resolveVoucherQuestions, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
-import { cleanName, compatibleNames, createContact, fullName, likeWord, sameName, selectContacts } from "@/lib/people";
+import { cleanName, compatibleNames, createContact, fullName, likeWord, mergeNames, sameName, selectContacts } from "@/lib/people";
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
@@ -823,10 +823,15 @@ export async function createContactFromMailAction(mailId: number, _: FormState, 
     ? []
     : (await selectContacts().where(and(eq(contacts.companyId, companyId), isNull(contacts.email)))).filter((c) => sameName(c, person));
   const found = byEmail ?? byName;
-  // Gefundene Person bei einer anderen Firma oder dort „früher“: die Mail gehört zur Zuordnung bei dieser Firma
-  const known = found && (found.companyId !== companyId || found.endedAt)
-    ? { ...found, id: await affiliate(found.personId, companyId, { email, phone: person.phone, position: person.position }), companyId, email: found.companyId === companyId ? found.email : email }
-    : found;
+  // Gefundene Person bei einer anderen Firma oder dort „früher“: die Mail gehört zur Zuordnung bei dieser Firma.
+  // Ohne Firma und aktuell: diese Zuordnung bekommt einfach die Firma (unten). Danach die tatsächlich betroffene
+  // Zuordnung neu lesen, damit „nur Leeres ergänzen“ deren Werte prüft und nicht die einer anderen.
+  const moveTo = found && ((found.companyId !== null && found.companyId !== companyId) || found.endedAt);
+  const [known] = found
+    ? moveTo
+      ? await selectContacts().where(eq(contacts.id, await affiliate(found.personId, companyId, { email, phone: person.phone, position: person.position })))
+      : [found]
+    : [];
   let contactId: number;
   if (known) {
     contactId = known.id;
@@ -838,8 +843,9 @@ export async function createContactFromMailAction(mailId: number, _: FormState, 
     if (!known.email && email) own.email = email;
     if (Object.keys(own).length) await db.update(contacts).set(own).where(eq(contacts.id, known.id));
     const personal: Partial<typeof people.$inferInsert> = {};
-    if (!known.firstName && person.firstName) personal.firstName = person.firstName;
-    if (!known.lastName && person.lastName) personal.lastName = person.lastName;
+    const names = mergeNames(known, person);
+    if (names.firstName !== known.firstName) personal.firstName = names.firstName;
+    if (names.lastName !== known.lastName) personal.lastName = names.lastName;
     if (!known.mobile && person.mobile) personal.mobile = person.mobile;
     if (Object.keys(personal).length) await db.update(people).set(personal).where(eq(people.id, known.personId));
   } else {
@@ -1141,7 +1147,12 @@ export async function findPeopleAction(firstName: string, lastName: string, exce
   const candidates = await db
     .select()
     .from(people)
-    .where(wanted.lastName ? eq(people.lastName, wanted.lastName) : and(isNull(people.lastName), eq(people.firstName, wanted.firstName!)))
+    // nur ein Name: in beiden Feldern suchen („Alex“ kann als Vor- oder Nachname stehen)
+    .where(
+      wanted.firstName && wanted.lastName
+        ? eq(people.lastName, wanted.lastName)
+        : or(eq(people.firstName, (wanted.firstName ?? wanted.lastName)!), eq(people.lastName, (wanted.firstName ?? wanted.lastName)!)),
+    )
     .limit(20);
   const hits = candidates.filter((p) => sameName(p, wanted)).slice(0, 5);
   if (!hits.length) return [];

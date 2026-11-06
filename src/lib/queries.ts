@@ -836,7 +836,12 @@ export async function companyPeople(companyId: number) {
 // Auswahl „Ansprechpartner“ im Vorgang: aktuelle Kontakte der Firma (Zuordnungs-ID), dazu der bisher gesetzte, falls inzwischen „früher“
 export async function contactOptions(companyId: number, keep?: number | null) {
   const rows = await selectContacts()
-    .where(and(eq(contacts.companyId, companyId), keep ? or(current, eq(contacts.id, keep)) : current))
+    // der bisherige Ansprechpartner steht immer zur Wahl, auch wenn er (aus alten Daten) bei einer anderen Firma steht
+    .where(or(and(eq(contacts.companyId, companyId), current), keep ? eq(contacts.id, keep) : undefined))
     .orderBy(sql`coalesce(${people.lastName}, ${people.firstName})`);
-  return rows.map((c) => ({ id: c.id, personId: c.personId, name: `${fullName(c)}${c.endedAt ? " (früher)" : ""}` }));
+  return rows.map((c) => ({
+    id: c.id,
+    personId: c.personId,
+    name: `${fullName(c)}${c.companyId !== companyId ? " (andere Firma)" : c.endedAt ? " (früher)" : ""}`,
+  }));
 }
