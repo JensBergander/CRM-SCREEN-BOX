@@ -2,9 +2,18 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { Lock, Trash2, X } from "lucide-react";
-import { addAffiliationAction, createPersonAction, deletePersonAction, updatePersonAction } from "@/app/(app)/actions";
-import { btnPrimary, btnQuiet, Field, FormError, Input, Textarea } from "./ui";
+import { Lock, Merge, Trash2, X } from "lucide-react";
+import {
+  addAffiliationAction,
+  createPersonAction,
+  deletePersonAction,
+  findPeopleAction,
+  mergePeopleAction,
+  searchPeopleAction,
+  updatePersonAction,
+  type PersonMatch,
+} from "@/app/(app)/actions";
+import { btnPrimary, btnQuiet, Field, FormError, Input, inputClass, Textarea } from "./ui";
 
 export type EditLink = {
   id: number;
@@ -214,8 +223,10 @@ export function AddAffiliation({ personId, companies }: { personId: number; comp
 // Neuer Kontakt von der Kontaktliste aus; Firma optional
 export function NewPersonForm({ companies }: { companies: { id: number; name: string }[] }) {
   const [state, action, pending] = useActionState(createPersonAction, undefined);
+  const form = useRef<HTMLFormElement>(null);
+  const same = useSameName();
   return (
-    <form action={action} className="flex max-w-xl flex-col gap-4 rounded-2xl bg-surface p-6">
+    <form ref={form} action={action} onBlur={(e) => ["firstName", "lastName"].includes((e.target as unknown as HTMLInputElement).name) && same.check(form.current)} className="flex max-w-xl flex-col gap-4 rounded-2xl bg-surface p-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Vorname">
           <Input name="firstName" autoFocus />
@@ -224,6 +235,17 @@ export function NewPersonForm({ companies }: { companies: { id: number; name: st
           <Input name="lastName" />
         </Field>
       </div>
+      {same.matches.length > 0 && (
+        <div className="rounded-xl bg-info-soft px-4 py-3 text-sm text-info-ink">
+          <p className="font-semibold">Gibt es schon?</p>
+          {same.matches.map((m) => (
+            <p key={m.id}>
+              <a href={`/kontakte/${m.id}`} className="font-semibold underline">{m.name}</a> · {m.firms}
+            </p>
+          ))}
+          <p className="mt-1 text-xs">Ist es dieselbe Person, ordne ihr auf ihrer Kontaktseite eine weitere Firma zu. Sonst einfach weiter.</p>
+        </div>
+      )}
       <Field label="Firma" hint="Optional: aus der Liste wählen, neuen Namen eingeben oder leer lassen">
         <Input name="companyName" list="person-companies" autoComplete="off" />
       </Field>
@@ -250,4 +272,100 @@ export function NewPersonForm({ companies }: { companies: { id: number; name: st
       <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Wird angelegt …" : "Kontakt anlegen"}</button>
     </form>
   );
+}
+
+// Doppelte Person in diese überführen: Firmen, Notizen, Aufgaben, Vorgänge und Mails wandern mit
+export function MergePerson({ person }: { person: { id: number; name: string } }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(person.name);
+  const [hits, setHits] = useState<PersonMatch[]>([]);
+  // wofür die angezeigten Treffer gelten; „Niemand gefunden“ erst, wenn die Suche für diese Eingabe fertig ist
+  const [searched, setSearched] = useState("");
+  const [target, setTarget] = useState<PersonMatch | null>(null);
+  const [error, setError] = useState<string>();
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(
+      () =>
+        searchPeopleAction(query, person.id).then((rows) => {
+          setHits(rows);
+          setSearched(query);
+        }),
+      250,
+    );
+    return () => clearTimeout(t);
+  }, [open, query, person.id]);
+
+  if (!open) {
+    return (
+      <div className="border-t border-line-soft px-5 py-4">
+        <button type="button" onClick={() => setOpen(true)} className={btnQuiet}>
+          <Merge size={14} aria-hidden="true" /> Mit anderer Person zusammenführen …
+        </button>
+      </div>
+    );
+  }
+  return (
+    <section className="flex flex-col gap-3 border-t border-line-soft px-5 py-4">
+      <h3 className="text-sm font-semibold">Mit anderer Person zusammenführen</h3>
+      {!target ? (
+        <>
+          <label className="flex flex-col gap-1.5 text-sm">
+            Wer ist das doppelt?
+            <input value={query} onChange={(e) => setQuery(e.target.value)} className={inputClass} autoFocus />
+          </label>
+          <ul className="flex flex-col gap-1">
+            {hits.map((p) => (
+              <li key={p.id}>
+                <button type="button" onClick={() => setTarget(p)} className="flex w-full flex-col rounded-xl px-3 py-2 text-left text-sm hover:bg-bg">
+                  <span className="font-semibold">{p.name}</span>
+                  <span className="text-xs text-muted">{p.firms}</span>
+                </button>
+              </li>
+            ))}
+            {query.trim() && searched === query && !hits.length && <li className="px-3 text-sm text-muted">Niemand gefunden.</li>}
+          </ul>
+        </>
+      ) : (
+        <div className="flex flex-col gap-3 text-sm">
+          <p>
+            <strong>{target.name}</strong> ({target.firms}) wird in <strong>{person.name}</strong> überführt: Firmen, Notizen, Anrufe, Aufgaben, Vorgänge und
+            Mails wandern mit. Danach gibt es {target.name} nicht mehr als eigenen Kontakt.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => startTransition(async () => setError((await mergePeopleAction(target.id, person.id))?.error))}
+              className={btnPrimary}
+            >
+              {pending ? "Führt zusammen …" : "Zusammenführen"}
+            </button>
+            <button type="button" disabled={pending} onClick={() => setTarget(null)} className={btnQuiet}>
+              Andere wählen
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <FormError message={error} />}
+      <div>
+        <button type="button" onClick={() => setOpen(false)} className="text-[13px] text-muted hover:text-ink">
+          Abbrechen
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// Hinweis „gibt es schon“ beim Anlegen: prüft nach Eingabe des Namens auf gleichnamige Personen
+export function useSameName(companyId?: number | null) {
+  const [matches, setMatches] = useState<PersonMatch[]>([]);
+  const check = (form: HTMLFormElement | null) => {
+    if (!form) return;
+    const data = new FormData(form);
+    findPeopleAction(String(data.get("firstName") ?? ""), String(data.get("lastName") ?? ""), companyId).then(setMatches);
+  };
+  return { matches, check, clear: () => setMatches([]) };
 }

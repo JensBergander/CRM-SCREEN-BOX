@@ -7,7 +7,7 @@ import { callContexts, companyOptions, getPerson, peopleOfActivities, personCall
 import { BackButton } from "@/components/back-button";
 import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm } from "@/components/forms";
-import { AddAffiliation, PersonEditor } from "@/components/person-forms";
+import { AddAffiliation, MergePerson, PersonEditor } from "@/components/person-forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
 import { Card, Empty, LexwareBadge, Row } from "@/components/ui";
@@ -122,6 +122,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
                 </Row>
               ))}
               <AddAffiliation personId={person.id} companies={await companyOptions()} />
+              <MergePerson person={{ id: person.id, name }} />
             </Card>
 
             <div className="flex flex-col gap-5">

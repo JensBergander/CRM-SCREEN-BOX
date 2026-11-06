@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -22,13 +22,13 @@ import {
 import { loadOlderMails, matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { graphSend, mailboxes, messageText } from "@/lib/graph";
 import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
-import { mergeCompanies } from "@/lib/merge";
+import { mergeCompanies, mergePeople } from "@/lib/merge";
 import { deleteDealWebsite, linkWebsiteEvent, ownWebsiteEvent, setWebsitePublic, syncDealWebsite, uploadWebsiteImage } from "@/lib/website";
 import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
 import { archiveVoucher, createDealFromVoucher, linkVoucher, quickReconcile, reconcileDeals, resolveVoucherQuestions, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
-import { cleanName, createContact, sameName, selectContacts } from "@/lib/people";
+import { cleanName, createContact, fullName, sameName, selectContacts } from "@/lib/people";
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
@@ -529,7 +529,15 @@ export async function createContactAction(companyId: number | null, _: FormState
     const firstName = cleanName(value("firstName"));
     const lastName = cleanName(value("lastName"));
     if (!firstName && !lastName) return { error: "Bitte Vor- oder Nachnamen angeben." };
-    await createContact({ companyId: targetCompany, firstName, lastName, email, phone: value("phone"), mobile: value("mobile"), position: value("position") });
+    // Gleiche Mail und gleicher Name bei einer anderen Firma: dieselbe Person, nur eine weitere Zuordnung
+    const [same] = email ? (await selectContacts().where(sql`lower(${contacts.email}) = ${email.toLowerCase()}`)).filter((c) => sameName(c, { firstName, lastName })) : [];
+    if (same && same.companyId === targetCompany) {
+      // steht schon bei dieser Firma
+    } else if (same) {
+      await db.insert(contacts).values({ personId: same.personId, companyId: targetCompany, email, phone: value("phone"), position: value("position") });
+    } else {
+      await createContact({ companyId: targetCompany, firstName, lastName, email, phone: value("phone"), mobile: value("mobile"), position: value("position") });
+    }
   }
   // Erste bekannte Firmen-Domain gleich mitlernen
   if (targetCompany && domainOf(email)) {
@@ -1076,4 +1084,61 @@ export async function deletePersonAction(personId: number): Promise<FormState> {
   if (traces.count) return { error: "An diesem Kontakt hängen schon Einträge. Bitte zusammenführen oder bei der Firma auf „früher“ setzen." };
   await db.delete(people).where(eq(people.id, personId));
   redirect("/kontakte");
+}
+
+export type PersonMatch = { id: number; name: string; firms: string };
+
+// „Gibt es schon“: Personen mit gleichem Namen (für den Vorschlag beim Anlegen). Nur ein Vorschlag, nie automatisch.
+export async function findPeopleAction(firstName: string, lastName: string, exceptCompanyId?: number | null): Promise<PersonMatch[]> {
+  await getCurrentUser();
+  const wanted = { firstName: cleanName(firstName), lastName: cleanName(lastName) };
+  if (!wanted.firstName && !wanted.lastName) return [];
+  const candidates = await db
+    .select()
+    .from(people)
+    .where(wanted.lastName ? eq(people.lastName, wanted.lastName) : and(isNull(people.lastName), eq(people.firstName, wanted.firstName!)))
+    .limit(20);
+  const hits = candidates.filter((p) => sameName(p, wanted)).slice(0, 5);
+  if (!hits.length) return [];
+  const links = await db
+    .select({ personId: contacts.personId, companyId: contacts.companyId, name: companies.name, ended: contacts.endedAt })
+    .from(contacts)
+    .leftJoin(companies, eq(companies.id, contacts.companyId))
+    .where(inArray(contacts.personId, hits.map((p) => p.id)));
+  return hits
+    // schon bei dieser Firma: kein Vorschlag, die Person steht ja in der Liste
+    .filter((p) => !exceptCompanyId || !links.some((l) => l.personId === p.id && l.companyId === exceptCompanyId && !l.ended))
+    .map((p) => ({
+      id: p.id,
+      name: fullName(p),
+      firms: links.filter((l) => l.personId === p.id).map((l) => `${l.name?.trim() ?? "ohne Firma"}${l.ended ? " (früher)" : ""}`).join(", ") || "ohne Firma",
+    }));
+}
+
+// Zusammenführen: alles von „from“ landet bei „into“, danach ist „from“ weg
+export async function mergePeopleAction(fromId: number, intoId: number): Promise<FormState> {
+  await getCurrentUser();
+  if (fromId === intoId) return { error: "Bitte eine andere Person wählen." };
+  await mergePeople(fromId, intoId);
+  redirect(`/kontakte/${intoId}`);
+}
+
+// Auswahl im Zusammenführen-Dialog: Personen nach Namen suchen
+export async function searchPeopleAction(query: string, exceptId: number): Promise<PersonMatch[]> {
+  await getCurrentUser();
+  const words = query.trim().split(/\s+/).filter(Boolean).slice(0, 4);
+  if (!words.length) return [];
+  const rows = await db
+    .select()
+    .from(people)
+    .where(and(ne(people.id, exceptId), ...words.map((w) => or(like(people.firstName, `%${w}%`), like(people.lastName, `%${w}%`)))))
+    .limit(8);
+  const links = rows.length
+    ? await db
+        .select({ personId: contacts.personId, name: companies.name })
+        .from(contacts)
+        .leftJoin(companies, eq(companies.id, contacts.companyId))
+        .where(inArray(contacts.personId, rows.map((p) => p.id)))
+    : [];
+  return rows.map((p) => ({ id: p.id, name: fullName(p), firms: links.filter((l) => l.personId === p.id).map((l) => l.name?.trim() ?? "ohne Firma").join(", ") || "ohne Firma" }));
 }

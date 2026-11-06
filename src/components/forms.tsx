@@ -19,6 +19,7 @@ import { PlanningDialog } from "./planning";
 import { AddressSearch } from "./place-input";
 import { RunningDot } from "./timeline";
 import { ContactSelect, PeoplePicker, type PickPerson } from "./people-picker";
+import { useSameName } from "./person-forms";
 import { ActivityDialog, type ActivityKind } from "./activity-dialog";
 import { dial, NumberMenu } from "./call-menu";
 import type { PhoneNumber } from "@/lib/queries";
@@ -288,6 +289,16 @@ export function ContactForm({ companyId }: { companyId: number }) {
   const [state, action, pending] = useActionState(createContactAction.bind(null, companyId), undefined);
   const ref = useResetOnSuccess(state, pending);
   const [open, setOpen] = useState(false);
+  const same = useSameName(companyId);
+  const existing = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    // versteckte Felder setzt reset() nicht zurück
+    if (!pending && state && !state.error) {
+      same.clear();
+      if (existing.current) existing.current.value = "";
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, state]);
   if (!open) {
     return (
       <div className="border-t border-line-soft px-5 py-3">
@@ -296,9 +307,39 @@ export function ContactForm({ companyId }: { companyId: number }) {
     );
   }
   return (
-    <form ref={ref} action={action} className="grid grid-cols-2 gap-3 border-t border-line-soft px-5 py-4">
+    <form
+      ref={ref}
+      action={action}
+      onBlur={(e) => ["firstName", "lastName"].includes((e.target as unknown as HTMLInputElement).name) && same.check(ref.current)}
+      className="grid grid-cols-2 gap-3 border-t border-line-soft px-5 py-4"
+    >
+      <input ref={existing} type="hidden" name="personId" defaultValue="" />
       <Input name="firstName" placeholder="Vorname" aria-label="Vorname" />
       <Input name="lastName" placeholder="Nachname" aria-label="Nachname" />
+      <p className="col-span-2 -mt-1 text-xs text-muted">Ein Name genügt, Vor- oder Nachname.</p>
+      {same.matches.length > 0 && (
+        <div className="col-span-2 flex flex-col gap-2 rounded-xl bg-info-soft px-4 py-3 text-sm text-info-ink">
+          {same.matches.map((m) => (
+            <div key={m.id} className="flex flex-col items-start gap-1.5">
+              <span>
+                <strong>{m.name}</strong> gibt es schon ({m.firms}).
+              </span>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  if (existing.current) existing.current.value = String(m.id);
+                  ref.current?.requestSubmit();
+                }}
+                className={btnQuiet}
+              >
+                Diese Person hier hinzufügen
+              </button>
+            </div>
+          ))}
+          <span className="text-xs">Eine andere Person mit gleichem Namen? Dann einfach speichern.</span>
+        </div>
+      )}
       <Input name="email" type="email" placeholder="E-Mail" aria-label="E-Mail" className="col-span-2" />
       <Input name="phone" placeholder="Telefon" aria-label="Telefon" />
       <Input name="mobile" placeholder="Mobil" aria-label="Mobil" />
