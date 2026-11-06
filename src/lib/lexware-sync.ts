@@ -196,14 +196,20 @@ export async function waitingDeals(companyId: number, type: string) {
 // passt ein laufender Vorgang, wird nachgefragt; sonst entsteht ein Vorgang aus dem Beleg
 async function handleFreshVouchers(): Promise<string[]> {
   const log: string[] = [];
+  const used = new Set(
+    (await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals)).flatMap((d) => [d.o, d.i]).filter(Boolean),
+  );
+  // Offene Rückfragen zu Belegen, deren Nummer inzwischen an einem Vorgang steht (z. B. von Hand eingetragen), sind erledigt
+  const answered = (await db.select({ number: lexwareVouchers.number }).from(lexwareVouchers).where(eq(lexwareVouchers.pending, true)))
+    .map((v) => v.number)
+    .filter((n) => used.has(n));
+  if (answered.length) await db.update(lexwareVouchers).set({ pending: false }).where(inArray(lexwareVouchers.number, answered));
+
   const fresh = await db
     .select()
     .from(lexwareVouchers)
     .where(and(eq(lexwareVouchers.fresh, true), eq(lexwareVouchers.archived, false), notInArray(lexwareVouchers.status, ["draft"])));
   if (!fresh.length) return log;
-  const used = new Set(
-    (await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals)).flatMap((d) => [d.o, d.i]).filter(Boolean),
-  );
   const done = (id: string, set: Partial<LexwareVoucher> = {}) =>
     db.update(lexwareVouchers).set({ fresh: false, ...set }).where(eq(lexwareVouchers.id, id));
 
@@ -266,6 +272,13 @@ export async function createDealFromVoucher(voucherId: string): Promise<number> 
 // „Gehört zu keinem Vorgang“: Beleg ins Archiv, zählt aber weiter im Umsatz
 export async function archiveVoucher(voucherId: string) {
   await db.update(lexwareVouchers).set({ archived: true, pending: false, fresh: false }).where(eq(lexwareVouchers.id, voucherId));
+}
+
+// Nummern, die von Hand an einem Vorgang eingetragen wurden: offene Rückfragen zu diesen Belegen sind damit beantwortet
+export async function resolveVoucherQuestions(numbers: (string | null)[]) {
+  const list = numbers.filter((n): n is string => !!n);
+  if (!list.length) return;
+  await db.update(lexwareVouchers).set({ pending: false, fresh: false, archived: false }).where(inArray(lexwareVouchers.number, list));
 }
 
 // Lexware-Belege mit Vorgängen abgleichen; ändert nur eindeutige Fälle

@@ -14,7 +14,7 @@ import { ContactActions } from "@/components/contact-actions";
 import { ActivityForm, ContactForm, EditCompanyForm, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
-import { Badge, btnPrimary, btnSecondary, Card, Empty, LexwareBadge, Row } from "@/components/ui";
+import { Badge, btnAccent, btnSecondary, Card, Empty, LexwareBadge, Row } from "@/components/ui";
 import { LexwareActions } from "@/components/lexware-actions";
 import { OlderMails } from "@/components/older-mails";
 import { BackButton } from "@/components/back-button";
@@ -84,13 +84,13 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           company={{ id: company.id, name: company.name, kind: company.kind, lexwareId: company.lexwareId }}
           personGuess={data.contacts.length === 1 && [data.contacts[0].firstName, data.contacts[0].lastName].filter(Boolean).join(" ") === company.name}
         />
-        <ContactActions name={company.name} call={companyCall(call)} email={company.email} />
+        <ContactActions call={companyCall(call)} />
         {!supplier && (
           <>
-            <Link href={`/vorgaenge/neu?firma=${company.id}`} className={btnSecondary}>Neuer Vorgang</Link>
-            <Link href={`/vorgaenge/neu?schnell=1&firma=${company.id}`} className={btnPrimary}>
+            <Link href={`/vorgaenge/neu?firma=${company.id}`} title="Anfrage oder Angebot erfassen" className={btnSecondary}>Neuer Vorgang</Link>
+            <Link href={`/vorgaenge/neu?schnell=1&firma=${company.id}`} title="Startet direkt als „Beauftragt“, ohne Angebot" className={btnAccent}>
               <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
-              Schnellauftrag
+              Neuer Auftrag
             </Link>
           </>
         )}
@@ -214,7 +214,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
                       {[c.position, c.phone, c.mobile && `mobil ${c.mobile}`, c.email].filter(Boolean).join(" · ") || "–"}
                     </p>
                   </div>
-                  <ContactActions name={name} call={personCall(call, c)} email={c.email} />
+                  <ContactActions call={personCall(call, c)} />
                 </Row>
               );
             })}

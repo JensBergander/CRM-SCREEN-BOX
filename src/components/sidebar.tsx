@@ -57,7 +57,7 @@ export function Sidebar({ userName }: { userName: string }) {
         className="flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-white hover:opacity-90"
       >
         <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
-        Schnellauftrag
+        Neuer Auftrag
       </Link>
 
       <form action="/api/auth/logout" method="post" className="mt-4 flex items-center gap-2 px-3">

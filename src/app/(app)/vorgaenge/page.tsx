@@ -21,10 +21,12 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
   // Suche über Firma, Vorgang, Projekt-, Angebots- und Rechnungsnummer
   const query = typeof params.q === "string" ? params.q.trim() : "";
   if (query) {
-    const needle = query.toLowerCase();
-    deals = deals.filter((d) =>
-      [d.companyName, d.title, d.number, d.offerNumber, d.invoiceNumber].some((f) => f?.toLowerCase().includes(needle)),
-    );
+    // jedes Wort muss irgendwo vorkommen, z. B. „Eurowings Messe“
+    const words = query.toLowerCase().split(/\s+/);
+    deals = deals.filter((d) => {
+      const text = [d.companyName, d.title, d.number, d.offerNumber, d.invoiceNumber].filter(Boolean).join(" ").toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
   }
 
   const link = (patch: Record<string, string | null>) => {

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lt, lte, max, ne, or, sql, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, like, lt, lte, max, ne, or, sql, sum, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { activities, companies, contacts, dealSuppliers, deals, emails, lexwareVouchers, mailSync, productionDays, tasks, voucherFiles, type CompanyKind, type Email } from "@/db/schema";
 import { lexwareUrl, waitingDeals, type LineItem } from "./lexware-sync";
@@ -91,7 +91,10 @@ export async function getDashboard() {
 
 // own: Nummer der angeklickten Person (im Menü oben, abgetrennt von den übrigen der Firma)
 export type PhoneNumber = { label: string; number: string; own?: boolean };
-type Person = { id: number; firstName: string | null; lastName: string; phone: string | null; mobile: string | null };
+type Person = { id: number; firstName: string | null; lastName: string; phone: string | null; mobile: string | null; email?: string | null };
+export type MailAddress = { label: string; email: string; own?: boolean };
+
+const personName = (p: Person) => [p.firstName, p.lastName].filter(Boolean).join(" ");
 
 // Alle Nummern einer Firma zum Anrufen: bevorzugte Person zuerst, Handy vor Festnetz, Zentrale zuletzt, ohne Doppelte
 function collectNumbers(staff: Person[], preferredId: number | null | undefined, companyPhone: string | null, markOwn = false): PhoneNumber[] {
@@ -112,22 +115,37 @@ function collectNumbers(staff: Person[], preferredId: number | null | undefined,
   return numbers;
 }
 
+// Alle Mail-Adressen einer Firma, gleiche Reihenfolge wie bei den Nummern, allgemeine Firmenadresse zuletzt
+function collectEmails(staff: Person[], preferredId: number | null | undefined, companyEmail: string | null, markOwn = false): MailAddress[] {
+  const first = staff.find((p) => p.id === preferredId) ?? staff[0];
+  const ordered = first ? [first, ...staff.filter((p) => p.id !== first.id)] : staff;
+  const list: MailAddress[] = [];
+  const add = (label: string, email: string | null | undefined, own = false) => {
+    const clean = email?.trim();
+    if (clean && !list.some((m) => m.email.toLowerCase() === clean.toLowerCase())) list.push({ label, email: clean, ...(own && { own }) });
+  };
+  for (const p of ordered) add(personName(p), p.email, markOwn && p.id === preferredId);
+  add("Firma allgemein", companyEmail);
+  return list;
+}
+
 // Alles, was 📞 und das Popup „Anruf festhalten“ brauchen
 export type CallTarget = {
   companyId: number | null;
   title: string;
   person?: string;
   numbers: PhoneNumber[];
+  emails?: MailAddress[];
   projects: { id: number; title: string }[];
 };
-type CallContext = { id: number; name: string; phone: string | null; staff: Person[]; preferredId: number | null; projects: { id: number; title: string }[] };
+type CallContext = { id: number; name: string; phone: string | null; email: string | null; staff: Person[]; preferredId: number | null; projects: { id: number; title: string }[] };
 
 // Für Listen: Ansprechpartner, Zentrale und laufende Vorgänge vieler Firmen in drei Abfragen
 export async function callContexts(companyIds: number[]): Promise<Map<number, CallContext>> {
   const ids = [...new Set(companyIds)];
   if (!ids.length) return new Map();
   const [firms, staff, running] = await Promise.all([
-    db.select({ id: companies.id, name: companies.name, phone: companies.phone }).from(companies).where(inArray(companies.id, ids)),
+    db.select({ id: companies.id, name: companies.name, phone: companies.phone, email: companies.email }).from(companies).where(inArray(companies.id, ids)),
     db.select().from(contacts).where(inArray(contacts.companyId, ids)).orderBy(asc(contacts.id)),
     db
       .select({ id: deals.id, title: deals.title, companyId: deals.companyId, contactId: deals.contactId })
@@ -144,6 +162,7 @@ export async function callContexts(companyIds: number[]): Promise<Map<number, Ca
           id: f.id,
           name: f.name.trim(),
           phone: f.phone,
+          email: f.email,
           staff: staff.filter((p) => p.companyId === f.id),
           preferredId: own.find((d) => d.contactId)?.contactId ?? null,
           projects: own.map((d) => ({ id: d.id, title: d.title })),
@@ -154,7 +173,13 @@ export async function callContexts(companyIds: number[]): Promise<Map<number, Ca
 }
 
 export function companyCall(ctx: CallContext): CallTarget {
-  return { companyId: ctx.id, title: ctx.name, numbers: collectNumbers(ctx.staff, ctx.preferredId, ctx.phone), projects: ctx.projects };
+  return {
+    companyId: ctx.id,
+    title: ctx.name,
+    numbers: collectNumbers(ctx.staff, ctx.preferredId, ctx.phone),
+    emails: collectEmails(ctx.staff, ctx.preferredId, ctx.email),
+    projects: ctx.projects,
+  };
 }
 
 // Person: ihre Nummern oben, darunter die übrigen ihrer Firma
@@ -166,6 +191,7 @@ export function personCall(ctx: CallContext | undefined, person: Person): CallTa
     title: ctx ? `${ctx.name} · ${name}` : name,
     person: name,
     numbers: collectNumbers(staff, person.id, ctx?.phone ?? null, true),
+    emails: collectEmails(staff, person.id, ctx?.email ?? null, true),
     projects: ctx?.projects ?? [],
   };
 }
@@ -410,6 +436,13 @@ export async function companyOptions(forDeals = false) {
     .orderBy(asc(companies.name));
 }
 
+// Suche nach Wörtern: jedes Wort muss in irgendeinem der Felder vorkommen („Max Mustermann“, „Mustermann Eurowings“)
+function wordSearch(query: string | undefined, fields: (word: string) => SQL[]): SQL | undefined {
+  const words = (query ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return undefined;
+  return and(...words.map((w) => or(...fields(`%${w}%`))));
+}
+
 export async function listCompanies(query?: string, kind: CompanyKind | "alle" = "kunde", tag?: string) {
   const q = query?.trim();
   return db
@@ -437,15 +470,15 @@ export async function listCompanies(query?: string, kind: CompanyKind | "alle" =
         kind === "alle" ? undefined : eq(companies.kind, kind),
         // exakter Treffer in der kommagetrennten Liste
         tag ? sql`find_in_set(${tag}, replace(${companies.tags}, ', ', ',')) > 0` : undefined,
-        q
-          ? or(
-              like(companies.name, `%${q}%`),
-              like(companies.city, `%${q}%`),
-              like(companies.emailDomain, `%${q}%`),
-              like(companies.tags, `%${q}%`),
-              like(companies.notes, `%${q}%`),
-            )
-          : undefined,
+        // auch über die Namen der Ansprechpartner
+        wordSearch(q, (w) => [
+          like(companies.name, w),
+          like(companies.city, w),
+          like(companies.emailDomain, w),
+          like(companies.tags, w),
+          like(companies.notes, w),
+          sql`exists (select 1 from ${contacts} where ${contacts.companyId} = ${companies.id} and (${contacts.firstName} like ${w} or ${contacts.lastName} like ${w}))`,
+        ]),
       ),
     )
     .groupBy(companies.id)
@@ -524,14 +557,13 @@ export async function listContacts(query?: string) {
     .from(contacts)
     .leftJoin(companies, eq(companies.id, contacts.companyId))
     .where(
-      q
-        ? or(
-            like(contacts.lastName, `%${q}%`),
-            like(contacts.firstName, `%${q}%`),
-            like(contacts.email, `%${q}%`),
-            like(companies.name, `%${q}%`),
-          )
-        : undefined,
+      wordSearch(q, (w) => [
+        like(contacts.lastName, w),
+        like(contacts.firstName, w),
+        like(contacts.email, w),
+        like(contacts.position, w),
+        like(companies.name, w),
+      ]),
     )
     .orderBy(asc(contacts.lastName))
     .limit(500);
@@ -546,7 +578,7 @@ export async function listInbox(view: "offen" | "alle" | "ignoriert", query?: st
       mail: emails,
       companyName: companies.name,
       dealTitle: deals.title,
-      dealActive: sql<boolean>`${deals.stage} in ('anfrage','angebot','beauftragt','erledigt','rechnung')`,
+      dealActive: sql<boolean>`${deals.stage} in ('anfrage','angebot','beauftragt','bearbeitung','erledigt','rechnung')`,
     })
     .from(emails)
     .leftJoin(companies, eq(companies.id, emails.companyId))
@@ -558,16 +590,14 @@ export async function listInbox(view: "offen" | "alle" | "ignoriert", query?: st
           : view === "ignoriert"
             ? eq(emails.status, "ignoriert")
             : undefined,
-        q
-          ? or(
-              like(emails.subject, `%${q}%`),
-              like(emails.fromAddress, `%${q}%`),
-              like(emails.fromName, `%${q}%`),
-              like(emails.toAddresses, `%${q}%`),
-              like(emails.preview, `%${q}%`),
-              like(companies.name, `%${q}%`),
-            )
-          : undefined,
+        wordSearch(q, (w) => [
+          like(emails.subject, w),
+          like(emails.fromAddress, w),
+          like(emails.fromName, w),
+          like(emails.toAddresses, w),
+          like(emails.preview, w),
+          like(companies.name, w),
+        ]),
       ),
     )
     .orderBy(desc(emails.receivedAt))
@@ -623,8 +653,12 @@ export async function pendingVouchers() {
     .innerJoin(companies, eq(companies.lexwareId, lexwareVouchers.contactId))
     .where(eq(lexwareVouchers.pending, true))
     .orderBy(desc(lexwareVouchers.voucherDate));
+  // Belege, deren Nummer schon an einem Vorgang steht, sind zugeordnet, auch wenn die Rückfrage noch offen markiert ist
+  const used = new Set(
+    (await db.select({ o: deals.offerNumber, i: deals.invoiceNumber }).from(deals)).flatMap((d) => [d.o, d.i]).filter(Boolean),
+  );
   return Promise.all(
-    rows.map(async (r) => ({ ...r, deals: (await waitingDeals(r.companyId, r.voucher.type)).map((d) => ({ id: d.id, title: d.title, stage: d.stage })) })),
+    rows.filter((r) => !used.has(r.voucher.number)).map(async (r) => ({ ...r, deals: (await waitingDeals(r.companyId, r.voucher.type)).map((d) => ({ id: d.id, title: d.title, stage: d.stage })) })),
   );
 }
 

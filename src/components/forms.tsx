@@ -170,16 +170,14 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [] }:
   const [dialog, setDialog] = useState<{ kind: ActivityKind; notice?: string } | null>(null);
   const [menu, setMenu] = useState(false);
   const closeMenu = useCallback(() => setMenu(false), []);
+  const callButton = useRef<HTMLButtonElement>(null);
   const body = useRef<HTMLTextAreaElement>(null);
   const openIfEmpty = (kind: ActivityKind) => (e: React.MouseEvent) => {
     if (body.current?.value.trim()) return;
     e.preventDefault();
     if (kind === "notiz") return setDialog({ kind });
-    // Anruf: eine Nummer wählt sofort, mehrere zeigen die Auswahl, keine nur das Fenster mit Hinweis
-    if (numbers.length === 1) {
-      dial(numbers[0].number);
-      setDialog({ kind });
-    } else if (numbers.length > 1) setMenu(!menu);
+    // Anruf: Auswahl der Nummern (mit Namen, wie überall), keine Nummer nur das Fenster mit Hinweis
+    if (numbers.length) setMenu(!menu);
     else setDialog({ kind, notice: "Keine Nummer hinterlegt." });
   };
   const pill = (on: boolean) =>
@@ -195,9 +193,10 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [] }:
         </label>
         <button type="submit" name="type" value="notiz" disabled={pending} onClick={openIfEmpty("notiz")} className={btnQuiet}>Notiz</button>
         <div className="relative">
-          <button type="submit" name="type" value="anruf" disabled={pending} onClick={openIfEmpty("anruf")} aria-expanded={numbers.length > 1 ? menu : undefined} className={btnQuiet}>Anruf</button>
+          <button ref={callButton} type="submit" name="type" value="anruf" disabled={pending} onClick={openIfEmpty("anruf")} aria-expanded={numbers.length ? menu : undefined} className={btnQuiet}>Anruf</button>
           {menu && (
             <NumberMenu
+              anchor={callButton}
               numbers={numbers}
               onClose={closeMenu}
               onPick={(n) => {

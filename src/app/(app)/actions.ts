@@ -26,7 +26,7 @@ import { mergeCompanies } from "@/lib/merge";
 import { deleteDealWebsite, linkWebsiteEvent, ownWebsiteEvent, setWebsitePublic, syncDealWebsite, uploadWebsiteImage } from "@/lib/website";
 import { parseSignature, type SignatureData } from "@/lib/signature";
 import { sendDigest } from "@/lib/digest";
-import { archiveVoucher, createDealFromVoucher, linkVoucher, quickReconcile, reconcileDeals, syncVouchers } from "@/lib/lexware-sync";
+import { archiveVoucher, createDealFromVoucher, linkVoucher, quickReconcile, reconcileDeals, resolveVoucherQuestions, syncVouchers } from "@/lib/lexware-sync";
 import { createQuotationDraft } from "@/lib/lexware-draft";
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
@@ -127,15 +127,13 @@ export async function updateDealAction(dealId: number, _: FormState, form: FormD
     notes: text(form, "notes"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const offerNumber = text(form, "offerNumber")?.trim() || null;
+  const invoiceNumber = text(form, "invoiceNumber")?.trim() || null;
   await db
     .update(deals)
-    .set({
-      ...parsed.data,
-      offerNumber: text(form, "offerNumber")?.trim() || null,
-      invoiceNumber: text(form, "invoiceNumber")?.trim() || null,
-      compareOnly: form.get("compareOnly") === "on",
-    })
+    .set({ ...parsed.data, offerNumber, invoiceNumber, compareOnly: form.get("compareOnly") === "on" })
     .where(eq(deals.id, dealId));
+  await resolveVoucherQuestions([offerNumber, invoiceNumber]);
   refresh();
   return {};
 }

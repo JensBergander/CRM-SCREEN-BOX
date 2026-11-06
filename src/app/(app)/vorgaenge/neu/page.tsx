@@ -29,14 +29,14 @@ export default async function NewDealPage({ searchParams }: PageProps<"/vorgaeng
       <BackButton fallback="/vorgaenge" label="Vorgänge" />
       <PageHeader
         area="vorgaenge"
-        title={quick ? "Schnellauftrag" : "Neuer Vorgang"}
+        title={quick ? "Neuer Auftrag" : "Neuer Vorgang"}
         sub={
           fromMail
             ? `Aus der Mail „${fromMail.subject}“ von ${fromMail.from}`
             : fromNote
               ? `Aus der Notiz „${fromNote.title}“`
               : quick
-              ? "Startet direkt als „Beauftragt“, z. B. nach einem Anruf"
+              ? "Startet direkt als „Beauftragt“, ohne Angebot, z. B. nach einem Anruf"
               : "Anfrage, Angebot oder Auftrag erfassen"
         }
       />

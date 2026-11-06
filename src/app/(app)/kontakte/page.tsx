@@ -49,7 +49,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
                   </td>
                   <td className="px-3 py-3 text-muted">{c.email ?? "–"}</td>
                   <td className="px-5 py-2">
-                    <ContactActions name={name} call={personCall(c.companyId ? calls.get(c.companyId) : undefined, c)} email={c.email} />
+                    <ContactActions call={personCall(c.companyId ? calls.get(c.companyId) : undefined, c)} />
                   </td>
                 </tr>
               );

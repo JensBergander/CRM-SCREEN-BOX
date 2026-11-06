@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { createDealAction } from "@/app/(app)/actions";
-import { btnPrimary, Field, FormError, Input, Select, Textarea } from "./ui";
+import { btnAccent, btnPrimary, Field, FormError, Input, Select, Textarea } from "./ui";
 
 export function DealForm({ companies, preset, quick, today, fromMail, fromNote }: {
   companies: { id: number; name: string }[];
@@ -77,8 +77,8 @@ export function DealForm({ companies, preset, quick, today, fromMail, fromNote }
       )}
 
       <FormError message={state?.error} />
-      <button type="submit" disabled={pending} className={btnPrimary}>
-        {pending ? "Wird angelegt …" : quick ? "Schnellauftrag anlegen" : "Vorgang anlegen"}
+      <button type="submit" disabled={pending} className={quick ? btnAccent : btnPrimary}>
+        {pending ? "Wird angelegt …" : quick ? "Auftrag anlegen" : "Vorgang anlegen"}
       </button>
     </form>
   );

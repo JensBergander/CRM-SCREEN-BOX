@@ -8,6 +8,9 @@ export const btnPrimary =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-ink px-5 text-sm font-semibold text-surface disabled:opacity-50";
 export const btnSecondary =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-ink px-5 text-sm font-semibold text-ink disabled:opacity-50";
+// Orange = Produktion: „Neuer Auftrag“ startet direkt als „Beauftragt“
+export const btnAccent =
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50";
 export const btnQuiet =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-full bg-bg px-4 text-[13px] font-semibold text-ink hover:bg-line disabled:opacity-50";
 export const inputClass =

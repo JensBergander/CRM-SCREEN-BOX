@@ -84,7 +84,7 @@ export async function ProviderPage({ params }: { params: Record<string, string |
                     <Link key={x} href={href(x)} className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${TONE_SOFT[KIND_TONE[kind]]}`}>{x}</Link>
                   ))}
                 </div>
-                <ContactActions name={r.name} call={companyCall(calls.get(r.id)!)} email={person?.email ?? r.email} />
+                <ContactActions call={companyCall(calls.get(r.id)!)} />
               </li>
             );
           })}

@@ -44,7 +44,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
   return (
     <div className="flex flex-col gap-5">
       <PageHeader area="firmen" title="Firmen" sub={`${rows.length} ${query || filter !== "alle" ? "Treffer" : "Kunden"}`}>
-        <SearchBox defaultValue={query} placeholder="Name oder Ort" keep={{ sterne: filter === "alle" ? undefined : filter, sort: byStars ? "sterne" : undefined }} />
+        <SearchBox defaultValue={query} placeholder="Firma, Ort oder Ansprechpartner" keep={{ sterne: filter === "alle" ? undefined : filter, sort: byStars ? "sterne" : undefined }} />
         <Link href="/firmen/neu" className={btnPrimary}>
           <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
           Neue Firma
@@ -93,7 +93,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
                 <td className="px-3 py-3 text-right tabular-nums text-muted">{c.revenue > 0 ? euro(c.revenue) : "–"}</td>
                 <td className="px-3 py-3 text-muted">{c.lastChange ? dateDe(new Date(c.lastChange).toISOString()) : "–"}</td>
                 <td className="px-5 py-2">
-                  <ContactActions name={c.name} call={companyCall(calls.get(c.id)!)} email={c.email} />
+                  <ContactActions call={companyCall(calls.get(c.id)!)} />
                 </td>
               </tr>
             ))}
