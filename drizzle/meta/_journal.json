@@ -183,6 +183,13 @@
       "when": 1794420803106,
       "tag": "0025_activity_edited",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1794422064807,
+      "tag": "0026_follow_up_date",
+      "breakpoints": true
     }
   ]
 }

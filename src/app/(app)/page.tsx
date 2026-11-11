@@ -3,7 +3,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { MapPin } from "lucide-react";
 import { addDaysIso, ageLabel, daysSince, euro, mapsUrl, todayIso } from "@/lib/format";
 import { upcomingProductionDays } from "@/lib/schedule";
-import { getDashboard, pendingVouchers, recentCompanies } from "@/lib/queries";
+import { competitorNames, getDashboard, pendingVouchers, recentCompanies } from "@/lib/queries";
+import { FollowUps } from "@/components/follow-ups";
 import { RecentCompanies } from "@/components/recent-companies";
 import { lexwareUrl } from "@/lib/lexware-sync";
 import { VoucherQuestions } from "@/components/voucher-questions";
@@ -15,12 +16,13 @@ import { displayName, firstNameOf } from "@/lib/profile";
 
 
 export default async function StartPage() {
-  const [user, data, upcoming, questions, recent] = await Promise.all([
+  const [user, data, upcoming, questions, recent, competitors] = await Promise.all([
     getCurrentUser(),
     getDashboard(),
     upcomingProductionDays(todayIso(), addDaysIso(todayIso(), 14)),
     pendingVouchers(),
     recentCompanies(),
+    competitorNames(),
   ]);
   const now = new Date();
   const name = firstNameOf(await displayName(user));
@@ -40,7 +42,7 @@ export default async function StartPage() {
       dot: data.billing.length > 0 ? "bg-danger" : "bg-done",
       hot: data.billing.length > 0,
     },
-    { label: "Angebote nachfassen", value: String(data.followUps.length), hint: "über 10 Tage ohne Antwort", dot: "bg-sales" },
+    { label: "Angebote nachfassen", value: String(data.followUps.length), hint: "ohne Antwort, Frist erreicht", dot: "bg-sales" },
     { label: "Laufende Projekte", value: String(data.beauftragt), hint: "Beauftragt und in Bearbeitung", dot: "bg-accent" },
     { label: "Offene Angebote", value: euro(data.offers.total ?? 0), hint: `${data.offers.n} Angebote verschickt`, dot: "bg-sales" },
   ];
@@ -148,18 +150,8 @@ export default async function StartPage() {
           <TaskList tasks={data.todayTasks} today={todayIso()} empty="Keine Aufgaben für heute." />
         </Card>
 
-        <Card title="Angebote nachfassen" aside={<span className="text-xs text-muted">ohne Rückmeldung seit über 10 Tagen</span>}>
-          {data.followUps.length === 0 && <Empty>Keine Angebote, die auf Antwort warten.</Empty>}
-          {data.followUps.map((deal) => (
-            <Row key={deal.id} href={`/vorgaenge/${deal.id}`}>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{deal.companyName}</p>
-                <p className="truncate text-[13px] text-muted">{deal.title} · {euro(deal.amountNet)}</p>
-              </div>
-              {deal.compareOnly && <Badge tone="info">Vergleichsangebot?</Badge>}
-              <span className="whitespace-nowrap text-xs text-muted">{daysSince(deal.stageChangedAt)} Tage</span>
-            </Row>
-          ))}
+        <Card title="Angebote nachfassen" aside={<span className="text-xs text-muted">ohne Rückmeldung seit über 10 Tagen oder Frist erreicht</span>}>
+          <FollowUps deals={data.followUps} competitors={competitors} today={todayIso()} />
         </Card>
 
         <Card
@@ -168,7 +160,7 @@ export default async function StartPage() {
         >
           {data.mails.length === 0 && <Empty>Keine offenen Mails.</Empty>}
           {data.mails.map(({ mail }) => (
-            <Row key={mail.id} href="/posteingang">
+            <Row key={mail.id} href={`/posteingang?mail=${mail.id}`}>
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg text-[13px] font-semibold text-muted">
                 {(mail.fromName ?? mail.fromAddress ?? "?").slice(0, 2).toUpperCase()}
               </span>

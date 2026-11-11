@@ -1,0 +1,1 @@
+ALTER TABLE `deals` ADD `follow_up_date` date;

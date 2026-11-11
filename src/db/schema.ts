@@ -184,6 +184,8 @@ export const deals = mysqlTable(
     lostNote: text("lost_note"),
     notes: text("notes"),
     stageChangedAt: timestamp("stage_changed_at").notNull().defaultNow(),
+    // Angebot nachgefasst: erst ab diesem Tag wieder unter „Angebote nachfassen“ (sonst 10 Tage nach Versand)
+    followUpDate: date("follow_up_date", { mode: "string" }),
     ...timestamps,
   },
   (t) => [index("deals_company_idx").on(t.companyId), index("deals_stage_idx").on(t.stage)],

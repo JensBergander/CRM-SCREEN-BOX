@@ -10,7 +10,7 @@ import { Card, FormError, PageHeader } from "@/components/ui";
 const VIEWS = { offen: "Ohne Zuordnung", alle: "Alle Mails", ignoriert: "Ignoriert" } as const;
 
 export default async function InboxPage({ searchParams }: PageProps<"/posteingang">) {
-  const { ansicht, q } = await searchParams;
+  const { ansicht, q, mail } = await searchParams;
   const view = ansicht === "alle" || ansicht === "ignoriert" ? ansicht : "offen";
   const query = typeof q === "string" && q.trim() ? q.trim() : undefined;
   const [rows, state, companies, tagOptions] = await Promise.all([listInbox(view, query), mailState(), companyOptions(), serviceTagOptions()]);
@@ -55,7 +55,7 @@ export default async function InboxPage({ searchParams }: PageProps<"/posteingan
       </div>
 
       <Card>
-        <InboxList rows={rows} companies={companies} tagOptions={tagOptions} />
+        <InboxList rows={rows} companies={companies} tagOptions={tagOptions} initialOpen={typeof mail === "string" && /^\d+$/.test(mail) ? Number(mail) : null} />
       </Card>
     </div>
   );

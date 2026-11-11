@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { appState, companies, deals, lexwareVouchers } from "@/db/schema";
 import { addDaysIso, dateDe, daysSince, euro, todayIso } from "./format";
 import { graphPost, mailboxes } from "./graph";
-import { listInbox, listTasks, pendingVouchers } from "./queries";
+import { followUpDue, listInbox, listTasks, pendingVouchers } from "./queries";
 
 const APP_URL = () => process.env.APP_URL ?? "https://crm.screen-box.de";
 
@@ -18,7 +18,8 @@ export async function buildDigest(): Promise<{ sections: Section[]; total: numbe
       .select({ id: deals.id, title: deals.title, amountNet: deals.amountNet, since: deals.stageChangedAt, company: companies.name, invoiceNumber: deals.invoiceNumber })
       .from(deals)
       .innerJoin(companies, eq(companies.id, deals.companyId))
-      .where(and(eq(deals.stage, stage), lt(deals.stageChangedAt, new Date(`${addDaysIso(today, -olderThanDays)}T23:59:59Z`))))
+      // Angebote wie auf der Startseite: nach „Nachgefasst“ erst ab der neuen Frist
+      .where(stage === "angebot" ? followUpDue(today) : and(eq(deals.stage, stage), lt(deals.stageChangedAt, new Date(`${addDaysIso(today, -olderThanDays)}T23:59:59Z`))))
       .orderBy(asc(deals.stageChangedAt));
 
   const [billing, running, working, offers, invoiced, tasks, mails, questions] = await Promise.all([

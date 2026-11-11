@@ -87,3 +87,9 @@ export function suggestFolderName(companyName: string): string {
 export function mapsUrl(query: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
+
+// Montag der nächsten Woche (von einem ISO-Datum aus)
+export function nextMondayIso(iso: string): string {
+  const day = new Date(`${iso}T12:00:00Z`).getUTCDay();
+  return addDaysIso(iso, ((8 - day) % 7) || 7);
+}

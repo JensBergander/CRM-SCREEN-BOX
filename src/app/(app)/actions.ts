@@ -772,6 +772,29 @@ export async function createTaskAction(_: FormState, form: FormData): Promise<Fo
   return {};
 }
 
+// Aufgabe verschieben (Morgen, Nächste Woche oder ein Datum)
+export async function moveTaskAction(taskId: number, dueDate: string): Promise<{ error?: string }> {
+  await getCurrentUser();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || Number.isNaN(Date.parse(dueDate))) return { error: "Bitte ein gültiges Datum wählen." };
+  await db.update(tasks).set({ dueDate }).where(eq(tasks.id, taskId));
+  refresh();
+  return {};
+}
+
+// Angebot nachgefasst: Notiz im Vorgang und neue Frist, bis dahin verschwindet es aus „Angebote nachfassen“
+export async function followUpDealAction(dealId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const due = text(form, "followUpDate") ?? "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || due <= todayIso()) return { error: "Bitte eine neue Frist nach heute wählen." };
+  const [deal] = await db.select({ companyId: deals.companyId, stage: deals.stage }).from(deals).where(eq(deals.id, dealId));
+  if (!deal) return { error: "Vorgang nicht gefunden." };
+  const note = text(form, "body")?.trim();
+  await db.insert(activities).values({ companyId: deal.companyId, dealId, type: "notiz", body: note ? `Nachgefasst: ${note}` : "Nachgefasst" });
+  await db.update(deals).set({ followUpDate: due }).where(eq(deals.id, dealId));
+  refresh();
+  return {};
+}
+
 export async function toggleTaskAction(taskId: number, done: boolean) {
   await getCurrentUser();
   await db.update(tasks).set({ doneAt: done ? new Date() : null }).where(eq(tasks.id, taskId));

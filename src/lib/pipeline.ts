@@ -130,6 +130,7 @@ export async function changeStage(
       .set({
         stage: to,
         stageChangedAt: new Date(),
+        followUpDate: null,
         lostReason: to === "verloren" ? lost!.reason : null,
         lostNote: to === "verloren" ? lost!.note ?? null : null,
       })

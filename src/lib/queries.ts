@@ -18,6 +18,7 @@ const dealWithCompany = {
   compareOnly: deals.compareOnly,
   quick: deals.quick,
   stageChangedAt: deals.stageChangedAt,
+  followUpDate: deals.followUpDate,
   createdAt: deals.createdAt,
   companyId: deals.companyId,
   companyName: companies.name,
@@ -64,9 +65,17 @@ export async function listTasks(filter: { open?: boolean; dueUntil?: string; com
     .limit(filter.open === false ? 30 : 500);
 }
 
+// Angebote zum Nachfassen: 10 Tage nach Versand ohne Antwort, nach „Nachgefasst“ ab der neuen Frist
+export function followUpDue(today: string) {
+  const sentBefore = new Date(`${addDaysIso(today, -10)}T00:00:00Z`);
+  return and(
+    eq(deals.stage, "angebot"),
+    or(and(isNull(deals.followUpDate), lt(deals.stageChangedAt, sentBefore)), lte(deals.followUpDate, today)),
+  );
+}
+
 export async function getDashboard() {
   const today = todayIso();
-  const followUpBefore = new Date(`${addDaysIso(today, -10)}T00:00:00Z`);
 
   const [billing, followUps, todayTasks, [beauftragt], [offers], mails] = await Promise.all([
     db
@@ -79,7 +88,7 @@ export async function getDashboard() {
       .select(dealWithCompany)
       .from(deals)
       .innerJoin(companies, eq(companies.id, deals.companyId))
-      .where(and(eq(deals.stage, "angebot"), lt(deals.stageChangedAt, followUpBefore)))
+      .where(followUpDue(today))
       .orderBy(asc(deals.stageChangedAt)),
     listTasks({ open: true, dueUntil: today }),
     db.select({ n: count() }).from(deals).where(inArray(deals.stage, ["beauftragt", "bearbeitung"])),

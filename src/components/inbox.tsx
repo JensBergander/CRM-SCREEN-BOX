@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { BellOff, CheckSquare, ExternalLink, FolderPlus, Paperclip, RefreshCw, UserPlus, X } from "lucide-react";
 import { ignoreMailAction, ignoreSenderAction, syncMailAction, taskFromMailAction } from "@/app/(app)/actions";
 import { relativeTime } from "@/lib/format";
@@ -34,17 +34,47 @@ export function SyncButton() {
   );
 }
 
-export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; companies: { id: number; name: string }[]; tagOptions: TagOptions }) {
-  const [open, setOpen] = useState<number | null>(null);
+export function InboxList({ rows, companies, tagOptions, initialOpen = null }: {
+  rows: InboxRow[];
+  companies: { id: number; name: string }[];
+  tagOptions: TagOptions;
+  // aus der Startseite: diese Mail gleich zum Lesen und Zuordnen öffnen
+  initialOpen?: number | null;
+}) {
+  const [open, setOpen] = useState<number | null>(initialOpen);
+  const [note, setNote] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-  if (!rows.length) return <Empty>Keine Mails in dieser Ansicht.</Empty>;
+  // geöffnete Mail nach oben holen (beim Start und nach dem Weiterspringen)
+  useEffect(() => {
+    if (open) document.getElementById(`mail-${open}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [open]);
+  // Nach Zuordnen oder Ignorieren gleich die nächste Mail öffnen; die Reihenfolge der Liste gilt von vor dem Neuladen
+  const order = rows.map((r) => r.mail.id).join(",");
+  const next = useCallback(
+    (id: number, message: string) => {
+      const ids = order.split(",").map(Number);
+      const following = ids[ids.indexOf(id) + 1] ?? null;
+      setOpen(following);
+      setNote(following ? `${message} Weiter mit der nächsten Mail.` : `${message} Das war die letzte Mail in dieser Ansicht.`);
+    },
+    [order],
+  );
+  const ignore = (id: number, wasOpen: boolean) =>
+    startTransition(async () => {
+      if (wasOpen) next(id, "Ignoriert.");
+      await ignoreMailAction(id);
+    });
+  if (!rows.length) return <Empty>{note ?? "Keine Mails in dieser Ansicht."}</Empty>;
 
   return (
     <ul>
       {rows.map((row) => {
         const m = row.mail;
         return (
-          <li key={m.id} className="border-t border-line-soft px-5 py-4">
+          <li key={m.id} id={`mail-${m.id}`} className="scroll-mt-4 border-t border-line-soft px-5 py-4">
+            {open === m.id && note && (
+              <p role="status" className="mb-2 text-xs font-semibold text-muted">{note}</p>
+            )}
             <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
               <div className="min-w-0 flex-[1_1_380px]">
                 <p className="text-xs text-muted">
@@ -72,7 +102,7 @@ export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; c
                     <ExternalLink size={14} aria-hidden="true" /> Öffnen
                   </a>
                 )}
-                <button type="button" onClick={() => setOpen(open === m.id ? null : m.id)} className={btnQuiet} aria-expanded={open === m.id}>
+                <button type="button" onClick={() => { setNote(null); setOpen(open === m.id ? null : m.id); }} className={btnQuiet} aria-expanded={open === m.id}>
                   <UserPlus size={14} aria-hidden="true" /> {m.companyId ? "Lesen & Kontakt übernehmen" : "Lesen & zuordnen"}
                 </button>
                 <button type="button" onClick={() => startTransition(() => taskFromMailAction(m.id))} className={btnQuiet}>
@@ -83,7 +113,7 @@ export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; c
                 </Link>
                 {m.status === "neu" && (
                   <>
-                    <button type="button" onClick={() => startTransition(() => ignoreMailAction(m.id))} className={btnQuiet}>
+                    <button type="button" onClick={() => ignore(m.id, open === m.id)} className={btnQuiet}>
                       <X size={14} aria-hidden="true" /> Ignorieren
                     </button>
                     <button
@@ -98,7 +128,17 @@ export function InboxList({ rows, companies, tagOptions }: { rows: InboxRow[]; c
                 )}
               </div>
             </div>
-            {open === m.id && <MailContactPanel mailId={m.id} companies={companies} tagOptions={tagOptions} onClose={() => setOpen(null)} />}
+            {open === m.id && (
+              <MailContactPanel
+                key={m.id}
+                mailId={m.id}
+                companies={companies}
+                tagOptions={tagOptions}
+                onClose={() => setOpen(null)}
+                onSaved={() => next(m.id, "Zugeordnet.")}
+                onIgnore={m.status === "neu" ? () => ignore(m.id, true) : undefined}
+              />
+            )}
           </li>
         );
       })}

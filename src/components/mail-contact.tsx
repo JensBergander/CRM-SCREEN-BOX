@@ -113,10 +113,13 @@ type Props = {
   companyId?: number;
   dealId?: number | null;
   embedded?: boolean;
+  // Posteingang: nach dem Speichern bzw. Ignorieren gleich weiter zur nächsten Mail
+  onSaved?: () => void;
+  onIgnore?: () => void;
 };
 
 // Mail lesen und Absender mit den Daten aus der Signatur übernehmen; bei bekanntem Kontakt gespeichert und Signatur nebeneinander
-export function MailContactPanel({ mailId, companies, tagOptions, onClose, companyId, dealId, embedded = false }: Props) {
+export function MailContactPanel({ mailId, companies, tagOptions, onClose, companyId, dealId, embedded = false, onSaved, onIgnore }: Props) {
   const [data, setData] = useState<MailForContact | { error: string } | null>(null);
   const [state, action, pending] = useActionState(createContactFromMailAction.bind(null, mailId), undefined);
   const [, startLoading] = useTransition();
@@ -124,10 +127,19 @@ export function MailContactPanel({ mailId, companies, tagOptions, onClose, compa
     startLoading(async () => setData(await loadMailForContactAction(mailId, companyId)));
   }, [mailId, companyId]);
   const box = embedded ? "mt-2 rounded-xl bg-bg p-3" : "mt-3 rounded-xl bg-bg p-4";
+  const saved = !!state && !state.error && !pending;
+  // nur einmal je Speichern weiterspringen, auch wenn sich onSaved bei jedem Rendern ändert
+  const announced = useRef(false);
+  useEffect(() => {
+    if (saved && !announced.current) {
+      announced.current = true;
+      onSaved?.();
+    }
+  }, [saved, onSaved]);
 
   if (!data) return <p className={`${box} text-sm text-muted`}>Mail wird geladen und Signatur ausgelesen …</p>;
   if ("error" in data) return <div className="mt-3"><FormError message={data.error} /></div>;
-  if (state && !state.error && !pending) {
+  if (saved) {
     return (
       <p role="status" className={`${box} flex items-center gap-3 text-sm`}>
         {data.known ? "Gespeichert." : "Übernommen und zugeordnet."}
@@ -246,6 +258,7 @@ export function MailContactPanel({ mailId, companies, tagOptions, onClose, compa
       <FormError message={state?.error} />
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : k ? "Speichern" : "Übernehmen"}</button>
+        {onIgnore && <button type="button" onClick={onIgnore} className={btnQuiet}>Ignorieren</button>}
         <button type="button" onClick={onClose} className={btnQuiet}>Schließen</button>
       </div>
     </form>
