@@ -83,10 +83,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
                         stale ? "ring-[1.5px] ring-danger/40" : ""
                       } ${dragging === deal.id ? "opacity-50" : ""}`}
                     >
-                      <div className="flex gap-2 text-xs text-muted">
-                        <span className="flex-1 truncate">{deal.companyName}</span>
-                        <span className="tabular-nums">{deal.number}</span>
-                      </div>
+                      <p className="truncate text-xs text-muted">{deal.companyName}</p>
                       <p className="text-sm font-semibold leading-snug">{deal.title}</p>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="flex-1 text-[13px] font-semibold tabular-nums">{euro(deal.amountNet)}</span>

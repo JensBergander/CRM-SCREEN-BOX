@@ -162,7 +162,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
                   <span className={`h-2 w-2 shrink-0 rounded-full ${STAGE_DOT[p.stage]}`} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{p.customer} · {p.title}</p>
-                    <p className="truncate text-xs text-muted">{[p.number, p.note].filter(Boolean).join(" · ") || STAGE_LABEL[p.stage]}</p>
+                    <p className="truncate text-xs text-muted">{p.note || STAGE_LABEL[p.stage]}</p>
                   </div>
                   <span className="text-[13px] tabular-nums">{p.costNet !== null ? euro(p.costNet) : "–"}</span>
                 </Row>
@@ -188,7 +188,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
                 <span className={`h-2 w-2 shrink-0 rounded-full ${STAGE_DOT[d.stage]}`} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{d.title}</p>
-                  <p className="text-xs text-muted">{STAGE_LABEL[d.stage]}{d.number && ` · ${d.number}`}</p>
+                  <p className="text-xs text-muted">{STAGE_LABEL[d.stage]}</p>
                   {d.stage === "verloren" && (
                     <p className="mt-1 text-xs text-danger-ink">
                       {[d.lostReason && LOST_REASON_LABEL[d.lostReason], d.competitorId && `an ${competitorNames.get(d.competitorId) ?? "Wettbewerber"}`]

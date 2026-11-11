@@ -54,8 +54,8 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
               <Link href={`/kontakte/${data.contact.personId}`} className="font-semibold text-ink hover:underline">{fullName(data.contact)}</Link>
             </>
           )}
-          {deal.number && <> · Nr. {deal.number}</>}
           {deal.projectDate && <> · {dateDe(deal.projectDate)}</>}
+          {deal.number && <span className="text-xs text-muted/70"> · Nr. {deal.number}</span>}
         </p>
         <InlineTitle
           value={deal.title}

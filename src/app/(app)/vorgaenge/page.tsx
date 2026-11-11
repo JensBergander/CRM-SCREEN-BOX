@@ -71,8 +71,7 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="text-left text-xs text-muted">
-                <th className="px-5 py-3 font-medium">Nr.</th>
-                <th className="px-3 py-3 font-medium">Firma · Vorgang</th>
+                <th className="px-5 py-3 font-medium">Firma · Vorgang</th>
                 <th className="px-3 py-3 font-medium">Phase</th>
                 <th className="px-3 py-3 text-right font-medium">Betrag</th>
                 <th className="px-5 py-3 font-medium">Projektdatum</th>
@@ -81,8 +80,7 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
             <tbody>
               {deals.map((d) => (
                 <tr key={d.id} className="border-t border-line-soft hover:bg-bg/60">
-                  <td className="px-5 py-3 tabular-nums text-muted">{d.number ?? "–"}</td>
-                  <td className="px-3 py-3">
+                  <td className="px-5 py-3">
                     <Link href={`/vorgaenge/${d.id}`} className="block">
                       <span className="font-semibold">{d.companyName}</span>
                       <span className="block text-[13px] text-muted">{d.title}</span>

@@ -149,7 +149,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
                       <span className={`h-2 w-2 shrink-0 rounded-full ${STAGE_DOT[d.stage]}`} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold">{d.title}</p>
-                        <p className="text-xs text-muted">{[d.companyName.trim(), STAGE_LABEL[d.stage], d.number].filter(Boolean).join(" · ")}</p>
+                        <p className="text-xs text-muted">{[d.companyName.trim(), STAGE_LABEL[d.stage]].filter(Boolean).join(" · ")}</p>
                       </div>
                     </Row>
                   ))}
