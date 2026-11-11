@@ -174,6 +174,7 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
             searchable
             today={todayIso()}
             peopleOf={await peopleOfActivities(data.timeline.map((a) => a.id))}
+            peopleFor={Object.fromEntries([...calls].map(([companyId, c]) => [companyId, pickPeople(c.staff)]))}
             tasks={{
               count: data.tasks.filter((t) => !t.doneAt).length,
               content: <TaskList tasks={data.tasks} today={todayIso()} empty="Keine Aufgaben mit dieser Person." />,

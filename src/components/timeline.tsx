@@ -11,14 +11,17 @@ import {
   Mail,
   MailOpen,
   MessageSquare,
+  MoreHorizontal,
   Paperclip,
   Phone,
   Search,
 } from "lucide-react";
-import { assignEntryAction, createTaskAction, mailTextAction } from "@/app/(app)/actions";
+import { assignEntryAction, createTaskAction, deleteActivityAction, mailTextAction, updateActivityAction } from "@/app/(app)/actions";
 import type { Activity, Email } from "@/db/schema";
 import { relativeTime, tidyMailText } from "@/lib/format";
-import { btnQuiet, Empty, FormError, Input } from "./ui";
+import { btnPrimary, btnQuiet, Empty, FormError, Input, Textarea } from "./ui";
+import { PeoplePicker, type PickPerson } from "./people-picker";
+import { WhenField } from "./when-field";
 
 const ICON = { notiz: MessageSquare, anruf: Phone, phase: ArrowRightLeft, mail: Mail };
 const LABEL = { notiz: "Notiz", anruf: "Anruf", phase: "Phase", mail: "Mail" };
@@ -273,6 +276,134 @@ function MailEntry({ mail, sender, projects, today }: { mail: Email; sender?: st
   );
 }
 
+// Kleines Menü „⋯“ an Notizen und Anrufen
+function EntryMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+  const item = "w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-bg";
+  return (
+    <div ref={ref} className="relative -mr-2 -mt-1 shrink-0">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Eintrag bearbeiten oder löschen" className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
+        <MoreHorizontal size={16} aria-hidden="true" />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-40 rounded-xl border border-line bg-surface p-1 shadow-lg">
+          <button type="button" role="menuitem" className={item} onClick={() => { setOpen(false); onEdit(); }}>Bearbeiten</button>
+          <button type="button" role="menuitem" className={`${item} text-danger-ink`} onClick={() => { setOpen(false); onDelete(); }}>Löschen</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Notiz oder Anruf an Ort und Stelle ändern: Art, Text, „Mit wem?“ und Zeitpunkt
+function EditActivity({ activity, who, people, onDone }: { activity: Activity; who: PickPerson[]; people: PickPerson[]; onDone: () => void }) {
+  const [state, action, pending] = useActionState(updateActivityAction.bind(null, activity.id), undefined);
+  const [kind, setKind] = useState<"notiz" | "anruf">(activity.type === "anruf" ? "anruf" : "notiz");
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (wasPending.current && !pending && state && !state.error) onDone();
+    wasPending.current = pending;
+  }, [pending, state, onDone]);
+  // bisherige Personen bleiben wählbar, auch wenn sie nicht mehr aktuell bei der Firma sind
+  const options = [...people, ...who.filter((w) => !people.some((p) => p.id === w.id))];
+  const pill = (on: boolean) => `inline-flex min-h-8 cursor-pointer items-center rounded-full border px-3 text-[12px] font-semibold ${on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted"}`;
+  return (
+    <form action={action} className="mt-1 flex flex-col gap-2.5 rounded-xl bg-bg p-3">
+      <div role="radiogroup" aria-label="Art" className="flex gap-1.5">
+        {(["notiz", "anruf"] as const).map((k) => (
+          <label key={k} className={pill(kind === k)}>
+            <input type="radio" name="type" value={k} checked={kind === k} onChange={() => setKind(k)} className="sr-only" />
+            {k === "anruf" ? "Anruf" : "Notiz"}
+          </label>
+        ))}
+      </div>
+      <label>
+        <span className="sr-only">Text</span>
+        <Textarea name="body" rows={Math.min(12, Math.max(3, activity.body.split("\n").length + 1))} defaultValue={activity.body} required autoFocus className="resize-y bg-surface py-2" />
+      </label>
+      <PeoplePicker people={options} initial={who.map((w) => w.id)} small allowNew={!!activity.companyId} />
+      <WhenField initial={activity.createdAt} />
+      <FormError message={state?.error} />
+      <div className="flex items-center gap-2">
+        <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Speichern"}</button>
+        <button type="button" onClick={onDone} className={btnQuiet}>Abbrechen</button>
+      </div>
+    </form>
+  );
+}
+
+function ActivityEntry({ activity: a, who, people, projects, today }: { activity: Activity; who: PickPerson[]; people: PickPerson[]; projects: Project[]; today: string }) {
+  const [mode, setMode] = useState<"view" | "edit" | "delete">("view");
+  const [error, setError] = useState<string>();
+  const [pending, startTransition] = useTransition();
+  const Icon = ICON[a.type];
+  const editable = a.type === "notiz" || a.type === "anruf";
+  // Verlorene Vorgänge hervorheben, damit Grund und Notiz beim nächsten Kontakt auffallen
+  const lost = a.type === "phase" && a.body.includes("→ Abgelehnt / Verloren");
+  const remove = () =>
+    startTransition(async () => {
+      const result = await deleteActivityAction(a.id);
+      if (result.error) setError(result.error);
+    });
+  return (
+    <li className={`flex gap-3.5 border-t border-line-soft px-5 py-3.5 ${lost ? "bg-danger-soft/50" : ""}`}>
+      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${lost ? "bg-danger-soft text-danger-ink" : "bg-bg text-muted"}`}>
+        <Icon size={15} aria-hidden="true" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-2">
+          <p className={`flex-1 text-xs ${lost ? "font-semibold text-danger-ink" : "text-muted"}`}>
+            {lost ? "Verloren" : LABEL[a.type]} · {relativeTime(a.createdAt)}
+            {a.editedAt && <span title={`bearbeitet am ${relativeTime(a.editedAt)}`}> · bearbeitet</span>}
+          </p>
+          {editable && mode === "view" && <EntryMenu onEdit={() => setMode("edit")} onDelete={() => setMode("delete")} />}
+        </div>
+        {mode === "edit" ? (
+          <EditActivity activity={a} who={who} people={people} onDone={() => setMode("view")} />
+        ) : (
+          <>
+            <p className="whitespace-pre-line text-sm">{a.body}</p>
+            {who.length > 0 && (
+              <p className="mt-1 text-xs text-muted">
+                Mit{" "}
+                {who.map((p, i) => (
+                  <span key={p.id}>
+                    {i > 0 && ", "}
+                    <Link href={`/kontakte/${p.id}`} className="font-semibold text-ink hover:underline">{p.name}</Link>
+                  </span>
+                ))}
+              </p>
+            )}
+          </>
+        )}
+        {mode === "delete" && (
+          <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-danger-soft/60 p-3 text-sm">
+            <span className="flex-1">{a.type === "anruf" ? "Diesen Anruf" : "Diese Notiz"} wirklich löschen?</span>
+            <button type="button" disabled={pending} onClick={remove} className={`${btnQuiet} text-danger-ink`}>{pending ? "Löscht …" : "Löschen"}</button>
+            <button type="button" disabled={pending} onClick={() => setMode("view")} className={btnQuiet}>Abbrechen</button>
+            <FormError message={error} />
+          </div>
+        )}
+        {a.type !== "phase" && mode === "view" && (
+          <EntryActions
+            entry={{ kind: "activity", id: a.id, dealId: a.dealId, companyId: a.companyId, title: a.body.split("\n")[0] }}
+            projects={projects}
+            newDealHref={`/vorgaenge/neu?notiz=${a.id}`}
+            today={today}
+          />
+        )}
+      </div>
+    </li>
+  );
+}
+
 // Notizen, Anrufe, Phasenwechsel und Mails in einer Zeitleiste, neueste zuerst; optional mit Suche, Filter und Projektzuordnung
 export function Timeline({
   items,
@@ -283,6 +414,7 @@ export function Timeline({
   projectFilter = false,
   today = "",
   peopleOf = {},
+  peopleFor = {},
   tasks,
 }: {
   items: Activity[];
@@ -295,6 +427,8 @@ export function Timeline({
   today?: string;
   // Mit wem? Personen je Notiz/Anruf (Aktivitäts-ID → Personen), verlinkt auf die Kontaktseite
   peopleOf?: Record<number, { id: number; name: string }[]>;
+  // Auswahl „Mit wem?“ beim Bearbeiten: aktuelle Kontakte je Firma (Firmen-ID → Personen)
+  peopleFor?: Record<number, PickPerson[]>;
   // optionaler Filter „Aufgaben“ (z. B. auf der Kontaktseite): zeigt statt der Einträge diese Liste
   tasks?: { count: number; content: ReactNode };
 }) {
@@ -390,40 +524,15 @@ export function Timeline({
         {visible.map((item) => {
           if (item.kind === "email") return <MailEntry key={`m${item.email.id}`} mail={item.email} sender={item.email.companyId ? senders[item.email.companyId] : undefined} projects={projects} today={today} />;
           const a = item.activity;
-          const Icon = ICON[a.type];
-          // Verlorene Vorgänge hervorheben, damit Grund und Notiz beim nächsten Kontakt auffallen
-          const lost = a.type === "phase" && a.body.includes("→ Abgelehnt / Verloren");
           return (
-            <li key={`a${a.id}`} className={`flex gap-3.5 border-t border-line-soft px-5 py-3.5 ${lost ? "bg-danger-soft/50" : ""}`}>
-              <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${lost ? "bg-danger-soft text-danger-ink" : "bg-bg text-muted"}`}>
-                <Icon size={15} aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className={`text-xs ${lost ? "font-semibold text-danger-ink" : "text-muted"}`}>
-                  {lost ? "Verloren" : LABEL[a.type]} · {relativeTime(a.createdAt)}
-                </p>
-                <p className="whitespace-pre-line text-sm">{a.body}</p>
-                {peopleOf[a.id]?.length > 0 && (
-                  <p className="mt-1 text-xs text-muted">
-                    Mit{" "}
-                    {peopleOf[a.id].map((p, i) => (
-                      <span key={p.id}>
-                        {i > 0 && ", "}
-                        <Link href={`/kontakte/${p.id}`} className="font-semibold text-ink hover:underline">{p.name}</Link>
-                      </span>
-                    ))}
-                  </p>
-                )}
-                {a.type !== "phase" && (
-                  <EntryActions
-                    entry={{ kind: "activity", id: a.id, dealId: a.dealId, companyId: a.companyId, title: a.body.split("\n")[0] }}
-                    projects={projects}
-                    newDealHref={`/vorgaenge/neu?notiz=${a.id}`}
-                    today={today}
-                  />
-                )}
-              </div>
-            </li>
+            <ActivityEntry
+              key={`a${a.id}`}
+              activity={a}
+              who={peopleOf[a.id] ?? []}
+              people={a.companyId ? peopleFor[a.companyId] ?? [] : []}
+              projects={projects}
+              today={today}
+            />
           );
         })}
       </ol>

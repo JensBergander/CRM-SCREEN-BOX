@@ -176,6 +176,13 @@
       "when": 1794005483292,
       "tag": "0024_display_name",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1794420803106,
+      "tag": "0025_activity_edited",
+      "breakpoints": true
     }
   ]
 }

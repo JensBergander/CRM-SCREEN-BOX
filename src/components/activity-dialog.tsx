@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { PhoneMissed, X } from "lucide-react";
 import { addActivityAction } from "@/app/(app)/actions";
 import { PeoplePicker, type PickPerson } from "./people-picker";
+import { WhenField } from "./when-field";
 import { RunningDot } from "./timeline";
 import { btnPrimary, btnQuiet, FormError, Textarea } from "./ui";
 
@@ -127,6 +128,7 @@ export function ActivityDialog({
         </div>
 
         <PeoplePicker people={people} initial={initialPeople} />
+        <WhenField />
 
         <label>
           <span className="sr-only">Text</span>

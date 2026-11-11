@@ -247,7 +247,10 @@ export const activities = mysqlTable(
     dealId: int("deal_id").references(() => deals.id, { onDelete: "cascade" }),
     type: mysqlEnum("type", ACTIVITY_TYPES).notNull(),
     body: text("body").notNull(),
+    // Zeitpunkt des Gesprächs bzw. der Notiz; beim Anlegen und Bearbeiten änderbar („Wann“)
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // zuletzt nachträglich bearbeitet (Hinweis „bearbeitet“)
+    editedAt: timestamp("edited_at"),
   },
   (t) => [index("activities_company_idx").on(t.companyId, t.createdAt)],
 );

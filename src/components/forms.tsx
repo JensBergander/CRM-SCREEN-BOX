@@ -19,6 +19,7 @@ import { PlanningDialog } from "./planning";
 import { AddressSearch } from "./place-input";
 import { RunningDot } from "./timeline";
 import { ContactSelect, PeoplePicker, type PickPerson } from "./people-picker";
+import { WhenField } from "./when-field";
 import { useSameName } from "./person-forms";
 import { ActivityDialog, type ActivityKind } from "./activity-dialog";
 import { dial, NumberMenu } from "./call-menu";
@@ -241,6 +242,9 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [], p
         />
       )}
       {people.length > 0 && <PeoplePicker key={round} people={people} initial={initialPeople} small />}
+      <div className="flex">
+        <WhenField key={round} compact />
+      </div>
       {!dealId && projects.length > 0 && (
         <div role="radiogroup" aria-label="Zuordnen zu" className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-xs text-muted">Zu:</span>

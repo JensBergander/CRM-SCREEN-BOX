@@ -111,7 +111,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
           </Card>
           <Card title="Verlauf">
             <ActivityForm companyId={deal.companyId} dealId={deal.id} numbers={await phoneNumbers(deal.companyId, deal.id)} people={staff} initialPeople={contactPerson} />
-            <Timeline items={data.timeline} peopleOf={await peopleOfActivities(data.timeline.map((a) => a.id))} emails={data.emails} senders={data.senders} searchable projects={data.projects} today={todayIso()} />
+            <Timeline items={data.timeline} peopleFor={{ [deal.companyId]: staff }} peopleOf={await peopleOfActivities(data.timeline.map((a) => a.id))} emails={data.emails} senders={data.senders} searchable projects={data.projects} today={todayIso()} />
           </Card>
         </div>
         <div className="flex flex-col gap-5">

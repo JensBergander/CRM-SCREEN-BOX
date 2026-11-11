@@ -560,11 +560,13 @@ export async function addActivityAction(
   await getCurrentUser();
   const body = text(form, "body")?.trim();
   if (!body) return { error: "Bitte etwas eintragen." };
+  const when = whenFromForm(form);
+  if (when === "invalid") return { error: WHEN_ERROR };
   const unreached = form.get("unreached") === "1";
   const type = unreached || form.get("type") === "anruf" ? "anruf" : "notiz";
   // Auf der Firmenseite kommt das Projekt aus den Pills („Nur Firma“ = leer)
   const dealId = target.dealId ?? (await dealOfCompany(Number(text(form, "dealId")) || null, target.companyId));
-  const [inserted] = await db.insert(activities).values({ ...target, dealId, type, body });
+  const [inserted] = await db.insert(activities).values({ ...target, dealId, type, body, ...(when && { createdAt: when }) });
   const companyId = target.companyId ?? (dealId ? (await db.select({ c: deals.companyId }).from(deals).where(eq(deals.id, dealId)))[0]?.c ?? null : null);
   const personIds = await peopleFromForm(form, companyId);
   if (personIds.length) await db.insert(activityPeople).values(personIds.map((personId) => ({ activityId: inserted.insertId, personId })));
@@ -577,6 +579,53 @@ export async function addActivityAction(
     const [task] = await db.insert(tasks).values({ title: `${name ? `${name.trim()}: ` : ""}${todo}`.slice(0, 255), dueDate: followUp, companyId, dealId });
     if (personIds.length) await db.insert(taskPeople).values(personIds.map((personId) => ({ taskId: task.insertId, personId })));
   }
+  refresh();
+  return {};
+}
+
+const WHEN_ERROR = "Bitte einen gültigen Zeitpunkt angeben, der nicht in der Zukunft liegt.";
+
+// „Wann“ aus dem Formular: ISO-Zeitpunkt, im Browser aus der Ortszeit umgerechnet. Leer = jetzt (undefined).
+// Ein paar Minuten Vorlauf sind erlaubt (Uhren von Handy und Server laufen nie ganz gleich).
+function whenFromForm(form: FormData): Date | undefined | "invalid" {
+  const raw = text(form, "at")?.trim();
+  if (!raw) return undefined;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime()) || date.getTime() > Date.now() + 10 * 60_000 || date.getFullYear() < 2000) return "invalid";
+  return date;
+}
+
+// Nur Notizen und Anrufe lassen sich ändern; Phasenwechsel und verschickte Mails halten fest, was passiert ist
+async function editableActivity(activityId: number) {
+  const [row] = await db.select().from(activities).where(eq(activities.id, activityId));
+  return row && (row.type === "notiz" || row.type === "anruf") ? row : null;
+}
+
+// Notiz oder Anruf nachträglich ändern: Text, Art, Zeitpunkt und „Mit wem?“ (das Projekt über die Pill im Eintrag)
+export async function updateActivityAction(activityId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const row = await editableActivity(activityId);
+  if (!row) return { error: "Dieser Eintrag lässt sich nicht bearbeiten." };
+  const body = text(form, "body")?.trim();
+  if (!body) return { error: "Bitte etwas eintragen." };
+  const when = whenFromForm(form);
+  if (when === "invalid") return { error: WHEN_ERROR };
+  const type = form.get("type") === "anruf" ? "anruf" : "notiz";
+  const companyId = row.companyId ?? (row.dealId ? (await db.select({ c: deals.companyId }).from(deals).where(eq(deals.id, row.dealId)))[0]?.c ?? null : null);
+  const personIds = await peopleFromForm(form, companyId);
+  await db.transaction(async (tx) => {
+    await tx.update(activities).set({ body, type, createdAt: when ?? row.createdAt, editedAt: new Date() }).where(eq(activities.id, activityId));
+    await tx.delete(activityPeople).where(eq(activityPeople.activityId, activityId));
+    if (personIds.length) await tx.insert(activityPeople).values(personIds.map((personId) => ({ activityId, personId })));
+  });
+  refresh();
+  return {};
+}
+
+export async function deleteActivityAction(activityId: number): Promise<{ error?: string }> {
+  await getCurrentUser();
+  if (!(await editableActivity(activityId))) return { error: "Dieser Eintrag lässt sich nicht löschen." };
+  await db.delete(activities).where(eq(activities.id, activityId));
   refresh();
   return {};
 }
