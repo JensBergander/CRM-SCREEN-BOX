@@ -392,6 +392,29 @@ export async function foreignSenders(list: Email[], ownCompanyId: number): Promi
   return Object.fromEntries(rows.map((r) => [r.id, r.name]));
 }
 
+// Bekannte Absender eingehender Mails (Mail-ID → Person): über die Zuordnung der Mail, sonst über die Adresse.
+// Gehört eine Adresse mehreren Personen (z. B. info@), bleibt der Absender offen – nichts raten.
+export async function mailSenders(list: Email[]): Promise<Record<number, { personId: number; name: string }>> {
+  const incoming = list.filter((m) => !m.outgoing);
+  const ids = [...new Set(incoming.map((m) => m.contactId).filter((id): id is number => !!id))];
+  const addresses = [...new Set(incoming.filter((m) => !m.contactId && m.fromAddress).map((m) => m.fromAddress!.toLowerCase()))];
+  if (!ids.length && !addresses.length) return {};
+  const rows = await selectContacts().where(
+    or(ids.length ? inArray(contacts.id, ids) : undefined, addresses.length ? inArray(sql`lower(${contacts.email})`, addresses) : undefined),
+  );
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const byAddress = new Map<string, Set<number>>();
+  for (const r of rows) if (r.email) byAddress.set(r.email.toLowerCase(), (byAddress.get(r.email.toLowerCase()) ?? new Set()).add(r.personId));
+  const result: Record<number, { personId: number; name: string }> = {};
+  for (const m of incoming) {
+    const row = m.contactId ? byId.get(m.contactId) : undefined;
+    const persons = !row && m.fromAddress ? byAddress.get(m.fromAddress.toLowerCase()) : undefined;
+    const person = row ?? (persons?.size === 1 ? rows.find((r) => r.personId === [...persons][0]) : undefined);
+    if (person) result[m.id] = { personId: person.personId, name: fullName(person) };
+  }
+  return result;
+}
+
 export type SupplierRow = Awaited<ReturnType<typeof suppliersForDeal>>[number];
 
 // Lieferanten eines Vorgangs mit Notiz und Kosten

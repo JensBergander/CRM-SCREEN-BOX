@@ -15,13 +15,25 @@ import {
   Paperclip,
   Phone,
   Search,
+  UserPlus,
 } from "lucide-react";
 import { assignEntryAction, createTaskAction, deleteActivityAction, mailTextAction, updateActivityAction } from "@/app/(app)/actions";
 import type { Activity, Email } from "@/db/schema";
 import { relativeTime, tidyMailText } from "@/lib/format";
-import { btnPrimary, btnQuiet, Empty, FormError, Input, Textarea } from "./ui";
+import { btnPrimary, btnQuiet, Empty, FormError, Input, RunningDot, Textarea } from "./ui";
 import { PeoplePicker, type PickPerson } from "./people-picker";
 import { WhenField } from "./when-field";
+import { MailContactPanel } from "./mail-contact";
+import type { TagOptions } from "@/lib/service-tags";
+
+// Firmen-Zeitleiste: Absender eingehender Mails als Kontakt übernehmen bzw. Daten ergänzen
+export type MailContacts = {
+  companyId: number;
+  companies: { id: number; name: string }[];
+  tagOptions: TagOptions;
+  // Mail-ID → bekannter Absender
+  known: Record<number, { personId: number; name: string }>;
+};
 
 const ICON = { notiz: MessageSquare, anruf: Phone, phase: ArrowRightLeft, mail: Mail };
 const LABEL = { notiz: "Notiz", anruf: "Anruf", phase: "Phase", mail: "Mail" };
@@ -46,10 +58,7 @@ type Item =
 
 const pillClass = "inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold";
 
-// Grüner Punkt für laufende Projekte
-export function RunningDot() {
-  return <span className="h-2 w-2 shrink-0 rounded-full bg-ok" aria-label="läuft" />;
-}
+export { RunningDot } from "./ui";
 
 // Auswahlliste der Projekte; bei vielen mit Suchfeld (Projekt, Nummer oder Kunde)
 function ProjectMenu({ projects, onPick, onClear, heading }: { projects: Project[]; onPick: (id: number) => void; onClear?: () => void; heading: string }) {
@@ -221,15 +230,29 @@ function EntryActions({ entry, projects, newDealHref, today }: { entry: Entry; p
   );
 }
 
-function MailEntry({ mail, sender, projects, today }: { mail: Email; sender?: string; projects: Project[]; today: string }) {
+function MailEntry({ mail, sender, projects, today, contacts }: { mail: Email; sender?: string; projects: Project[]; today: string; contacts?: MailContacts }) {
   const [full, setFull] = useState<{ text: string } | { error: string } | null>(null);
   const [open, setOpen] = useState(false);
+  const [adopt, setAdopt] = useState(false);
   const [pending, startTransition] = useTransition();
   const Icon = mail.outgoing ? MailOpen : Mail;
+  const canAdopt = !!contacts && !mail.outgoing;
+  const known = contacts?.known[mail.id];
 
+  const load = () => {
+    if (!full) startTransition(async () => setFull(await mailTextAction(mail.id)));
+  };
   const toggle = () => {
     setOpen(!open);
-    if (!full) startTransition(async () => setFull(await mailTextAction(mail.id)));
+    load();
+  };
+  // Beim Übernehmen die ganze Mail mit Signatur darüber zeigen
+  const toggleAdopt = () => {
+    if (!adopt) {
+      setOpen(true);
+      load();
+    }
+    setAdopt(!adopt);
   };
 
   return (
@@ -239,7 +262,17 @@ function MailEntry({ mail, sender, projects, today }: { mail: Email; sender?: st
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted">
-          {mail.outgoing ? `Mail an ${mail.toAddresses?.split(",")[0]}` : `Mail von ${mail.fromName ?? mail.fromAddress}`} · {relativeTime(mail.receivedAt)}
+          {mail.outgoing ? (
+            `Mail an ${mail.toAddresses?.split(",")[0]}`
+          ) : known ? (
+            <>
+              Mail von{" "}
+              <Link href={`/kontakte/${known.personId}`} className="font-semibold text-ink hover:underline">{known.name}</Link>
+            </>
+          ) : (
+            `Mail von ${mail.fromName ?? mail.fromAddress}`
+          )}{" "}
+          · {relativeTime(mail.receivedAt)}
           {mail.hasAttachments && <Paperclip size={12} className="ml-1 inline" aria-label="mit Anhang" />}
           {sender && mail.companyId && (
             <Link href={`/firmen/${mail.companyId}`} className="ml-2 rounded-md bg-line-soft px-1.5 py-0.5 text-[11px] font-semibold text-ink">
@@ -264,7 +297,23 @@ function MailEntry({ mail, sender, projects, today }: { mail: Email; sender?: st
               <ExternalLink size={13} aria-hidden="true" /> In Outlook
             </a>
           )}
+          {canAdopt && (
+            <button type="button" onClick={toggleAdopt} aria-expanded={adopt} className="inline-flex items-center gap-1 text-muted hover:text-ink">
+              <UserPlus size={13} aria-hidden="true" /> {known ? "Daten ergänzen" : "Kontakt übernehmen"}
+            </button>
+          )}
         </div>
+        {adopt && contacts && (
+          <MailContactPanel
+            mailId={mail.id}
+            companies={contacts.companies}
+            tagOptions={contacts.tagOptions}
+            companyId={mail.companyId ?? contacts.companyId}
+            dealId={mail.dealId}
+            embedded
+            onClose={() => setAdopt(false)}
+          />
+        )}
         <EntryActions
           entry={{ kind: "mail", id: mail.id, dealId: mail.dealId, companyId: mail.companyId, title: (mail.subject ?? "Mail").replace(/^(AW|WG|RE|FW|Fwd):\s*/i, "") }}
           projects={projects}
@@ -416,6 +465,7 @@ export function Timeline({
   peopleOf = {},
   peopleFor = {},
   tasks,
+  mailContacts,
 }: {
   items: Activity[];
   emails?: Email[];
@@ -431,6 +481,7 @@ export function Timeline({
   peopleFor?: Record<number, PickPerson[]>;
   // optionaler Filter „Aufgaben“ (z. B. auf der Kontaktseite): zeigt statt der Einträge diese Liste
   tasks?: { count: number; content: ReactNode };
+  mailContacts?: MailContacts;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("alle");
@@ -522,7 +573,7 @@ export function Timeline({
       {visible.length === 0 && <Empty>{merged.length ? "Nichts gefunden." : "Noch keine Einträge."}</Empty>}
       <ol>
         {visible.map((item) => {
-          if (item.kind === "email") return <MailEntry key={`m${item.email.id}`} mail={item.email} sender={item.email.companyId ? senders[item.email.companyId] : undefined} projects={projects} today={today} />;
+          if (item.kind === "email") return <MailEntry key={`m${item.email.id}`} mail={item.email} sender={item.email.companyId ? senders[item.email.companyId] : undefined} projects={projects} today={today} contacts={mailContacts} />;
           const a = item.activity;
           return (
             <ActivityEntry

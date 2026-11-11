@@ -173,7 +173,10 @@ export function AddressSearch({ fillName = false }: { fillName?: boolean }) {
         onPick={(p) => {
           const set = (name: string, v: string | null | undefined, onlyEmpty = false) => {
             const el = field(name);
-            if (el && v && !(onlyEmpty && el.value)) el.value = v;
+            if (el && v && !(onlyEmpty && el.value)) {
+              el.value = v;
+              el.dispatchEvent(new Event("input", { bubbles: true }));
+            }
           };
           set("street", p.street);
           set("zip", p.zip);

@@ -5,7 +5,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { activities, activityPeople, appState, companies, COMPANY_KINDS, contacts, people, dealSuppliers, taskPeople, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks } from "@/db/schema";
+import { activities, activityPeople, appState, companies, COMPANY_KINDS, contacts, people, dealSuppliers, taskPeople, deals, emails, LOST_REASONS, mailIgnore, productionDays, STAGES, tasks, type Email } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { suggestFolderName, tidyMailText, todayIso } from "@/lib/format";
 import {
@@ -802,16 +802,64 @@ export async function mailTextAction(mailId: number): Promise<{ text: string } |
   }
 }
 
+export type KnownContact = {
+  id: number;
+  personId: number;
+  // Zuordnung gehört zu einer anderen Firma: Position, Mail und Telefon werden für diese Firma neu angelegt
+  elsewhere: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  position: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+  fromLexware: boolean;
+};
+
 export type MailForContact = {
   text: string;
   suggestion: SignatureData & { email: string };
-  company: { id: number; name: string; lexwareId: string | null; customerNumber: string | null; supplierNumber: string | null; lexwareArchived: boolean } | null;
+  company: {
+    id: number;
+    name: string;
+    lexwareId: string | null;
+    customerNumber: string | null;
+    supplierNumber: string | null;
+    lexwareArchived: boolean;
+    emailDomain: string | null;
+    website: string | null;
+    street: string | null;
+    zip: string | null;
+    city: string | null;
+  } | null;
+  // schon gespeicherter Kontakt: Formular zeigt gespeichert und Signatur nebeneinander
+  known: KnownContact | null;
   projects: ProjectOption[];
   hint: ReturnType<typeof hintProps> | null;
 };
 
-// Volltext der Mail holen und Kontaktdaten aus der Signatur vorschlagen
-export async function loadMailForContactAction(mailId: number): Promise<MailForContact | { error: string }> {
+// Der Absender als gespeicherter Kontakt: über die Zuordnung der Mail, sonst über die Adresse (Namen dürfen
+// nicht widersprechen), sonst gleicher Name ohne Mail bei der Firma
+async function knownSender(mail: Email, address: string, name: { firstName: string | null; lastName: string | null }, companyId: number | null) {
+  if (mail.contactId && !mail.outgoing) {
+    const [byMail] = await selectContacts().where(eq(contacts.id, mail.contactId));
+    if (byMail) return byMail;
+  }
+  if (address) {
+    const [byAddress] = (
+      await selectContacts()
+        .where(sql`lower(${contacts.email}) = ${address.toLowerCase()}`)
+        .orderBy(sql`${contacts.companyId} <=> ${companyId} desc`, sql`${contacts.endedAt} is not null`, desc(contacts.id))
+    ).filter((c) => compatibleNames(c, name));
+    if (byAddress) return byAddress;
+  }
+  if (!companyId) return null;
+  const [byName] = (await selectContacts().where(and(eq(contacts.companyId, companyId), isNull(contacts.email)))).filter((c) => sameName(c, name));
+  return byName ?? null;
+}
+
+// Volltext der Mail holen und Kontaktdaten aus der Signatur vorschlagen; companyId: vorbelegte Firma (Firmen-Zeitleiste)
+export async function loadMailForContactAction(mailId: number, companyId?: number): Promise<MailForContact | { error: string }> {
   await getCurrentUser();
   const [mail] = await db.select().from(emails).where(eq(emails.id, mailId));
   if (!mail) return { error: "Mail nicht gefunden." };
@@ -820,8 +868,8 @@ export async function loadMailForContactAction(mailId: number): Promise<MailForC
     const address = mail.outgoing ? mail.toAddresses?.split(",")[0]?.trim() ?? "" : mail.fromAddress ?? "";
     // Bei gesendeten Mails steht unten die eigene Signatur, daher nur die Empfängeradresse auswerten
     const suggestion = parseSignature(mail.outgoing ? "" : unique, { name: mail.outgoing ? null : mail.fromName, address });
-    const match = await matchAddress(address);
-    const [company] = match
+    const targetId = companyId ?? (await matchAddress(address))?.companyId ?? null;
+    const [company] = targetId
       ? await db
           .select({
             id: companies.id,
@@ -830,49 +878,90 @@ export async function loadMailForContactAction(mailId: number): Promise<MailForC
             customerNumber: companies.customerNumber,
             supplierNumber: companies.supplierNumber,
             lexwareArchived: companies.lexwareArchived,
+            emailDomain: companies.emailDomain,
+            website: companies.website,
+            street: companies.street,
+            zip: companies.zip,
+            city: companies.city,
           })
           .from(companies)
-          .where(eq(companies.id, match.companyId))
+          .where(eq(companies.id, targetId))
       : [];
+    const sender = await knownSender(mail, address, { firstName: cleanName(suggestion.firstName), lastName: cleanName(suggestion.lastName) }, company?.id ?? null);
+    const elsewhere = sender?.companyId && sender.companyId !== company?.id ? await companyName(sender.companyId) : null;
+    const known: KnownContact | null = sender
+      ? {
+          id: sender.id,
+          personId: sender.personId,
+          elsewhere: elsewhere ?? (sender.endedAt ? "früher" : null),
+          firstName: sender.firstName,
+          lastName: sender.lastName,
+          position: sender.position,
+          email: sender.email,
+          phone: sender.phone,
+          mobile: sender.mobile,
+          fromLexware: sender.fromLexware,
+        }
+      : null;
     const projects = company ? (await projectsFor(company.id)).filter((p) => p.active) : [];
     const rating = company ? await ratingFor(company.id) : null;
     const hint = rating && rating.rating.stars !== null && rating.rating.stars <= 2 ? hintProps(rating) : null;
-    return { text: tidyMailText(full), suggestion: { ...suggestion, email: address }, company: company ?? null, projects, hint };
+    return { text: tidyMailText(full), suggestion: { ...suggestion, email: address }, company: company ?? null, known, projects, hint };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Mail konnte nicht geladen werden." };
   }
 }
 
+const PERSON_FIELDS = ["firstName", "lastName", "mobile"] as const;
+const AFFILIATION_FIELDS = ["position", "email", "phone"] as const;
+const COMPANY_FIELDS = ["website", "street", "zip", "city"] as const;
+// Bei Lexware-Ansprechpartnern führt Lexware: gefüllte Felder bleiben, leere darf das CRM ergänzen
+const LEXWARE_CONTACT_FIELDS = new Set<string>(["firstName", "lastName", "email", "phone"]);
+
 // Kontakt (und bei Bedarf Firma oder Lieferant) aus einer Mail anlegen und die Mail zuordnen.
-// Vorhandene Einträge werden nur ergänzt, nie überschrieben.
+// Ohne Abgleich werden vorhandene Einträge nur ergänzt. Mit Abgleich (compare) gilt, was angehakt ist („take“);
+// Lexware-Felder bleiben dabei unangetastet.
 export async function createContactFromMailAction(mailId: number, _: FormState, form: FormData): Promise<FormState> {
   await getCurrentUser();
-  const firstName = cleanName(text(form, "firstName"));
-  const lastName = cleanName(text(form, "lastName"));
-  if (!firstName && !lastName) return { error: "Bitte Vor- oder Nachnamen angeben." };
+  const value = (key: string) => text(form, key)?.trim() || null;
+  const compare = form.get("compare") === "1";
+  const takes = new Set(form.getAll("take").map(String));
+  const chosenId = Number(text(form, "knownId")) || null;
+  const [chosen] = chosenId ? await selectContacts().where(eq(contacts.id, chosenId)) : [];
+  // Ist ein gespeicherter Kontakt gewählt, zählen beim Abgleich nur angehakte Namen; sonst die Eingabe
+  const firstName = cleanName(value("firstName"));
+  const lastName = cleanName(value("lastName"));
+  if (!chosen && !firstName && !lastName) return { error: "Bitte Vor- oder Nachnamen angeben." };
   const companyId = await resolveCompany(form);
   if (!companyId) return { error: "Bitte eine Firma bzw. den Namen des Lieferanten angeben." };
-  const value = (key: string) => text(form, key)?.trim() || null;
   const email = value("email")?.toLowerCase() ?? null;
 
   const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
   const fill: Partial<typeof companies.$inferInsert> = {};
   // Die Adresse von Lexware-Firmen kommt aus Lexware
-  const fillable = company.lexwareId ? (["website"] as const) : (["website", "street", "zip", "city"] as const);
-  for (const key of fillable) if (!company[key] && value(key)) fill[key] = value(key);
+  const fillable = COMPANY_FIELDS.filter((key) => key === "website" || !company.lexwareId);
+  // Abgleich gilt nur für die Firma, die im Formular verglichen wurde; wurde die Firma geändert, nur Leeres ergänzen
+  const compared = compare && Number(text(form, "compareCompanyId")) === companyId;
+  for (const key of fillable) {
+    const v = value(key);
+    if (!v) continue;
+    if (compared ? takes.has(key) && v !== company[key] : !company[key]) fill[key] = v;
+  }
   if (form.get("learnDomain") === "on" && !company.emailDomain && domainOf(email)) fill.emailDomain = domainOf(email);
   if (Object.keys(fill).length) await db.update(companies).set(fill).where(eq(companies.id, companyId));
 
   const person = { firstName, lastName, position: value("position"), phone: value("phone"), mobile: value("mobile") };
-  // Erst über die Mailadresse suchen, sonst denselben Namen in der Firma ohne Adresse (z. B. aus Lexware importiert)
-  // über die Mail nur, wenn die Namen nicht widersprechen (geteilte Adressen wie info@)
-  const [byEmail] = email
-    ? (await selectContacts().where(sql`lower(${contacts.email}) = ${email}`).orderBy(sql`${contacts.endedAt} is not null`, desc(contacts.id))).filter((c) => compatibleNames(c, person))
-    : [];
-  const [byName] = byEmail
+  // Gewählter Kontakt, sonst erst über die Mailadresse suchen, sonst denselben Namen in der Firma ohne Adresse
+  // (z. B. aus Lexware importiert); über die Mail nur, wenn die Namen nicht widersprechen (geteilte Adressen wie info@)
+  const [byEmail] = chosen
+    ? []
+    : email
+      ? (await selectContacts().where(sql`lower(${contacts.email}) = ${email}`).orderBy(sql`${contacts.endedAt} is not null`, desc(contacts.id))).filter((c) => compatibleNames(c, person))
+      : [];
+  const [byName] = chosen || byEmail
     ? []
     : (await selectContacts().where(and(eq(contacts.companyId, companyId), isNull(contacts.email)))).filter((c) => sameName(c, person));
-  const found = byEmail ?? byName;
+  const found = chosen ?? byEmail ?? byName;
   // Gefundene Person bei einer anderen Firma oder dort „früher“: die Mail gehört zur Zuordnung bei dieser Firma.
   // Ohne Firma und aktuell: diese Zuordnung bekommt einfach die Firma (unten). Danach die tatsächlich betroffene
   // Zuordnung neu lesen, damit „nur Leeres ergänzen“ deren Werte prüft und nicht die einer anderen.
@@ -885,25 +974,42 @@ export async function createContactFromMailAction(mailId: number, _: FormState, 
   let contactId: number;
   if (known) {
     contactId = known.id;
-    // nur ergänzen, nie überschreiben
+    const input: Record<string, string | null> = { ...person, email };
+    const lexware = known.fromLexware || !!chosen?.fromLexware;
+    // angehakt (Abgleich) bzw. leer (ohne Abgleich); Lexware-Felder nur, wenn sie leer sind
+    const take = (key: string, saved: string | null) =>
+      !!input[key] &&
+      input[key] !== saved &&
+      (chosen && found === chosen ? takes.has(key) && !(lexware && LEXWARE_CONTACT_FIELDS.has(key) && saved) : !saved);
+    // Position, Mail und Telefon einer gerade neu angelegten Zuordnung hat affiliate() schon gesetzt
     const own: Partial<typeof contacts.$inferInsert> = {};
-    if (!known.position && person.position) own.position = person.position;
-    if (!known.phone && person.phone) own.phone = person.phone;
+    for (const key of AFFILIATION_FIELDS) if (take(key, known[key])) own[key] = input[key];
     if (!known.companyId) own.companyId = companyId;
-    if (!known.email && email) own.email = email;
     if (Object.keys(own).length) await db.update(contacts).set(own).where(eq(contacts.id, known.id));
     const personal: Partial<typeof people.$inferInsert> = {};
-    const names = mergeNames(known, person);
-    if (names.firstName !== known.firstName) personal.firstName = names.firstName;
-    if (names.lastName !== known.lastName) personal.lastName = names.lastName;
-    if (!known.mobile && person.mobile) personal.mobile = person.mobile;
+    if (chosen && found === chosen) {
+      for (const key of PERSON_FIELDS) if (take(key, known[key])) personal[key] = input[key];
+      // nie beide Namen leer
+      const after = { firstName: personal.firstName ?? known.firstName, lastName: personal.lastName ?? known.lastName };
+      if (!after.firstName && !after.lastName) {
+        delete personal.firstName;
+        delete personal.lastName;
+      }
+    } else {
+      const names = mergeNames(known, person);
+      if (names.firstName !== known.firstName) personal.firstName = names.firstName;
+      if (names.lastName !== known.lastName) personal.lastName = names.lastName;
+      if (!known.mobile && person.mobile) personal.mobile = person.mobile;
+    }
     if (Object.keys(personal).length) await db.update(people).set(personal).where(eq(people.id, known.personId));
   } else {
     contactId = (await createContact({ ...person, companyId, email })).contactId;
   }
 
+  const [before] = await db.select({ companyId: emails.companyId }).from(emails).where(eq(emails.id, mailId));
   await db.update(emails).set({ companyId, contactId, status: "zugeordnet" }).where(eq(emails.id, mailId));
-  await assignMailToDeal(mailId, Number(text(form, "dealId")) || null);
+  // Projekt nur ändern, wenn eins gewählt wurde oder die Mail die Firma wechselt; sonst bleibt die Zuordnung
+  if (form.has("dealId") || before?.companyId !== companyId) await assignMailToDeal(mailId, Number(text(form, "dealId")) || null);
   await rematchOpenMails();
   refresh();
   return {};

@@ -8,7 +8,7 @@ import { MIN_OFFERS, ratingFor } from "@/lib/rating";
 import { AssessmentCard } from "@/components/rating";
 import { InlineTitle } from "@/components/inline-title";
 import { renameCompanyAction } from "../../actions";
-import { pickPeople, callContexts, companyCall, companyName, dealsWonBy, personCall, peopleOfActivities, phoneNumbers, getCompany, projectsOfSupplier } from "@/lib/queries";
+import { companyOptions, mailSenders, pickPeople, callContexts, companyCall, companyName, dealsWonBy, personCall, peopleOfActivities, phoneNumbers, getCompany, projectsOfSupplier } from "@/lib/queries";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
 import { fullName } from "@/lib/people";
@@ -137,7 +137,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         <Card title="Zeitleiste" aside={<OlderMails companyId={company.id} />}>
           {/* Lieferanten: Notizen nur zur Firma; Mails ordnest du über die Zeitleiste einem Kundenprojekt zu */}
           <ActivityForm companyId={company.id} dealId={null} projects={supplier ? [] : data.projects.filter((p) => p.active)} numbers={await phoneNumbers(company.id)} people={pickPeople(data.contacts.filter((c) => !c.endedAt))} />
-          <Timeline items={data.timeline} peopleFor={{ [company.id]: pickPeople(data.contacts.filter((c) => !c.endedAt)) }} peopleOf={await peopleOfActivities(data.timeline.map((a) => a.id))} emails={data.emails} senders={data.senders} searchable projects={data.projects} projectFilter today={todayIso()} />
+          <Timeline items={data.timeline} peopleFor={{ [company.id]: pickPeople(data.contacts.filter((c) => !c.endedAt)) }} peopleOf={await peopleOfActivities(data.timeline.map((a) => a.id))} emails={data.emails} senders={data.senders} searchable projects={data.projects} projectFilter today={todayIso()} mailContacts={{ companyId: company.id, companies: await companyOptions(), tagOptions: await serviceTagOptions(), known: await mailSenders(data.emails) }} />
         </Card>
 
         <div className="flex flex-col gap-5">

@@ -134,3 +134,8 @@ export function LexwareBadge({ company, link = true }: {
     <span title={title} className={cls}>{label}</span>
   );
 }
+
+// Grüner Punkt für laufende Projekte
+export function RunningDot() {
+  return <span className="h-2 w-2 shrink-0 rounded-full bg-ok" aria-label="läuft" />;
+}
