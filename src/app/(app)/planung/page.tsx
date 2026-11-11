@@ -27,6 +27,26 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
   const days = Array.from({ length: WEEKS * 7 }, (_, i) => addDaysIso(start, i));
   const rows = await scheduleBetween(start, end);
 
+  const list = (
+    <ul className="mt-2 flex flex-col gap-3">
+      {rows.map((r) => (
+        <li key={r.dealId}>
+          <Link href={`/vorgaenge/${r.dealId}`} className="font-semibold hover:underline">{r.company} · {r.title}</Link>
+          <span className="block text-muted">
+            {r.days.map((x) => `${dateDe(x.day)} ${x.startTime}–${x.endTime}`).join(", ") || "keine Produktionstage"}
+            {r.postStart && r.postEnd && ` · Postproduktion ${dateDe(r.postStart)} bis ${dateDe(r.postEnd)}`}
+          </span>
+          {r.location && (
+            <span className="block text-muted">
+              Drehort:{" "}
+              {r.hasMap ? <a href={mapsUrl(r.location)} target="_blank" rel="noreferrer" className="text-ink underline">{r.location}</a> : r.location}
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader area="planung" title="Planung" sub={`${dateDe(start)} bis ${dateDe(end)} · Produktion kräftig, Postproduktion hell`}>
@@ -40,6 +60,9 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
           </Link>
         </div>
       </PageHeader>
+
+      {/* Handy: die Zeitachse zeigt nur wenige Tage, die Liste steht deshalb offen davor */}
+      {rows.length > 0 && <section aria-label="Produktionen als Liste" className="rounded-2xl bg-surface px-5 py-3 text-sm md:hidden">{list}</section>}
 
       <Card>
         {rows.length === 0 ? (
@@ -99,25 +122,9 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
       </Card>
 
       {rows.length > 0 && (
-        <details className="rounded-2xl bg-surface px-5 py-3 text-sm">
+        <details className="hidden rounded-2xl bg-surface px-5 py-3 text-sm md:block">
           <summary className="cursor-pointer text-[13px] text-muted">Als Liste</summary>
-          <ul className="mt-2 flex flex-col gap-2">
-            {rows.map((r) => (
-              <li key={r.dealId}>
-                <Link href={`/vorgaenge/${r.dealId}`} className="font-semibold hover:underline">{r.company} · {r.title}</Link>
-                <span className="block text-muted">
-                  {r.days.map((x) => `${dateDe(x.day)} ${x.startTime}–${x.endTime}`).join(", ") || "keine Produktionstage"}
-                  {r.postStart && r.postEnd && ` · Postproduktion ${dateDe(r.postStart)} bis ${dateDe(r.postEnd)}`}
-                </span>
-                {r.location && (
-                  <span className="block text-muted">
-                    Drehort:{" "}
-                    {r.hasMap ? <a href={mapsUrl(r.location)} target="_blank" rel="noreferrer" className="text-ink underline">{r.location}</a> : r.location}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
+          {list}
         </details>
       )}
     </div>

@@ -86,7 +86,6 @@ export function TaskList({ tasks, today, empty }: { tasks: TaskRow[]; today: str
       {optimistic.map((task) => {
         const due = dueLabel(task.dueDate, today);
         const done = !!task.doneAt;
-        const context = [task.companyName, task.dealTitle].filter(Boolean).join(" · ");
         return (
           <li key={task.id} className="flex items-center gap-3.5 border-t border-line-soft px-5 py-3">
             <input
@@ -104,9 +103,15 @@ export function TaskList({ tasks, today, empty }: { tasks: TaskRow[]; today: str
             />
             <div className="min-w-0 flex-1">
               <p className={`text-sm font-medium ${done ? "text-muted line-through" : ""}`}>{task.title}</p>
-              {context && (
+              {(task.companyName || task.dealTitle) && (
                 <p className="truncate text-xs text-muted">
-                  {task.dealId ? <Link href={`/vorgaenge/${task.dealId}`} className="inline-block py-1 hover:text-ink hover:underline">{context}</Link> : context}
+                  {task.companyId && task.companyName && (
+                    <Link href={`/firmen/${task.companyId}`} className="inline-block py-1 hover:text-ink hover:underline">{task.companyName.trim()}</Link>
+                  )}
+                  {task.companyName && task.dealTitle && " · "}
+                  {task.dealId && task.dealTitle && (
+                    <Link href={`/vorgaenge/${task.dealId}`} className="inline-block py-1 hover:text-ink hover:underline">{task.dealTitle}</Link>
+                  )}
                 </p>
               )}
             </div>

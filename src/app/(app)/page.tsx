@@ -41,10 +41,11 @@ export default async function StartPage() {
       hint: oldestBilling !== null ? `ältester ${ageLabel(oldestBilling)} erledigt` : "erledigt, noch keine Rechnung",
       dot: data.billing.length > 0 ? "bg-danger" : "bg-done",
       hot: data.billing.length > 0,
+      href: data.billing.length > 0 ? "#abrechnung" : "/vorgaenge",
     },
-    { label: "Angebote nachfassen", value: String(data.followUps.length), hint: "ohne Antwort, Frist erreicht", dot: "bg-sales" },
-    { label: "Laufende Projekte", value: String(data.beauftragt), hint: "Beauftragt und in Bearbeitung", dot: "bg-accent" },
-    { label: "Offene Angebote", value: euro(data.offers.total ?? 0), hint: `${data.offers.n} Angebote verschickt`, dot: "bg-sales" },
+    { label: "Angebote nachfassen", value: String(data.followUps.length), hint: "ohne Antwort, Frist erreicht", dot: "bg-sales", href: "#nachfassen" },
+    { label: "Laufende Projekte", value: String(data.beauftragt), hint: "Beauftragt und in Bearbeitung", dot: "bg-accent", href: "/planung" },
+    { label: "Offene Angebote", value: euro(data.offers.total ?? 0), hint: `${data.offers.n} Angebote verschickt`, dot: "bg-sales", href: "/vorgaenge" },
   ];
 
   return (
@@ -55,16 +56,17 @@ export default async function StartPage() {
         </Link>
       </PageHeader>
 
-      <section aria-label="Kennzahlen" className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+      {/* Handy 2×2, damit „Heute zu tun“ schneller kommt; jede Kachel führt zur passenden Liste */}
+      <section aria-label="Kennzahlen" className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(200px,1fr))] md:gap-4">
         {kpis.map((kpi) => (
-          <div key={kpi.label} className="flex flex-col gap-1.5 rounded-2xl bg-surface p-5">
+          <Link key={kpi.label} href={kpi.href} className="flex flex-col gap-1 rounded-2xl bg-surface p-4 hover:ring-1 hover:ring-line md:gap-1.5 md:p-5">
             <div className="flex items-center gap-2 text-[13px] text-muted">
               <span className={`h-2 w-2 rounded-full ${kpi.dot}`} />
               {kpi.label}
             </div>
-            <div className={`text-3xl font-bold tracking-tight ${kpi.hot ? "text-danger-ink" : ""}`}>{kpi.value}</div>
+            <div className={`text-2xl font-bold tracking-tight md:text-3xl ${kpi.hot ? "text-danger-ink" : ""}`}>{kpi.value}</div>
             <div className="text-xs text-muted">{kpi.hint}</div>
-          </div>
+          </Link>
         ))}
       </section>
 
@@ -90,11 +92,13 @@ export default async function StartPage() {
       )}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(380px,100%),1fr))] items-start gap-5">
+        {/* leer nur Platz: die Kachel oben zeigt schon „0“ */}
+        {data.billing.length > 0 && (
         <Card
+          id="abrechnung"
           title="Offen zur Abrechnung"
-          aside={data.billing.length > 0 && <Badge tone="danger">{data.billing.length} · {euro(billingSum)}</Badge>}
+          aside={<Badge tone="danger">{data.billing.length} · {euro(billingSum)}</Badge>}
         >
-          {data.billing.length === 0 && <Empty>Nichts offen. Alles abgerechnet.</Empty>}
           {data.billing.map((deal) => {
             const days = daysSince(deal.stageChangedAt);
             return (
@@ -114,6 +118,7 @@ export default async function StartPage() {
             );
           })}
         </Card>
+        )}
 
         <Card title="Nächste Produktionstage" aside={<Link href="/planung" className="text-[13px] text-muted">Planung</Link>}>
           {upcoming.length === 0 && <Empty>In den nächsten 14 Tagen ist keine Produktion geplant.</Empty>}
@@ -150,7 +155,7 @@ export default async function StartPage() {
           <TaskList tasks={data.todayTasks} today={todayIso()} empty="Keine Aufgaben für heute." />
         </Card>
 
-        <Card title="Angebote nachfassen" aside={<span className="text-xs text-muted">ohne Rückmeldung seit über 10 Tagen oder Frist erreicht</span>}>
+        <Card id="nachfassen" title="Angebote nachfassen" aside={<span className="text-xs text-muted">ohne Rückmeldung seit über 10 Tagen oder Frist erreicht</span>}>
           <FollowUps deals={data.followUps} competitors={competitors} today={todayIso()} />
         </Card>
 

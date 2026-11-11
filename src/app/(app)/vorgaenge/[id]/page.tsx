@@ -4,7 +4,7 @@ import { dateDe, euro, todayIso } from "@/lib/format";
 import { LOST_REASON_LABEL, STAGE_LABEL } from "@/lib/labels";
 import { FolderPlus } from "lucide-react";
 import { folderLink } from "@/lib/folders";
-import { companyName, competitorNames, phoneNumbers, peopleOfActivities, companyPeople, contactOptions, getDeal, supplierNames, suppliersForDeal, vouchersForDeal } from "@/lib/queries";
+import { companyName, competitorNames, phoneNumbers, peopleOfActivities, companyPeople, contactOptions, getDeal, supplierNames, suppliersForDeal, vouchersForDeal, callContexts, companyCall, personCall } from "@/lib/queries";
 import { RatingHint } from "@/components/rating-hint";
 import { InlineTitle } from "@/components/inline-title";
 import { loadPlanningAction, renameDealAction } from "../../actions";
@@ -14,6 +14,7 @@ import { QuotationDraft } from "@/components/quotation-draft";
 import { ActivityForm, CompetitorForm, EditDealForm, StageControl, TaskForm } from "@/components/forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
+import { ContactActions } from "@/components/contact-actions";
 import { SupplierCard } from "@/components/suppliers";
 import { Badge, btnSecondary, Card, LexwareBadge } from "@/components/ui";
 import { STAGE_TONE } from "@/lib/tones";
@@ -38,6 +39,10 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
   const [suppliers, supplierOptions, staff] = await Promise.all([suppliersForDeal(deal.id), supplierNames(), companyPeople(deal.companyId)]);
   // Ansprechpartner des Vorgangs ist bei Notizen und Aufgaben vorausgewählt
   const contactPerson = data.contact?.personId ? [data.contact.personId] : [];
+  // Anrufen und Mailen direkt aus dem Kopf: Ansprechpartner des Vorgangs zuerst, sonst die Firma
+  const callCtx = (await callContexts([deal.companyId])).get(deal.companyId);
+  const callPerson = callCtx?.staff.find((p) => p.id === deal.contactId);
+  const call = callCtx ? (callPerson ? personCall(callCtx, callPerson) : companyCall(callCtx)) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -64,6 +69,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
           extra={deal.websiteEventId && websiteConfigured() && <EventPhoto dealId={deal.id} image={deal.websiteImage && websiteImageUrl(deal.websiteImage)} />}
         />
         <div className="flex flex-wrap items-center gap-2">
+          {call && <ContactActions call={call} />}
           <Badge tone={STAGE_TONE[deal.stage]}>
             {STAGE_LABEL[deal.stage]}
           </Badge>

@@ -68,13 +68,13 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
 
       {table && (
         <div className="relative overflow-x-auto rounded-2xl bg-surface">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full text-sm md:min-w-[760px]">
             <thead>
               <tr className="text-left text-xs text-muted">
                 <th className="px-5 py-3 font-medium">Firma · Vorgang</th>
-                <th className="px-3 py-3 font-medium">Phase</th>
-                <th className="px-3 py-3 text-right font-medium">Betrag</th>
-                <th className="px-5 py-3 font-medium">Projektdatum</th>
+                <th className="hidden md:table-cell px-3 py-3 font-medium">Phase</th>
+                <th className="hidden md:table-cell px-3 py-3 text-right font-medium">Betrag</th>
+                <th className="hidden md:table-cell px-5 py-3 font-medium">Projektdatum</th>
               </tr>
             </thead>
             <tbody>
@@ -84,17 +84,24 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
                     <Link href={`/vorgaenge/${d.id}`} className="block">
                       <span className="font-semibold">{d.companyName}</span>
                       <span className="block text-[13px] text-muted">{d.title}</span>
+                      {/* Handy: Phase, Betrag und Datum in der ersten Spalte statt rechts außerhalb */}
+                      <span className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted md:hidden">
+                        <span className={`h-2 w-2 rounded-full ${STAGE_DOT[d.stage]}`} aria-hidden="true" />
+                        <span className="font-semibold text-ink">{STAGE_LABEL[d.stage]}</span>
+                        {Number(d.amountNet) > 0 && <span className="tabular-nums">{euro(d.amountNet)}</span>}
+                        {d.projectDate && <span>{dateDe(d.projectDate)}</span>}
+                      </span>
                     </Link>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="hidden px-3 py-3 md:table-cell">
                     <span className="inline-flex items-center gap-2">
                       <span className={`h-2 w-2 rounded-full ${STAGE_DOT[d.stage]}`} />
                       {STAGE_LABEL[d.stage]}
                       {d.compareOnly && <Badge tone="info">Vergleich?</Badge>}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums">{euro(d.amountNet)}</td>
-                  <td className="px-5 py-3">{dateDe(d.projectDate)}</td>
+                  <td className="hidden px-3 py-3 text-right tabular-nums md:table-cell">{euro(d.amountNet)}</td>
+                  <td className="hidden px-5 py-3 md:table-cell">{dateDe(d.projectDate)}</td>
                 </tr>
               ))}
               {deals.length === 0 && (

@@ -43,6 +43,8 @@ export function InboxList({ rows, companies, tagOptions, initialOpen = null }: {
 }) {
   const [open, setOpen] = useState<number | null>(initialOpen);
   const [note, setNote] = useState<string | null>(null);
+  // Mails, aus denen gerade eine Aufgabe wurde: Rückmeldung statt Knopf, damit kein zweiter Klick eine doppelte anlegt
+  const [tasked, setTasked] = useState<number[]>([]);
   const [, startTransition] = useTransition();
   // geöffnete Mail nach oben holen (beim Start und nach dem Weiterspringen)
   useEffect(() => {
@@ -106,9 +108,22 @@ export function InboxList({ rows, companies, tagOptions, initialOpen = null }: {
                 <button type="button" onClick={() => { setNote(null); setOpen(open === m.id ? null : m.id); }} className={btnQuiet} aria-expanded={open === m.id}>
                   <UserPlus size={14} aria-hidden="true" /> {m.companyId ? "Lesen & Kontakt übernehmen" : "Lesen & zuordnen"}
                 </button>
-                <button type="button" onClick={() => startTransition(() => taskFromMailAction(m.id))} className={btnQuiet}>
-                  <CheckSquare size={14} aria-hidden="true" /> Aufgabe daraus
-                </button>
+                {tasked.includes(m.id) ? (
+                  <span role="status" className="inline-flex min-h-9 items-center gap-1.5 px-2 text-[13px] font-semibold text-ok-ink">
+                    <CheckSquare size={14} aria-hidden="true" /> Aufgabe für heute angelegt
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTasked((t) => [...t, m.id]);
+                      startTransition(() => taskFromMailAction(m.id));
+                    }}
+                    className={btnQuiet}
+                  >
+                    <CheckSquare size={14} aria-hidden="true" /> Aufgabe daraus
+                  </button>
+                )}
                 <Link href={`/vorgaenge/neu?mail=${m.id}`} className={btnQuiet}>
                   <FolderPlus size={14} aria-hidden="true" /> Vorgang daraus
                 </Link>

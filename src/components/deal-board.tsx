@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
 import { moveDealAction } from "@/app/(app)/actions";
 import { LOST_REASONS, type LostReason, type Stage } from "@/db/schema";
-import { daysSince, euro } from "@/lib/format";
+import { daysSince, euro, todayIso } from "@/lib/format";
 import { BOARD_STAGES, LOST_REASON_LABEL, STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import { STAGE_TONE, TONE_WASH } from "@/lib/tones";
 import type { DealRow } from "@/lib/queries";
@@ -51,7 +51,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
   return (
     <>
       <div className="relative overflow-x-auto pb-2">
-        <div className="grid min-w-[1540px] grid-cols-7 items-start gap-3.5">
+        <div className="grid min-w-[1100px] grid-cols-7 items-start gap-3.5">
           {BOARD_STAGES.map((stage) => {
             const cards = optimistic.filter((d) => d.stage === stage);
             const total = cards.reduce((s, d) => s + Number(d.amountNet ?? 0), 0);
@@ -71,7 +71,9 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
                 <p className="px-1 text-xs text-muted">{total > 0 ? euro(total) : " "}</p>
                 {cards.map((deal) => {
                   const days = daysSince(deal.stageChangedAt);
-                  const stale = STALE_AFTER[stage] !== undefined && days >= STALE_AFTER[stage]!;
+                  // Beauftragt mit Projekttermin heute oder später wartet nur auf den Dreh, das ist kein Handlungsbedarf
+                  const waiting = stage === "beauftragt" && !!deal.projectDate && deal.projectDate >= todayIso();
+                  const stale = !waiting && STALE_AFTER[stage] !== undefined && days >= STALE_AFTER[stage]!;
                   return (
                     <Link
                       key={deal.id}
@@ -84,12 +86,14 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
                       } ${dragging === deal.id ? "opacity-50" : ""}`}
                     >
                       <p className="truncate text-xs text-muted">{deal.companyName}</p>
-                      <p className="text-sm font-semibold leading-snug">{deal.title}</p>
+                      <p className="text-sm font-semibold leading-snug [overflow-wrap:anywhere] hyphens-auto" lang="de">{deal.title}</p>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="flex-1 text-[13px] font-semibold tabular-nums">{euro(deal.amountNet)}</span>
                         {deal.compareOnly && <Badge tone="info">Vergleich?</Badge>}
                         {deal.quick && <Badge>Schnellauftrag</Badge>}
-                        <Badge tone={stale ? "danger" : "neutral"}>{days <= 0 ? "heute" : `${days} T`}</Badge>
+                        <span title={days <= 0 ? "heute in diese Phase gekommen" : `seit ${days} Tagen in dieser Phase${stale ? ", bitte weiterbringen" : ""}`}>
+                          <Badge tone={stale ? "danger" : "neutral"}>{days <= 0 ? "heute" : `${days} T`}</Badge>
+                        </span>
                       </div>
                     </Link>
                   );
@@ -103,7 +107,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={() => drop("verloren")}
-        className={`rounded-2xl border-2 border-dashed px-5 py-4 text-center text-sm ${
+        className={`rounded-2xl border-2 border-dashed px-5 py-4 text-center text-sm pointer-coarse:hidden ${
           dragging ? "border-muted bg-line-soft text-ink" : "border-line text-muted"
         }`}
       >

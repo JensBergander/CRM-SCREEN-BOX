@@ -241,6 +241,8 @@ export type RecentCompany = {
   id: number;
   name: string;
   contact: string | null;
+  // Person hinter „contact“: im Notiz-Dialog bei „Mit wem?“ vorausgewählt
+  contactPersonId: number | null;
   phone: string | null;
   // alle Nummern der Firma, Ansprechpartner aus dem Vorgang zuerst, Handy vor Festnetz, Zentrale zuletzt
   numbers: PhoneNumber[];
@@ -295,6 +297,7 @@ export async function recentCompanies(): Promise<RecentCompany[]> {
         id: f.id,
         name: f.name.trim(),
         contact: person ? personName(person) : null,
+        contactPersonId: person?.personId ?? null,
         phone: numbers[0]?.number ?? null,
         numbers,
         people: pickPeople(staff),

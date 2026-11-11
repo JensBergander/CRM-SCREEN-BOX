@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { createDealAction } from "@/app/(app)/actions";
 import { ContactSelect } from "./people-picker";
+import { CompanyNameField } from "./company-name-field";
 import { btnAccent, btnPrimary, Field, FormError, Input, Select, Textarea } from "./ui";
 
 export function DealForm({ companies, preset, quick, today, fromMail, fromNote, contacts = [], contactId }: {
@@ -26,20 +27,7 @@ export function DealForm({ companies, preset, quick, today, fromMail, fromNote, 
       {quick && <input type="hidden" name="stage" value="beauftragt" />}
 
       <Field label="Firma" hint={preset ? undefined : "Aus der Liste wählen oder neuen Namen eingeben"}>
-        <Input
-          name="companyName"
-          list="company-names"
-          defaultValue={preset?.name}
-          required
-          autoComplete="off"
-          autoFocus={!preset}
-          placeholder="z. B. Eurowings GmbH"
-        />
-        <datalist id="company-names">
-          {companies.map((c) => (
-            <option key={c.id} value={c.name} />
-          ))}
-        </datalist>
+        <CompanyNameField companies={companies} defaultValue={preset?.name} listId="company-names" autoFocus={!preset} placeholder="z. B. Eurowings GmbH" />
       </Field>
 
       {preset && (

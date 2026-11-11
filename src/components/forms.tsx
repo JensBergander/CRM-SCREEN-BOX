@@ -193,6 +193,8 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [], p
   const closeMenu = useCallback(() => setMenu(false), []);
   const callButton = useRef<HTMLButtonElement>(null);
   const body = useRef<HTMLTextAreaElement>(null);
+  // Mit Text speichern die Knöpfe sofort, leer öffnen sie das große Fenster: die Beschriftung sagt, was passiert
+  const [filled, setFilled] = useState(false);
   const openIfEmpty = (kind: ActivityKind) => (e: React.MouseEvent) => {
     if (body.current?.value.trim()) return;
     e.preventDefault();
@@ -206,15 +208,15 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [], p
       on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted"
     }`;
   return (
-    <form ref={ref} action={action} className="flex flex-col gap-2 px-5 pb-3 pt-1">
+    <form ref={ref} action={action} onReset={() => setFilled(false)} className="flex flex-col gap-2 px-5 pb-3 pt-1">
       <div className="flex flex-wrap items-start gap-2">
         <label className="min-w-0 flex-[1_1_260px]">
           <span className="sr-only">Notiz oder Anruf festhalten</span>
-          <Textarea ref={body} name="body" rows={5} placeholder="Notiz oder Anruf festhalten …" required className="resize-y py-2" />
+          <Textarea ref={body} name="body" rows={5} placeholder="Notiz oder Anruf festhalten …" required onInput={(e) => setFilled(!!e.currentTarget.value.trim())} className="resize-y py-2" />
         </label>
-        <button type="submit" name="type" value="notiz" disabled={pending} onClick={openIfEmpty("notiz")} className={btnQuiet}>Notiz</button>
+        <button type="submit" name="type" value="notiz" disabled={pending} onClick={openIfEmpty("notiz")} className={btnQuiet}>{filled ? "Als Notiz speichern" : "Notiz"}</button>
         <div className="relative">
-          <button ref={callButton} type="submit" name="type" value="anruf" disabled={pending} onClick={openIfEmpty("anruf")} aria-expanded={numbers.length ? menu : undefined} className={btnQuiet}>Anruf</button>
+          <button ref={callButton} type="submit" name="type" value="anruf" disabled={pending} onClick={openIfEmpty("anruf")} aria-expanded={numbers.length && !filled ? menu : undefined} className={btnQuiet}>{filled ? "Als Anruf speichern" : "Anruf"}</button>
           {menu && (
             <NumberMenu
               anchor={callButton}
@@ -224,6 +226,10 @@ export function ActivityForm({ companyId, dealId, projects = [], numbers = [], p
                 dial(n.number);
                 setMenu(false);
                 setDialog({ kind: "anruf", personId: n.personId });
+              }}
+              onNoteOnly={() => {
+                setMenu(false);
+                setDialog({ kind: "anruf" });
               }}
             />
           )}

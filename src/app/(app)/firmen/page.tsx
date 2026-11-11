@@ -60,18 +60,18 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
       </nav>
 
       <div className="relative overflow-x-auto rounded-2xl bg-surface">
-        <table className="w-full min-w-[680px] text-sm">
+        <table className="w-full text-sm md:min-w-[680px]">
           <thead>
             <tr className="text-left text-xs text-muted">
               <th className="px-5 py-3 font-medium">Firma</th>
-              <th className="px-3 py-3 font-medium">
+              <th className="hidden px-3 py-3 font-medium md:table-cell">
                 <Link href={href({ sort: byStars ? undefined : "sterne" })} className={`inline-flex items-center gap-1 hover:text-ink ${byStars ? "text-ink" : ""}`}>
                   Einschätzung {byStars && <ArrowDown size={12} aria-hidden="true" />}
                 </Link>
               </th>
-              <th className="px-3 py-3 font-medium">Ort</th>
-              <th className="px-3 py-3 text-right font-medium">Umsatz</th>
-              <th className="px-3 py-3 font-medium">Letzte Bewegung</th>
+              <th className="hidden md:table-cell px-3 py-3 font-medium">Ort</th>
+              <th className="hidden md:table-cell px-3 py-3 text-right font-medium">Umsatz</th>
+              <th className="hidden md:table-cell px-3 py-3 font-medium">Letzte Bewegung</th>
               <th className="px-5 py-3 font-medium"><span className="sr-only">Anrufen oder schreiben</span></th>
             </tr>
           </thead>
@@ -81,18 +81,23 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
                 <td className="px-5 py-3">
                   <Link href={`/firmen/${c.id}`} className="inline-block py-1 font-semibold hover:underline">{c.name}</Link>
                   <span className="ml-2"><LexwareBadge company={c} /></span>
+                  {/* Handy: Ort und Einschätzung unter dem Namen, Anruf und Mail bleiben rechts im Bild */}
+                  <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted md:hidden">
+                    {c.city}
+                    {c.rating?.stars !== null && c.rating?.stars !== undefined && <Stars value={c.rating.stars} suggested={!c.rating.manual} size={12} />}
+                  </span>
                 </td>
-                <td className="px-3 py-3">
+                <td className="hidden px-3 py-3 md:table-cell">
                   {c.rating?.stars !== null && c.rating?.stars !== undefined ? (
                     <Stars value={c.rating.stars} suggested={!c.rating.manual} />
                   ) : (
                     <span className="text-xs text-muted">–</span>
                   )}
                 </td>
-                <td className="px-3 py-3 text-muted">{c.city ?? "–"}</td>
-                <td className="px-3 py-3 text-right tabular-nums text-muted">{c.revenue > 0 ? euro(c.revenue) : "–"}</td>
-                <td className="px-3 py-3 text-muted">{c.lastChange ? dateDe(new Date(c.lastChange).toISOString()) : "–"}</td>
-                <td className="px-5 py-2">
+                <td className="hidden px-3 py-3 text-muted md:table-cell">{c.city ?? "–"}</td>
+                <td className="hidden px-3 py-3 text-right tabular-nums text-muted md:table-cell">{c.revenue > 0 ? euro(c.revenue) : "–"}</td>
+                <td className="hidden px-3 py-3 text-muted md:table-cell">{c.lastChange ? dateDe(new Date(c.lastChange).toISOString()) : "–"}</td>
+                <td className="px-3 py-2 md:px-5">
                   <ContactActions call={companyCall(calls.get(c.id)!)} />
                 </td>
               </tr>

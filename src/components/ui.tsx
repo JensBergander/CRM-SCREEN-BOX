@@ -41,14 +41,15 @@ export function AreaTile({ icon: Icon, tone }: { icon: LucideIcon; tone: Tone })
   );
 }
 
-export function Card({ title, aside, children, className = "" }: {
+export function Card({ title, aside, children, className = "", id }: {
+  id?: string;
   title?: ReactNode;
   aside?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={`rounded-2xl bg-surface py-2 ${className}`}>
+    <section id={id} className={`scroll-mt-20 rounded-2xl bg-surface py-2 ${className}`}>
       {title && (
         <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
           <h2 className="text-base font-semibold">{title}</h2>

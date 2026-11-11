@@ -132,7 +132,7 @@ export function ActivityDialog({
 
         <label>
           <span className="sr-only">Text</span>
-          <Textarea ref={body} name="body" rows={10} defaultValue={initialBody} required autoFocus placeholder={kind === "anruf" ? "Worum ging es im Gespräch?" : "Notiz …"} className="resize-y" />
+          <Textarea ref={body} name="body" rows={10} defaultValue={initialBody} required autoFocus placeholder={kind === "anruf" ? "Worum ging es im Gespräch?" : "Notiz …"} className="resize-y max-sm:h-36" />
         </label>
 
         {!dealId && projects.length > 0 && (
@@ -176,7 +176,8 @@ export function ActivityDialog({
 
         <input ref={unreached} type="hidden" name="unreached" defaultValue="" />
         <FormError message={state?.error} />
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* Speichern bleibt sichtbar, auch wenn das Fenster auf dem Handy scrollt */}
+        <div className="sticky -bottom-6 -mx-6 -mb-6 mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-line-soft bg-surface px-6 py-4">
           {kind === "anruf" && (
             <button type="button" disabled={pending} onClick={notReached} className={`${btnQuiet} mr-auto`}>
               <PhoneMissed size={15} aria-hidden="true" /> Nicht erreicht

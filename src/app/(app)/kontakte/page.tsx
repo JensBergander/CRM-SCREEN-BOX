@@ -22,13 +22,13 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
         </Link>
       </PageHeader>
       <div className="relative overflow-x-auto rounded-2xl bg-surface">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full text-sm md:min-w-[640px]">
           <thead>
             <tr className="text-left text-xs text-muted">
               <th className="px-5 py-3 font-medium">Name</th>
-              <th className="px-3 py-3 font-medium">Firma</th>
-              <th className="px-3 py-3 font-medium">Telefon</th>
-              <th className="px-3 py-3 font-medium">E-Mail</th>
+              <th className="hidden md:table-cell px-3 py-3 font-medium">Firma</th>
+              <th className="hidden md:table-cell px-3 py-3 font-medium">Telefon</th>
+              <th className="hidden md:table-cell px-3 py-3 font-medium">E-Mail</th>
               <th className="px-5 py-3 font-medium"><span className="sr-only">Anrufen oder schreiben</span></th>
             </tr>
           </thead>
@@ -46,8 +46,12 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
                   <td className="px-5 py-3">
                     <Link href={`/kontakte/${person.id}`} className="inline-block py-1 font-semibold hover:underline">{name}</Link>
                     {position && <span className="block text-xs font-normal text-muted">{position}</span>}
+                    {/* Handy: Firma unter dem Namen, Anruf und Mail bleiben rechts im Bild */}
+                    {active.some((l) => l.companyName) && (
+                      <span className="block truncate text-xs text-muted md:hidden">{active.map((l) => l.companyName?.trim()).filter(Boolean).join(", ")}</span>
+                    )}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="hidden px-3 py-3 md:table-cell">
                     {active.length ? (
                       <span className="flex flex-col gap-1">
                         {active.map((l) =>
@@ -65,12 +69,12 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
                       <span className="text-muted">{links.some((l) => l.companyName) ? "nur frühere Firmen" : "–"}</span>
                     )}
                   </td>
-                  <td className="px-3 py-3 whitespace-nowrap text-muted">
+                  <td className="hidden px-3 py-3 whitespace-nowrap text-muted md:table-cell">
                     {phone ?? (person.mobile ? null : "–")}
                     {person.mobile && <span className="block">mobil {person.mobile}</span>}
                   </td>
-                  <td className="px-3 py-3 text-muted">{email ?? "–"}</td>
-                  <td className="px-5 py-2">
+                  <td className="hidden px-3 py-3 text-muted md:table-cell">{email ?? "–"}</td>
+                  <td className="px-3 py-2 md:px-5">
                     {main && (
                       <ContactActions
                         call={personCall(main.companyId ? calls.get(main.companyId) : undefined, { ...main, firstName: person.firstName, lastName: person.lastName, mobile: person.mobile })}

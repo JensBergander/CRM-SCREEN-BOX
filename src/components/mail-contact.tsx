@@ -7,6 +7,7 @@ import { createContactFromMailAction, loadMailForContactAction, type MailForCont
 import type { TagOptions } from "@/lib/service-tags";
 import { AddressSearch } from "./place-input";
 import { KindFields } from "./forms";
+import { CompanyNameField } from "./company-name-field";
 import { RatingHintView } from "./rating";
 import { btnPrimary, btnQuiet, Field, FormError, Input, LexwareBadge, RunningDot, Select } from "./ui";
 
@@ -48,6 +49,11 @@ function ProjectPicker({ projects, companyName, preset }: { projects: { id: numb
       </div>
     </fieldset>
   );
+}
+
+// Vorausgefüllte Felder brauchen eine sichtbare Beschriftung, der Platzhalter verschwindet ja
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-muted">{label}{children}</label>;
 }
 
 const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -179,11 +185,8 @@ export function MailContactPanel({ mailId, companies, tagOptions, onClose, compa
       {c && <input type="hidden" name="compareCompanyId" value={c.id} />}
       {(!c || !embedded) && <KindFields options={tagOptions} />}
       <Field label="Firma oder Person" hint={embedded ? "Ändern, wenn die Mail zu einer anderen Firma gehört" : "Vorhandene wählen oder neuen Namen eingeben"}>
-        <Input name="companyName" list={`companies-${mailId}`} required autoComplete="off" defaultValue={c?.name ?? s.company} />
+        <CompanyNameField companies={companies} defaultValue={c?.name ?? s.company} listId={`companies-${mailId}`} />
       </Field>
-      <datalist id={`companies-${mailId}`}>
-        {companies.map((o) => <option key={o.id} value={o.name} />)}
-      </datalist>
       {c && !embedded && (
         <p className="-mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
           Erkannt: <span className="font-semibold text-ink">{c.name}</span>
@@ -205,9 +208,9 @@ export function MailContactPanel({ mailId, companies, tagOptions, onClose, compa
             </>
           ) : (
             <>
-              <Input name="position" aria-label="Position" placeholder="Position / Tätigkeit" defaultValue={s.position} />
-              <Input name="email" type="email" aria-label="E-Mail" placeholder="E-Mail" defaultValue={s.email} />
-              <Input name="phone" aria-label="Telefon" placeholder="Telefon" defaultValue={s.phone} />
+              <Labeled label="Position / Tätigkeit"><Input name="position" defaultValue={s.position} /></Labeled>
+              <Labeled label="E-Mail"><Input name="email" type="email" defaultValue={s.email} /></Labeled>
+              <Labeled label="Telefon"><Input name="phone" defaultValue={s.phone} /></Labeled>
             </>
           )}
           <CompareRow name="mobile" label="Mobil" saved={k.mobile} suggested={s.mobile} />
@@ -215,14 +218,14 @@ export function MailContactPanel({ mailId, companies, tagOptions, onClose, compa
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2">
-            <Input name="firstName" aria-label="Vorname" placeholder="Vorname" defaultValue={s.firstName} />
-            <Input name="lastName" aria-label="Nachname" placeholder="Nachname" defaultValue={s.lastName} />
+            <Labeled label="Vorname"><Input name="firstName" defaultValue={s.firstName} /></Labeled>
+            <Labeled label="Nachname"><Input name="lastName" defaultValue={s.lastName} /></Labeled>
           </div>
-          <Input name="position" aria-label="Position" placeholder="Position / Tätigkeit" defaultValue={s.position} />
-          <Input name="email" type="email" aria-label="E-Mail" placeholder="E-Mail" defaultValue={s.email} />
+          <Labeled label="Position / Tätigkeit"><Input name="position" defaultValue={s.position} /></Labeled>
+          <Labeled label="E-Mail"><Input name="email" type="email" defaultValue={s.email} /></Labeled>
           <div className="grid grid-cols-2 gap-2">
-            <Input name="phone" aria-label="Telefon" placeholder="Telefon" defaultValue={s.phone} />
-            <Input name="mobile" aria-label="Mobil" placeholder="Mobil" defaultValue={s.mobile} />
+            <Labeled label="Telefon"><Input name="phone" defaultValue={s.phone} /></Labeled>
+            <Labeled label="Mobil"><Input name="mobile" defaultValue={s.mobile} /></Labeled>
           </div>
         </>
       )}
@@ -240,12 +243,12 @@ export function MailContactPanel({ mailId, companies, tagOptions, onClose, compa
         </div>
       ) : (
         <>
-          <Input name="website" aria-label="Website" placeholder="Website" defaultValue={s.website} />
+          <Labeled label="Website"><Input name="website" defaultValue={s.website} /></Labeled>
           <AddressSearch />
-          <Input name="street" aria-label="Straße" placeholder="Straße" defaultValue={s.street} />
+          <Labeled label="Straße"><Input name="street" defaultValue={s.street} /></Labeled>
           <div className="grid grid-cols-[6rem_1fr] gap-2">
-            <Input name="zip" aria-label="PLZ" placeholder="PLZ" defaultValue={s.zip} />
-            <Input name="city" aria-label="Ort" placeholder="Ort" defaultValue={s.city} />
+            <Labeled label="PLZ"><Input name="zip" defaultValue={s.zip} /></Labeled>
+            <Labeled label="Ort"><Input name="city" defaultValue={s.city} /></Labeled>
           </div>
         </>
       )}
@@ -267,7 +270,7 @@ export function MailContactPanel({ mailId, companies, tagOptions, onClose, compa
   if (embedded) return <div className={box}>{form}</div>;
   return (
     <div className={`${box} grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]`}>
-      <section aria-label="Mailtext" className="max-h-[560px] overflow-auto rounded-lg bg-surface p-4 text-[13px] leading-relaxed whitespace-pre-wrap">
+      <section aria-label="Mailtext" className="max-h-[240px] overflow-auto lg:max-h-[560px] rounded-lg bg-surface p-4 text-[13px] leading-relaxed whitespace-pre-wrap">
         {data.text || "(kein Text)"}
       </section>
       {form}

@@ -78,10 +78,22 @@ const phoneChoices = (numbers: PhoneNumber[]): Choice[] => numbers.map((n) => ({
 const mailChoices = (emails: MailAddress[]): Choice[] => emails.map((m) => ({ key: m.email, label: m.label, value: m.email, own: m.own }));
 
 // Für „Anruf“ im Notizformular: Nummernauswahl unter dem Knopf
-export function NumberMenu({ anchor, numbers, onPick, onClose }: { anchor: RefObject<HTMLElement | null>; numbers: PhoneNumber[]; onPick: (n: PhoneNumber) => void; onClose: () => void }) {
+// onNoteOnly: zusätzlicher Eintrag „Nur notieren“ (eingehenden Anruf festhalten, ohne zu wählen)
+export function NumberMenu({ anchor, numbers, onPick, onClose, onNoteOnly }: {
+  anchor: RefObject<HTMLElement | null>;
+  numbers: PhoneNumber[];
+  onPick: (n: PhoneNumber) => void;
+  onClose: () => void;
+  onNoteOnly?: () => void;
+}) {
   return (
     <Floating anchor={anchor} onClose={onClose}>
       <Choices items={phoneChoices(numbers)} onPick={(c) => onPick(numbers.find((n) => n.number === c.value)!)} />
+      {onNoteOnly && (
+        <button type="button" onClick={onNoteOnly} className="mt-1 flex min-h-10 w-full items-center border-t border-line-soft px-3 pt-1 text-left text-sm text-muted hover:text-ink">
+          Nur notieren, ohne anzurufen
+        </button>
+      )}
     </Floating>
   );
 }

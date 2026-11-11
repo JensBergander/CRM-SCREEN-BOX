@@ -54,6 +54,7 @@ export function RecentCompanies({ items }: { items: RecentCompany[] }) {
           projects={dialog.company.projects}
           title={[dialog.company.name, dialog.company.contact].filter(Boolean).join(" · ")}
           people={dialog.company.people}
+          initialPeople={dialog.company.contactPersonId ? [dialog.company.contactPersonId] : []}
           initialKind={dialog.kind}
           onClose={() => setDialog(null)}
         />
