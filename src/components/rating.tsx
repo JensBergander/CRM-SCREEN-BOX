@@ -11,7 +11,7 @@ import { btnPrimary, btnQuiet, Textarea } from "./ui";
 export function Stars({ value, suggested = false, size = 14 }: { value: number | null; suggested?: boolean; size?: number }) {
   if (value === null) return <span className="text-xs text-muted">nicht bewertet</span>;
   return (
-    <span className={`inline-flex items-center gap-0.5 ${suggested ? "opacity-55" : ""}`} aria-label={`${value} von 5 Sternen${suggested ? " (Vorschlag)" : ""}`} title={suggested ? "Vorschlag der App" : "deine Bewertung"}>
+    <span role="img" className={`inline-flex items-center gap-0.5 ${suggested ? "opacity-55" : ""}`} aria-label={`${value} von 5 Sternen${suggested ? " (Vorschlag)" : ""}`} title={suggested ? "Vorschlag der App" : "deine Bewertung"}>
       {[1, 2, 3, 4, 5].map((i) => (
         <Star key={i} size={size} aria-hidden="true" className={i <= value ? "fill-[#F5B400] text-[#F5B400]" : "text-line"} />
       ))}

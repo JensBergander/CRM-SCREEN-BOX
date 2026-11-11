@@ -50,7 +50,7 @@ export function DealBoard({ deals, competitors = [] }: { deals: DealRow[]; compe
 
   return (
     <>
-      <div className="overflow-x-auto pb-2">
+      <div className="relative overflow-x-auto pb-2">
         <div className="grid min-w-[1540px] grid-cols-7 items-start gap-3.5">
           {BOARD_STAGES.map((stage) => {
             const cards = optimistic.filter((d) => d.stage === stage);

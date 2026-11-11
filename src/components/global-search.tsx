@@ -239,7 +239,7 @@ export function SearchPalette() {
             className="min-h-12 flex-1 bg-transparent text-base outline-none"
           />
           {searching && <span className="text-xs text-muted">sucht …</span>}
-          <button type="button" onClick={() => setOpen(false)} aria-label="Suche schließen" className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
+          <button type="button" onClick={() => setOpen(false)} aria-label="Suche schließen" className="pointer-coarse:h-11 pointer-coarse:w-11 flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
             <X size={18} aria-hidden="true" />
           </button>
         </div>

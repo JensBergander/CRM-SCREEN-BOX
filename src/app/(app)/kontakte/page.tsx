@@ -21,7 +21,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
           Neuer Kontakt
         </Link>
       </PageHeader>
-      <div className="overflow-x-auto rounded-2xl bg-surface">
+      <div className="relative overflow-x-auto rounded-2xl bg-surface">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="text-left text-xs text-muted">
@@ -44,7 +44,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
               return (
                 <tr key={person.id} className="border-t border-line-soft hover:bg-bg/60">
                   <td className="px-5 py-3">
-                    <Link href={`/kontakte/${person.id}`} className="font-semibold hover:underline">{name}</Link>
+                    <Link href={`/kontakte/${person.id}`} className="inline-block py-1 font-semibold hover:underline">{name}</Link>
                     {position && <span className="block text-xs font-normal text-muted">{position}</span>}
                   </td>
                   <td className="px-3 py-3">
@@ -53,7 +53,7 @@ export default async function ContactsPage({ searchParams }: PageProps<"/kontakt
                         {active.map((l) =>
                           l.contact.companyId ? (
                             <span key={l.contact.id} className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-                              <Link href={`/firmen/${l.contact.companyId}`} className="hover:underline">{l.companyName}</Link>
+                              <Link href={`/firmen/${l.contact.companyId}`} className="inline-block py-1 hover:underline">{l.companyName}</Link>
                               {l.lexware && <LexwareBadge company={l.lexware} />}
                             </span>
                           ) : (

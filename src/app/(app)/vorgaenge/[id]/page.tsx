@@ -55,7 +55,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
             </>
           )}
           {deal.projectDate && <> · {dateDe(deal.projectDate)}</>}
-          {deal.number && <span className="text-xs text-muted/70"> · Nr. {deal.number}</span>}
+          {deal.number && <span className="text-xs text-muted"> · Nr. {deal.number}</span>}
         </p>
         <InlineTitle
           value={deal.title}

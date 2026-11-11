@@ -85,7 +85,7 @@ export function PersonEditor({ person, links, deletable }: { person: EditPerson;
                   <h2 className="text-lg font-bold">Kontakt bearbeiten</h2>
                   {lexware && <p className="text-sm text-muted">Name, Mail und Telefon kommen aus Lexware. Fehlt dort etwas, kannst du es hier ergänzen.</p>}
                 </div>
-                <button type="button" onClick={() => setOpen(false)} aria-label="Schließen" className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
+                <button type="button" onClick={() => setOpen(false)} aria-label="Schließen" className="pointer-coarse:h-11 pointer-coarse:w-11 flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
                   <X size={18} aria-hidden="true" />
                 </button>
               </div>

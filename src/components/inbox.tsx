@@ -46,7 +46,8 @@ export function InboxList({ rows, companies, tagOptions, initialOpen = null }: {
   const [, startTransition] = useTransition();
   // geöffnete Mail nach oben holen (beim Start und nach dem Weiterspringen)
   useEffect(() => {
-    if (open) document.getElementById(`mail-${open}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (open) document.getElementById(`mail-${open}`)?.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
   }, [open]);
   // Nach Zuordnen oder Ignorieren gleich die nächste Mail öffnen; die Reihenfolge der Liste gilt von vor dem Neuladen
   const order = rows.map((r) => r.mail.id).join(",");

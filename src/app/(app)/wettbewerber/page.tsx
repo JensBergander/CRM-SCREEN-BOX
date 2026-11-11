@@ -39,7 +39,7 @@ export default async function CompetitorsPage() {
           <Empty>Noch keine Wettbewerber. Sie entstehen, wenn du bei einem verlorenen Vorgang einträgst, wer den Auftrag bekommen hat.</Empty>
         )}
         {rows.length > 0 && (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted">
@@ -53,7 +53,7 @@ export default async function CompetitorsPage() {
                 {rows.map((c) => (
                   <tr key={c.id} className="border-t border-line-soft align-top">
                     <td className="px-5 py-3">
-                      <Link href={`/firmen/${c.id}`} className="font-semibold hover:underline">{c.name}</Link>
+                      <Link href={`/firmen/${c.id}`} className="inline-block py-1 font-semibold hover:underline">{c.name}</Link>
                       {c.notes && <span className="block truncate text-xs text-muted">{c.notes}</span>}
                     </td>
                     <td className="px-3 py-3 text-right font-semibold tabular-nums">{c.wins}×</td>

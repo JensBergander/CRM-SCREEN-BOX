@@ -59,7 +59,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
         ))}
       </nav>
 
-      <div className="overflow-x-auto rounded-2xl bg-surface">
+      <div className="relative overflow-x-auto rounded-2xl bg-surface">
         <table className="w-full min-w-[680px] text-sm">
           <thead>
             <tr className="text-left text-xs text-muted">
@@ -79,7 +79,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/firmen
             {rows.map((c) => (
               <tr key={c.id} className="border-t border-line-soft hover:bg-bg/60">
                 <td className="px-5 py-3">
-                  <Link href={`/firmen/${c.id}`} className="font-semibold hover:underline">{c.name}</Link>
+                  <Link href={`/firmen/${c.id}`} className="inline-block py-1 font-semibold hover:underline">{c.name}</Link>
                   <span className="ml-2"><LexwareBadge company={c} /></span>
                 </td>
                 <td className="px-3 py-3">

@@ -56,6 +56,8 @@ type Item =
   | { kind: "activity"; at: Date; activity: Activity; text: string }
   | { kind: "email"; at: Date; email: Email; text: string };
 
+const PAGE = 40;
+
 const pillClass = "inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-semibold";
 
 export { RunningDot } from "./ui";
@@ -217,10 +219,10 @@ function EntryActions({ entry, projects, newDealHref, today }: { entry: Entry; p
     <>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px]">
         {projects.length > 0 && <ProjectControl entry={entry} projects={projects} />}
-        <button type="button" onClick={() => { setTask(!task); setDone(false); }} aria-expanded={task} className="inline-flex items-center gap-1 text-muted hover:text-ink">
+        <button type="button" onClick={() => { setTask(!task); setDone(false); }} aria-expanded={task} className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center gap-1 text-muted hover:text-ink">
           <CheckSquare size={13} aria-hidden="true" /> Aufgabe daraus
         </button>
-        <Link href={newDealHref} className="inline-flex items-center gap-1 text-muted hover:text-ink">
+        <Link href={newDealHref} className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center gap-1 text-muted hover:text-ink">
           <FolderPlus size={13} aria-hidden="true" /> Vorgang daraus
         </Link>
         {done && <span role="status" className="text-xs text-muted">Aufgabe angelegt</span>}
@@ -288,17 +290,17 @@ function MailEntry({ mail, sender, projects, today, contacts }: { mail: Email; s
           </div>
         )}
         <div className="mt-2 flex flex-wrap gap-3 text-[13px]">
-          <button type="button" onClick={toggle} aria-expanded={open} className="inline-flex items-center gap-1 font-semibold">
+          <button type="button" onClick={toggle} aria-expanded={open} className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center gap-1 font-semibold">
             {open ? "Einklappen" : "Ganze Mail lesen"}
             <ChevronDown size={14} className={open ? "rotate-180" : ""} aria-hidden="true" />
           </button>
           {mail.webLink && (
-            <a href={mail.webLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted hover:text-ink">
+            <a href={mail.webLink} target="_blank" rel="noreferrer" className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center gap-1 text-muted hover:text-ink">
               <ExternalLink size={13} aria-hidden="true" /> In Outlook
             </a>
           )}
           {canAdopt && (
-            <button type="button" onClick={toggleAdopt} aria-expanded={adopt} className="inline-flex items-center gap-1 text-muted hover:text-ink">
+            <button type="button" onClick={toggleAdopt} aria-expanded={adopt} className="inline-flex min-h-8 pointer-coarse:min-h-11 items-center gap-1 text-muted hover:text-ink">
               <UserPlus size={13} aria-hidden="true" /> {known ? "Daten ergänzen" : "Kontakt übernehmen"}
             </button>
           )}
@@ -338,7 +340,7 @@ function EntryMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => v
   const item = "w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-bg";
   return (
     <div ref={ref} className="relative -mr-2 -mt-1 shrink-0">
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Eintrag bearbeiten oder löschen" className="flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Eintrag bearbeiten oder löschen" className="pointer-coarse:h-11 pointer-coarse:w-11 flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
         <MoreHorizontal size={16} aria-hidden="true" />
       </button>
       {open && (
@@ -486,6 +488,8 @@ export function Timeline({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("alle");
   const [project, setProject] = useState<number | "alle" | "ohne">("alle");
+  // Erst die neuesten Einträge, Ältere auf Klick (große Firmen haben Hunderte Mails); Suchtreffer immer alle
+  const [shown, setShown] = useState(PAGE);
 
   const merged = useMemo<Item[]>(
     () =>
@@ -521,7 +525,7 @@ export function Timeline({
       {searchable && (
         <div className="flex flex-col gap-2 border-t border-line-soft px-5 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex min-h-10 flex-[1_1_220px] items-center gap-2 rounded-full border border-line bg-surface px-4 text-muted">
+            <label className="flex min-h-10 flex-[1_1_220px] items-center gap-2 rounded-full border border-line bg-surface px-4 text-muted focus-within:border-ink focus-within:ring-1 focus-within:ring-ink">
               <Search size={15} aria-hidden="true" />
               <span className="sr-only">Zeitleiste durchsuchen</span>
               <input
@@ -572,7 +576,7 @@ export function Timeline({
       {filter === "aufgaben" && tasks ? tasks.content : <>
       {visible.length === 0 && <Empty>{merged.length ? "Nichts gefunden." : "Noch keine Einträge."}</Empty>}
       <ol>
-        {visible.map((item) => {
+        {(q ? visible : visible.slice(0, shown)).map((item) => {
           if (item.kind === "email") return <MailEntry key={`m${item.email.id}`} mail={item.email} sender={item.email.companyId ? senders[item.email.companyId] : undefined} projects={projects} today={today} contacts={mailContacts} />;
           const a = item.activity;
           return (
@@ -587,6 +591,13 @@ export function Timeline({
           );
         })}
       </ol>
+      {!q && visible.length > shown && (
+        <div className="border-t border-line-soft px-5 py-3">
+          <button type="button" onClick={() => setShown(shown + PAGE)} className={btnQuiet}>
+            Ältere anzeigen ({visible.length - shown} weitere)
+          </button>
+        </div>
+      )}
       </>}
     </>
   );

@@ -67,7 +67,7 @@ export default async function DealsPage({ searchParams }: PageProps<"/vorgaenge"
       {!table && <DealBoard deals={deals} competitors={competitors} />}
 
       {table && (
-        <div className="overflow-x-auto rounded-2xl bg-surface">
+        <div className="relative overflow-x-auto rounded-2xl bg-surface">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="text-left text-xs text-muted">

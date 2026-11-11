@@ -101,7 +101,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/auswertu
         title="Angebote je Kunde"
         aside={<span className="text-xs text-muted">„Nimmt selten an“: ab 3 Angeboten, unter einem Drittel angenommen</span>}
       >
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="text-left text-xs text-muted">
@@ -120,7 +120,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/auswertu
                 return (
                   <tr key={c.contactId || c.name} className="border-t border-line-soft">
                     <td className="px-5 py-2.5">
-                      {c.companyId ? <Link href={`/firmen/${c.companyId}`} className="font-semibold hover:underline">{c.name}</Link> : <span className="font-semibold">{c.name}</span>}
+                      {c.companyId ? <Link href={`/firmen/${c.companyId}`} className="inline-block py-1 font-semibold hover:underline">{c.name}</Link> : <span className="font-semibold">{c.name}</span>}
                       {rare && <span className="ml-2"><Badge tone="info">nimmt selten an</Badge></span>}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{c.offers}</td>

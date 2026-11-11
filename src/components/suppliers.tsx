@@ -56,7 +56,7 @@ function SupplierItem({ row }: { row: SupplierRow }) {
     <li className="flex items-center gap-3 border-t border-line-soft px-5 py-3">
       <span className="h-2 w-2 shrink-0 rounded-full bg-supplier" aria-hidden="true" />
       <div className="min-w-0 flex-1">
-        <Link href={`/firmen/${row.companyId}`} className="text-sm font-semibold hover:underline">{row.name}</Link>
+        <Link href={`/firmen/${row.companyId}`} className="inline-block py-1 text-sm font-semibold hover:underline">{row.name}</Link>
         <p className="truncate text-xs text-muted">{row.note || row.tags || "noch keine Notiz"}</p>
       </div>
       <span className="text-[13px] tabular-nums">{euro(row.costNet)}</span>

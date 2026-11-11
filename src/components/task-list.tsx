@@ -40,7 +40,7 @@ function MoveMenu({ title, today, onMove }: { title: string; today: string; onMo
         aria-expanded={open}
         aria-label={`${title} verschieben`}
         title="Verschieben"
-        className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink"
+        className="pointer-coarse:h-11 pointer-coarse:w-11 flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink"
       >
         <CalendarClock size={16} aria-hidden="true" />
       </button>
@@ -106,7 +106,7 @@ export function TaskList({ tasks, today, empty }: { tasks: TaskRow[]; today: str
               <p className={`text-sm font-medium ${done ? "text-muted line-through" : ""}`}>{task.title}</p>
               {context && (
                 <p className="truncate text-xs text-muted">
-                  {task.dealId ? <Link href={`/vorgaenge/${task.dealId}`}>{context}</Link> : context}
+                  {task.dealId ? <Link href={`/vorgaenge/${task.dealId}`} className="inline-block py-1 hover:text-ink hover:underline">{context}</Link> : context}
                 </p>
               )}
             </div>

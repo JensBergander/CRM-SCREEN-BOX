@@ -113,7 +113,7 @@ export function ActivityDialog({
             {title && <p className="text-sm text-muted">{title}</p>}
             {notice && <p className="mt-1 text-sm text-danger-ink">{notice}</p>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Schließen" className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
+          <button type="button" onClick={onClose} aria-label="Schließen" className="pointer-coarse:h-11 pointer-coarse:w-11 flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
             <X size={18} aria-hidden="true" />
           </button>
         </div>

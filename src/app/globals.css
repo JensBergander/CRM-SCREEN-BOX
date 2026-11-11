@@ -7,7 +7,8 @@
   --bg: #f5f5f7;
   --surface: #ffffff;
   --ink: #1d1d1f;
-  --muted: #6e6e73;
+  /* #636368: mindestens 4,5:1 auch auf --line (Umschalter) */
+  --muted: #636368;
   --line: #e5e5ea;
   --line-soft: #f0f0f3;
   --info-soft: #e8f4fc;
@@ -23,6 +24,8 @@
   --accent: #e84a14;
   --accent-soft: #fdede6;
   --accent-ink: #b93a0e;
+  /* Knopfflächen mit weißer Schrift: dunkler als --accent, damit 4,5:1 erreicht wird */
+  --accent-strong: #cc420f;
   --done: #e3a008;
   --done-soft: #fdf4dc;
   --done-ink: #8a6100;
@@ -123,6 +126,7 @@
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-strong: var(--accent-strong);
   --color-done: var(--done);
   --color-done-soft: var(--done-soft);
   --color-done-ink: var(--done-ink);
@@ -153,4 +157,31 @@
 body {
   background: var(--bg);
   color: var(--ink);
+}
+
+/* Tastaturfokus überall sichtbar, in der Schriftfarbe statt Browser-Blau */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+/* Zahlen in Listen und Tabellen untereinander bündig */
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }

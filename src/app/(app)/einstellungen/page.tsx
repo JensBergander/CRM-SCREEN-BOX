@@ -63,7 +63,7 @@ export default async function SettingsPage() {
         {ignored.length === 0 && <Empty>Noch keine. Im Posteingang über „Absender immer ignorieren“ hinzufügen.</Empty>}
         {ignored.map((rule) => (
           <Row key={rule.id}>
-            <span className="flex-1 text-sm">{rule.pattern.includes("@") ? rule.pattern : `alle von @${rule.pattern}`}</span>
+            <span className="min-w-0 flex-1 break-all text-sm">{rule.pattern.includes("@") ? rule.pattern : `alle von @${rule.pattern}`}</span>
             <form action={removeIgnoreAction.bind(null, rule.id)}>
               <button type="submit" className={btnQuiet}>Wieder zulassen</button>
             </form>

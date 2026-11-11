@@ -10,11 +10,11 @@ export const btnSecondary =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-ink px-5 text-sm font-semibold text-ink disabled:opacity-50";
 // Orange = Produktion: „Neuer Auftrag“ startet direkt als „Beauftragt“
 export const btnAccent =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50";
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent-strong px-5 text-sm font-semibold text-white hover:bg-accent-ink disabled:opacity-50";
 export const btnQuiet =
-  "inline-flex min-h-9 items-center justify-center gap-2 rounded-full bg-bg px-4 text-[13px] font-semibold text-ink hover:bg-line disabled:opacity-50";
+  "inline-flex min-h-9 pointer-coarse:min-h-11 items-center justify-center gap-2 rounded-full bg-bg px-4 text-[13px] font-semibold text-ink hover:bg-line disabled:opacity-50";
 export const inputClass =
-  "min-h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-[15px] text-ink outline-none focus:border-ink";
+  "min-h-11 w-full rounded-xl border border-line bg-surface px-3.5 text-[15px] text-ink outline-none focus:border-ink focus:ring-1 focus:ring-ink";
 
 export function PageHeader({ title, sub, area, children }: { title: string; sub?: ReactNode; area?: Area; children?: ReactNode }) {
   const a = area && AREAS[area];
@@ -122,7 +122,7 @@ export function LexwareBadge({ company, link = true }: {
   ]
     .filter(Boolean)
     .join(" · ");
-  const cls = `inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 align-middle text-[11px] font-semibold tabular-nums ${
+  const cls = `inline-flex min-h-6 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 align-middle text-[11px] font-semibold tabular-nums ${
     company.lexwareArchived ? "bg-line-soft text-muted line-through" : "bg-lexware-soft text-lexware-ink"
   }`;
   const label = `LX ${number ?? ""}`.trim();
@@ -137,5 +137,5 @@ export function LexwareBadge({ company, link = true }: {
 
 // Grüner Punkt für laufende Projekte
 export function RunningDot() {
-  return <span className="h-2 w-2 shrink-0 rounded-full bg-ok" aria-label="läuft" />;
+  return <span role="img" className="h-2 w-2 shrink-0 rounded-full bg-ok" aria-label="läuft" />;
 }

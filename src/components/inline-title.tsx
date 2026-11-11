@@ -52,7 +52,7 @@ export function InlineTitle({
           }}
           aria-label={`${label} bearbeiten`}
           title={`${label} bearbeiten`}
-          className="mt-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink"
+          className="pointer-coarse:h-11 pointer-coarse:w-11 mt-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink"
         >
           <Pencil size={16} aria-hidden="true" />
         </button>

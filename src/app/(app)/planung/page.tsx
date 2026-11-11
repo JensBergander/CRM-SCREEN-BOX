@@ -45,7 +45,7 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
         {rows.length === 0 ? (
           <Empty>In diesem Zeitraum sind keine Produktionen oder Postproduktionen geplant.</Empty>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <div style={{ minWidth: 240 + days.length * DAY_W }}>
               {/* Kopf: Kalenderwochen und Tage */}
               <div className="flex border-b border-line-soft text-[11px] text-muted">
@@ -82,6 +82,7 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
                         style={{ width: DAY_W }}
                         className={`relative flex shrink-0 items-center justify-center ${wd === 0 || wd === 6 ? "bg-bg" : ""} `}
                         title={label}
+                        role={label ? "img" : undefined}
                         aria-label={label}
                       >
                         {d === today && <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-ink/50" aria-hidden="true" />}

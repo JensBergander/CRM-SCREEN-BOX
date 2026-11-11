@@ -12,7 +12,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <NavTracker />
       <SearchPalette />
       <Sidebar userName={(await displayName(user)) ?? user.email} />
-      <main className="min-w-0 flex-1 px-4 py-8 md:px-10">{children}</main>
+      <main className="min-w-0 flex-1 px-4 pb-28 pt-6 md:px-10 md:py-8">{children}</main>
     </div>
   );
 }
