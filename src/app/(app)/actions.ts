@@ -36,6 +36,7 @@ import { changeStage, createDeal } from "@/lib/pipeline";
 import { companyName, personTraces, projectsFor, type ProjectOption } from "@/lib/queries";
 import { hintProps, ratingFor } from "@/lib/rating";
 import { autocomplete, placeDetails, resolveAddress, type Place } from "@/lib/places";
+import { describePaths, searchAll, type SearchHit, type SearchResult } from "@/lib/search";
 
 export type FormState = { error?: string } | undefined;
 
@@ -1386,4 +1387,16 @@ export async function saveDisplayNameAction(_: FormState, form: FormData): Promi
   await saveDisplayName(user.email, name);
   refresh();
   return {};
+}
+
+// Globale Suche: Firmen, Kontakte und Vorgänge, je höchstens fünf
+export async function globalSearchAction(query: string): Promise<SearchResult> {
+  await getCurrentUser();
+  return searchAll(query.slice(0, 100), 5);
+}
+
+// Zuletzt geöffnete Seiten aus dem Browser mit aktuellen Namen
+export async function recentPagesAction(paths: string[]): Promise<SearchHit[]> {
+  await getCurrentUser();
+  return describePaths(paths.filter((p) => typeof p === "string").slice(0, 6));
 }

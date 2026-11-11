@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { LogOut, Plus } from "lucide-react";
 import { AREAS, NAV_GROUPS } from "@/lib/areas";
 import { TONE_SOFT, TONE_TEXT } from "@/lib/tones";
+import { SearchButton } from "./global-search";
 
 export function Sidebar({ userName }: { userName: string }) {
   const pathname = usePathname();
@@ -18,10 +19,12 @@ export function Sidebar({ userName }: { userName: string }) {
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ink">
           <span className="h-2.5 w-2.5 rounded-full bg-accent" />
         </div>
-        <span className="text-[15px] font-bold tracking-wide">
+        <span className="flex-1 text-[15px] font-bold tracking-wide">
           SCREEN-BOX <span className="font-medium text-muted">CRM</span>
         </span>
+        <SearchButton variant="icon" />
       </div>
+      <SearchButton variant="field" />
 
       {NAV_GROUPS.map((group, i) => (
         <div key={group.title ?? i} className="flex flex-col gap-0.5 pt-3 first-of-type:pt-0">
