@@ -6,7 +6,9 @@ import { syncLexwareContactsIfDue } from "./lexware";
 import { cleanupPdfs, reconcileDeals, syncVouchers } from "./lexware-sync";
 import { mailboxes } from "./graph";
 import { syncMailboxes } from "./mail";
+import { refreshPaymentTasks } from "./payments";
 import { startWork } from "./pipeline";
+import { createAnniversaryTasks } from "./reminders";
 import { retryWebsiteSync, websiteConfigured } from "./website";
 
 // Alles, was regelmäßig laufen soll; jeder Teil scheitert für sich allein
@@ -30,6 +32,9 @@ export async function runJobs() {
     await step("abgleich", reconcileDeals);
     await step("pdf-aufraeumen", cleanupPdfs);
   }
+  // nach dem Abgleich: Fälligkeiten aus Lexware sind jetzt aktuell
+  await step("zahlung-pruefen", () => refreshPaymentTasks());
+  await step("jahres-erinnerung", createAnniversaryTasks);
   if (mailboxes().length) {
     await step("montagsmail", sendDigestIfDue);
     await step("kalender", retryCalendarSync);

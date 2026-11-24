@@ -160,6 +160,10 @@ export function EditDealForm({ deal, contacts }: { deal: Deal; contacts: { id: n
         <input type="checkbox" name="compareOnly" defaultChecked={deal.compareOnly} className="h-5 w-5 accent-ink" />
         Vermutlich nur Vergleichsangebot
       </label>
+      <label className="flex items-center gap-3 text-sm">
+        <input type="checkbox" name="oneOff" defaultChecked={deal.oneOff} className="h-5 w-5 accent-ink" />
+        Einmaliges Projekt (keine Erinnerung im nächsten Jahr)
+      </label>
       <Field label="Notiz">
         <Textarea name="notes" defaultValue={deal.notes ?? ""} />
       </Field>
@@ -427,6 +431,7 @@ export function EditCompanyForm({ company, tagOptions }: { company: Company; tag
     ["website", "Website"],
     ["emailDomain", "Mail-Domain", "z. B. eurowings.com, für die Zuordnung der Mails"],
     ["industry", "Branche"],
+    ["paymentTermDays", "Zahlungsziel (Tage)", "zahlt üblich nach … Tagen; leer = wie auf der Rechnung"],
   ];
   // Stammdaten von Lexware-Firmen kommen aus Lexware und werden dort gepflegt
   const fromLexware = !!company.lexwareId;
@@ -452,8 +457,9 @@ export function EditCompanyForm({ company, tagOptions }: { company: Company; tag
           <Field label={label} hint={hint}>
             <Input
               name={key}
-              defaultValue={(company[key] as string | null) ?? ""}
+              defaultValue={(company[key] as string | number | null) ?? ""}
               required={key === "name"}
+              inputMode={key === "paymentTermDays" ? "numeric" : undefined}
               readOnly={locked(key)}
               className={locked(key) ? "bg-bg text-muted" : ""}
             />

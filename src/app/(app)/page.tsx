@@ -12,18 +12,34 @@ import { TaskList } from "@/components/task-list";
 import { Badge, btnQuiet, Card, Empty, PageHeader, Row } from "@/components/ui";
 import { advanceDealAction } from "./actions";
 import { dayLine, greeting } from "@/lib/greeting";
+import { incomingForecast } from "@/lib/payments";
+import { postQuestions } from "@/lib/post";
+import { PostQuestions } from "@/components/post-questions";
 import { displayName, firstNameOf } from "@/lib/profile";
 
 
+// „KW 48 · 23.11.–29.11.“
+function weekLabel(from: string, to: string) {
+  const d = new Date(`${from}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 3);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const kw = Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `KW ${kw} · ${from.slice(8)}.${from.slice(5, 7)}.–${to.slice(8)}.${to.slice(5, 7)}.`;
+}
+
 export default async function StartPage() {
-  const [user, data, upcoming, questions, recent, competitors] = await Promise.all([
+  const [user, data, upcoming, questions, recent, competitors, postOpen, forecast] = await Promise.all([
     getCurrentUser(),
     getDashboard(),
     upcomingProductionDays(todayIso(), addDaysIso(todayIso(), 14)),
     pendingVouchers(),
     recentCompanies(),
     competitorNames(),
+    postQuestions(),
+    incomingForecast(),
   ]);
+  const forecastMax = Math.max(1, forecast.overdue.sum, ...forecast.weeks.map((w) => w.sum));
+  const forecastNet = forecast.overdue.net || forecast.weeks.some((w) => w.net);
   const now = new Date();
   const name = firstNameOf(await displayName(user));
   const sub = dayLine(now, {
@@ -69,6 +85,12 @@ export default async function StartPage() {
           </Link>
         ))}
       </section>
+
+      {postOpen.length > 0 && (
+        <Card title="Wie lange brauchst du noch?" aside={<Badge tone="danger">{postOpen.length} in Bearbeitung ohne Ende</Badge>}>
+          <PostQuestions items={postOpen} today={todayIso()} />
+        </Card>
+      )}
 
       {questions.length > 0 && (
         <Card
@@ -145,6 +167,40 @@ export default async function StartPage() {
             )}
             </div>
           ))}
+        </Card>
+
+        <Card
+          title="Geldeingang erwartet"
+          aside={<Link href="/vorgaenge?ansicht=tabelle&phase=rechnung" className="text-[13px] text-muted">Offene Rechnungen</Link>}
+        >
+          {forecast.overdue.count + forecast.weeks.reduce((s, w) => s + w.count, 0) === 0 ? (
+            <Empty>In den nächsten 4 Wochen ist keine Zahlung offen.</Empty>
+          ) : (
+            <ul className="flex flex-col px-5 pb-4">
+              {[
+                ...(forecast.overdue.count ? [{ key: "over", label: "Überfällig", ...forecast.overdue, danger: true }] : []),
+                ...forecast.weeks.map((w) => ({ key: w.from, label: weekLabel(w.from, w.to), ...w, danger: false })),
+              ].map((row) => (
+                <li key={row.key} className="flex flex-col gap-1.5 border-t border-line-soft py-3 first:border-t-0">
+                  <div className="flex items-baseline gap-3 text-sm">
+                    <span className={`flex-1 ${row.danger ? "font-semibold text-danger-ink" : "text-muted"}`}>{row.label}</span>
+                    <span className="text-xs text-muted">{row.count ? `${row.count} ${row.count === 1 ? "Rechnung" : "Rechnungen"}` : ""}</span>
+                    <span className={`w-24 text-right font-semibold tabular-nums ${row.danger ? "text-danger-ink" : ""}`}>
+                      {row.count ? euro(row.sum) : "–"}{row.net && "*"}
+                    </span>
+                  </div>
+                  <span className="h-1.5 rounded-full bg-line-soft" aria-hidden="true">
+                    <span className={`block h-full rounded-full ${row.danger ? "bg-danger" : "bg-done"}`} style={{ width: `${(row.sum / forecastMax) * 100}%` }} />
+                  </span>
+                </li>
+              ))}
+              <li className="pt-2 text-xs text-muted">
+                Nach Fälligkeit, bei Firmen mit Zahlungsziel oder Erfahrungswert nach dem späteren Datum. Beträge brutto laut Lexware
+                {forecastNet && "; * enthält Nettobeträge von Rechnungen, die noch nicht in Lexware gefunden wurden"}
+                {forecast.later > 0 && `. ${forecast.later} weitere später`}.
+              </li>
+            </ul>
+          )}
         </Card>
 
         <Card title="Zuletzt aktiv" aside={<span className="text-xs text-muted">Kunden mit Notiz, Anruf oder laufendem Vorgang</span>}>

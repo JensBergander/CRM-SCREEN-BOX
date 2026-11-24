@@ -23,6 +23,9 @@ import { EventPhoto } from "@/components/event-photo";
 import { BackButton } from "@/components/back-button";
 import { fullName } from "@/lib/people";
 import { WebsiteEventPanel } from "@/components/website-event";
+import { PostQuestions } from "@/components/post-questions";
+import { postQuestions } from "@/lib/post";
+import { paymentDues } from "@/lib/payments";
 
 export default async function DealPage({ params, searchParams }: PageProps<"/vorgaenge/[id]">) {
   const { id } = await params;
@@ -33,6 +36,7 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
   const { deal } = data;
   const vouchers = await vouchersForDeal(deal);
   const planning = await loadPlanningAction(deal.id);
+  const [postOpen, payment] = await Promise.all([postQuestions(deal.id), deal.stage === "rechnung" ? paymentDues([deal.id]).then((m) => m.get(deal.id)) : undefined]);
   const competitors = await competitorNames();
   const competitor = deal.competitorId ? await companyName(deal.competitorId) : null;
   const folder = data.folderName ? await folderLink(deal, data.folderName) : null;
@@ -77,11 +81,30 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
           {deal.compareOnly && <Badge tone="info">Vermutlich Vergleichsangebot</Badge>}
           {deal.quick && <Badge>Schnellauftrag</Badge>}
           {deal.fromLexware && <Badge>aus Lexware</Badge>}
+          {payment && (
+            <span className={`text-sm ${payment.expected < todayIso() ? "font-semibold text-danger-ink" : "text-muted"}`}>
+              {payment.expected < todayIso() ? "Zahlung überfällig seit" : "Zahlung erwartet bis"} {dateDe(payment.expected)}
+              {payment.lexwareDue && payment.lexwareDue !== payment.expected && ` (laut Rechnung ${dateDe(payment.lexwareDue)})`}
+            </span>
+          )}
           {deal.stage === "verloren" && deal.lostReason && (
             <span className="text-sm text-muted">Grund: {LOST_REASON_LABEL[deal.lostReason]}{deal.lostNote && ` – ${deal.lostNote}`}</span>
           )}
         </div>
       </header>
+
+      {payment?.mismatch && (
+        <p className="rounded-2xl bg-info-soft px-5 py-3 text-sm text-info-ink">
+          Auf der Rechnung stehen {payment.mismatch.invoiceDays} Tage Zahlungsziel, {data.companyName} zahlt üblich nach {payment.mismatch.termDays} Tagen.
+          „Zahlung prüfen“ richtet sich nach dem späteren Datum. Ist die Rechnung falsch, bitte in Lexware korrigieren.
+        </p>
+      )}
+
+      {postOpen.length > 0 && (
+        <Card title="Wie lange brauchst du noch?">
+          <PostQuestions items={postOpen} today={todayIso()} withLink={false} />
+        </Card>
+      )}
 
       {deal.stage === "verloren" && (
         <Card className="flex flex-col gap-2 px-5 py-4">

@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, gte, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { companies, deals, productionDays } from "@/db/schema";
+import { addDaysIso, todayIso } from "./format";
 
 export type ScheduleRow = {
   dealId: number;
@@ -13,6 +14,8 @@ export type ScheduleRow = {
   days: { day: string; startTime: string; endTime: string }[];
   postStart: string | null;
   postEnd: string | null;
+  // in Bearbeitung, aber das Ende ist vorbei oder fehlt: geschätzt bis morgen, bis du sagst, wie lange es noch dauert
+  overrun: { from: string; to: string } | null;
 };
 
 // Projekte mit Produktion oder Postproduktion im Zeitraum (ohne verlorene)
@@ -24,7 +27,7 @@ export async function scheduleBetween(from: string, to: string): Promise<Schedul
   const postRows = await db
     .select({ id: deals.id })
     .from(deals)
-    .where(and(lte(deals.postStart, to), gte(deals.postEnd, from)));
+    .where(or(and(lte(deals.postStart, to), gte(deals.postEnd, from)), eq(deals.stage, "bearbeitung")));
   const ids = [...new Set([...dayRows.map((r) => r.dealId), ...postRows.map((r) => r.id)])];
   if (!ids.length) return [];
 
@@ -36,8 +39,17 @@ export async function scheduleBetween(from: string, to: string): Promise<Schedul
       .where(and(inArray(deals.id, ids), ne(deals.stage, "verloren"))),
     db.select().from(productionDays).where(inArray(productionDays.dealId, ids)).orderBy(asc(productionDays.day), asc(productionDays.startTime)),
   ]);
+  const today = todayIso();
+  const tomorrow = addDaysIso(today, 1);
+  const overrunOf = (r: (typeof rows)[number], shootDays: string[]) => {
+    if (r.stage !== "bearbeitung" || (r.postEnd && r.postEnd >= today)) return null;
+    const lastShoot = shootDays.at(-1);
+    const start = r.postEnd ? addDaysIso(r.postEnd, 1) : r.postStart ?? (lastShoot && lastShoot < today ? addDaysIso(lastShoot, 1) : today);
+    return { from: start, to: tomorrow };
+  };
   return rows
     .map((r) => ({
+      overrun: overrunOf(r, days.filter((d) => d.dealId === r.id).map((d) => d.day)),
       dealId: r.id,
       title: r.title,
       company: r.company,
@@ -48,6 +60,13 @@ export async function scheduleBetween(from: string, to: string): Promise<Schedul
       postStart: r.postStart,
       postEnd: r.postEnd,
     }))
+    // nur Projekte, die im Zeitraum etwas zeigen (Bearbeitungs-Projekte kommen sonst als leere Zeile mit)
+    .filter(
+      (r) =>
+        r.days.some((d) => d.day >= from && d.day <= to) ||
+        (r.postStart && r.postEnd && r.postStart <= to && r.postEnd >= from) ||
+        (r.overrun && r.overrun.from <= to && r.overrun.to >= from),
+    )
     .sort((a, b) => (a.days[0]?.day ?? a.postStart ?? "").localeCompare(b.days[0]?.day ?? b.postStart ?? ""));
 }
 

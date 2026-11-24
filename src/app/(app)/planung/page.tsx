@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { addDaysIso, dateDe, mapsUrl, todayIso } from "@/lib/format";
 import { scheduleBetween } from "@/lib/schedule";
+import { estimateAccuracy, postQuestions } from "@/lib/post";
+import { PostQuestions } from "@/components/post-questions";
 import { Card, Empty, PageHeader } from "@/components/ui";
 
 const WEEKS = 8;
@@ -19,13 +21,20 @@ function isoWeek(iso: string) {
   return Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
 }
 
+// 1,4 → „40 % länger als geplant“
+function accuracyText(factor: number) {
+  const pct = Math.round((factor - 1) * 100);
+  if (Math.abs(pct) < 5) return "etwa so lange wie geplant";
+  return pct > 0 ? `${pct} % länger als geplant` : `${-pct} % kürzer als geplant`;
+}
+
 export default async function PlanningPage({ searchParams }: PageProps<"/planung">) {
   const { ab } = await searchParams;
   const today = todayIso();
   const start = mondayOf(typeof ab === "string" && /^\d{4}-\d{2}-\d{2}$/.test(ab) ? ab : today);
   const end = addDaysIso(start, WEEKS * 7 - 1);
   const days = Array.from({ length: WEEKS * 7 }, (_, i) => addDaysIso(start, i));
-  const rows = await scheduleBetween(start, end);
+  const [rows, open, accuracy] = await Promise.all([scheduleBetween(start, end), postQuestions(), estimateAccuracy()]);
 
   const list = (
     <ul className="mt-2 flex flex-col gap-3">
@@ -35,6 +44,7 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
           <span className="block text-muted">
             {r.days.map((x) => `${dateDe(x.day)} ${x.startTime}–${x.endTime}`).join(", ") || "keine Produktionstage"}
             {r.postStart && r.postEnd && ` · Postproduktion ${dateDe(r.postStart)} bis ${dateDe(r.postEnd)}`}
+            {r.overrun && <span className="text-danger-ink"> · Ende offen, geschätzt bis {dateDe(r.overrun.to)}</span>}
           </span>
           {r.location && (
             <span className="block text-muted">
@@ -49,7 +59,13 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader area="planung" title="Planung" sub={`${dateDe(start)} bis ${dateDe(end)} · Produktion kräftig, Postproduktion hell`}>
+      <PageHeader
+        area="planung"
+        title="Planung"
+        sub={`${dateDe(start)} bis ${dateDe(end)} · Produktion kräftig, Postproduktion hell, Ende offen rot gestrichelt${
+          accuracy ? ` · deine Postproduktion dauert im Schnitt ${accuracyText(accuracy.factor)} (${accuracy.count} Projekte)` : ""
+        }`}
+      >
         <div className="flex items-center gap-1">
           <Link href={`/planung?ab=${addDaysIso(start, -28)}`} aria-label="4 Wochen zurück" className="flex h-10 w-10 items-center justify-center rounded-full bg-surface hover:bg-line">
             <ChevronLeft size={18} aria-hidden="true" />
@@ -60,6 +76,12 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
           </Link>
         </div>
       </PageHeader>
+
+      {open.length > 0 && (
+        <Card title="Wie lange brauchst du noch?">
+          <PostQuestions items={open} today={today} />
+        </Card>
+      )}
 
       {/* Handy: die Zeitachse zeigt nur wenige Tage, die Liste steht deshalb offen davor */}
       {rows.length > 0 && <section aria-label="Produktionen als Liste" className="rounded-2xl bg-surface px-5 py-3 text-sm md:hidden">{list}</section>}
@@ -94,11 +116,14 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
                     const wd = new Date(`${d}T12:00:00Z`).getUTCDay();
                     const prod = r.days.find((x) => x.day === d);
                     const post = r.postStart && r.postEnd && d >= r.postStart && d <= r.postEnd;
+                    const over = !prod && !post && r.overrun && d >= r.overrun.from && d <= r.overrun.to;
                     const label = prod
                       ? `${dateDe(d)}: Produktion ${prod.startTime}–${prod.endTime}`
                       : post
                         ? `${dateDe(d)}: Postproduktion`
-                        : undefined;
+                        : over
+                          ? `${dateDe(d)}: Postproduktion, Ende offen (geschätzt)`
+                          : undefined;
                     return (
                       <div
                         key={d}
@@ -111,6 +136,7 @@ export default async function PlanningPage({ searchParams }: PageProps<"/planung
                         {d === today && <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-ink/50" aria-hidden="true" />}
                         {prod && <span className="relative h-6 w-[22px] rounded-[4px] bg-accent" />}
                         {!prod && post && <span className="relative h-3 w-full bg-accent-soft ring-1 ring-inset ring-accent/30" />}
+                        {over && <span className="relative h-3 w-full border-y-2 border-dashed border-danger bg-danger-soft/60" />}
                       </div>
                     );
                   })}

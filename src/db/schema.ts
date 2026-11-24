@@ -47,7 +47,8 @@ export type LostReason = (typeof LOST_REASONS)[number];
 export const COMPANY_KINDS = ["kunde", "lieferant", "wettbewerber"] as const;
 export type CompanyKind = (typeof COMPANY_KINDS)[number];
 
-export const TASK_KINDS = ["nachfassen", "rechnung", "zahlung"] as const;
+// „jahrestermin“: Erinnerung an ein wiederkehrendes Projekt (Vorjahrestermin minus 3 Monate)
+export const TASK_KINDS = ["nachfassen", "rechnung", "zahlung", "jahrestermin"] as const;
 export const ACTIVITY_TYPES = ["notiz", "anruf", "phase", "mail"] as const;
 
 const timestamps = {
@@ -85,6 +86,9 @@ export const companies = mysqlTable(
     email: varchar("email", { length: 255 }),
     emailDomain: varchar("email_domain", { length: 120 }),
     industry: varchar("industry", { length: 120 }),
+    // Erfahrungswert: nach wie vielen Tagen die Firma üblicherweise zahlt. Die Fälligkeit aus Lexware bleibt maßgeblich;
+    // weicht die Rechnung ab, gibt es einen Hinweis und „Zahlung prüfen“ richtet sich nach dem späteren Datum.
+    paymentTermDays: int("payment_term_days"),
     notes: text("notes"),
     ...timestamps,
   },
@@ -163,6 +167,12 @@ export const deals = mysqlTable(
     locationLng: double("location_lng"),
     postStart: date("post_start", { mode: "string" }),
     postEnd: date("post_end", { mode: "string" }),
+    // erster geplanter Zieltag der Postproduktion (vor Verlängerungen) und Tag, an dem sie tatsächlich fertig war:
+    // daraus die Schätzgenauigkeit
+    postEndPlanned: date("post_end_planned", { mode: "string" }),
+    postFinished: date("post_finished", { mode: "string" }),
+    // einmaliges Projekt: keine Jahres-Erinnerung
+    oneOff: boolean("one_off").notNull().default(false),
     blockContinuous: boolean("block_continuous").notNull().default(false),
     // ein durchgehender Kalendertermin (bei blockContinuous)
     calendarEventId: varchar("calendar_event_id", { length: 255 }),
@@ -235,6 +245,8 @@ export const tasks = mysqlTable(
     dealId: int("deal_id").references(() => deals.id, { onDelete: "cascade" }),
     // gesetzt bei Aufgaben, die die App selbst anlegt
     kind: mysqlEnum("kind", TASK_KINDS),
+    // von Hand verschoben: automatische Termine (z. B. „Zahlung prüfen“) werden dann nicht mehr angepasst
+    manualDue: boolean("manual_due").notNull().default(false),
     doneAt: timestamp("done_at"),
     ...timestamps,
   },

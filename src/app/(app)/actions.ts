@@ -33,6 +33,8 @@ import { cleanName, compatibleNames, createContact, fullName, likeWord, mergeNam
 import { saveAutoReplySettings } from "@/lib/autoreply";
 import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
+import { refreshPaymentTasks } from "@/lib/payments";
+import { estimateAccuracy, extendPost } from "@/lib/post";
 import { companyName, personTraces, projectsFor, type ProjectOption } from "@/lib/queries";
 import { hintProps, ratingFor } from "@/lib/rating";
 import { autocomplete, placeDetails, resolveAddress, type Place } from "@/lib/places";
@@ -133,13 +135,25 @@ export async function updateDealAction(dealId: number, _: FormState, form: FormD
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const offerNumber = text(form, "offerNumber")?.trim() || null;
   const invoiceNumber = text(form, "invoiceNumber")?.trim() || null;
-  const [current] = await db.select({ companyId: deals.companyId, contactId: deals.contactId }).from(deals).where(eq(deals.id, dealId));
+  const [current] = await db
+    .select({ companyId: deals.companyId, contactId: deals.contactId, invoiceNumber: deals.invoiceNumber })
+    .from(deals)
+    .where(eq(deals.id, dealId));
   const contactId = current ? await contactFromForm(form, current.companyId, current.contactId) : undefined;
+  const oneOff = form.get("oneOff") === "on";
   await db
     .update(deals)
-    .set({ ...parsed.data, offerNumber, invoiceNumber, compareOnly: form.get("compareOnly") === "on", ...(contactId !== undefined && { contactId }) })
+    .set({ ...parsed.data, offerNumber, invoiceNumber, oneOff, compareOnly: form.get("compareOnly") === "on", ...(contactId !== undefined && { contactId }) })
     .where(eq(deals.id, dealId));
   if (current) await resolveVoucherQuestions([offerNumber, invoiceNumber], current.companyId);
+  if (current && current.invoiceNumber !== invoiceNumber) await refreshPaymentTasks([dealId]);
+  // Einmaliges Projekt: eine offene Jahres-Erinnerung ist damit erledigt
+  if (oneOff) {
+    await db
+      .update(tasks)
+      .set({ doneAt: new Date() })
+      .where(and(eq(tasks.dealId, dealId), eq(tasks.kind, "jahrestermin"), isNull(tasks.doneAt)));
+  }
   refresh();
   return {};
 }
@@ -230,6 +244,8 @@ export type Planning = {
   postEnd: string | null;
   blockContinuous: boolean;
   calendarError?: string | null;
+  // Schätzgenauigkeit der Postproduktion (1,4 = dauert im Schnitt 40 % länger als geplant); nur zum Anzeigen
+  accuracy?: { factor: number; count: number } | null;
 };
 
 // Planung eines Vorgangs; als Drehort werden zuerst die Firmenadresse und frühere Drehorte vorgeschlagen
@@ -266,6 +282,7 @@ export async function loadPlanningAction(dealId: number): Promise<Planning | nul
     days: days.map((d) => ({ id: d.id, day: d.day, startTime: d.startTime, endTime: d.endTime })),
     postStart: row.deal.postStart,
     postEnd: row.deal.postEnd,
+    accuracy: await estimateAccuracy(),
     blockContinuous: row.deal.blockContinuous,
     calendarError: row.deal.calendarError,
   };
@@ -344,6 +361,9 @@ export async function savePlanningAction(dealId: number, input: Planning): Promi
       locationLng: data.location && data.place ? data.place.lng : null,
       postStart: data.postStart || null,
       postEnd: data.postEnd || null,
+      // Solange die Postproduktion noch nicht begonnen hat, ist ein geänderter Zieltag der Plan (für die Schätzgenauigkeit);
+      // danach zählt er als Verlängerung
+      ...((!data.postStart || data.postStart >= todayIso()) && { postEndPlanned: data.postEnd || null }),
       blockContinuous: data.blockContinuous,
       // Projektdatum (und Ordnername) folgen dem ersten Produktionstag
       ...(firstDay && { projectDate: firstDay }),
@@ -479,6 +499,10 @@ const companySchema = z.object({
   industry: optionalText,
   notes: optionalText,
   kind: z.enum(COMPANY_KINDS).catch("kunde"),
+  // leer = kein Erfahrungswert, dann gilt allein Lexware (bzw. 14 Tage)
+  paymentTermDays: optionalText
+    .transform((v) => (v == null ? null : Number(v)))
+    .refine((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 180), "Zahlungsziel bitte in ganzen Tagen angeben, z. B. 30 (höchstens 180)."),
 });
 
 async function companyValues(form: FormData) {
@@ -511,8 +535,9 @@ export async function updateCompanyAction(companyId: number, _: FormState, form:
   const master = (await fromLexware(companyId)) ? {} : { name, street, zip, city, phone, email };
   await db
     .update(companies)
-    .set({ ...own, ...master, emailDomain: own.emailDomain?.toLowerCase().replace(/^@/, "") ?? null })
+    .set({ ...own, ...master, paymentTermDays: own.paymentTermDays ?? null, emailDomain: own.emailDomain?.toLowerCase().replace(/^@/, "") ?? null })
     .where(eq(companies.id, companyId));
+  await refreshPaymentTasks();
   refresh();
   return {};
 }
@@ -777,7 +802,8 @@ export async function createTaskAction(_: FormState, form: FormData): Promise<Fo
 export async function moveTaskAction(taskId: number, dueDate: string): Promise<{ error?: string }> {
   await getCurrentUser();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || Number.isNaN(Date.parse(dueDate))) return { error: "Bitte ein gültiges Datum wählen." };
-  await db.update(tasks).set({ dueDate }).where(eq(tasks.id, taskId));
+  // von Hand verschoben: automatische Anpassung (z. B. „Zahlung prüfen“ nach Lexware-Fälligkeit) greift nicht mehr
+  await db.update(tasks).set({ dueDate, manualDue: true }).where(eq(tasks.id, taskId));
   refresh();
   return {};
 }
@@ -1082,6 +1108,7 @@ export async function taskFromMailAction(mailId: number) {
 export async function linkVoucherAction(dealId: number, voucherId: string) {
   await getCurrentUser();
   await linkVoucher(dealId, voucherId);
+  await refreshPaymentTasks([dealId]);
   refresh();
 }
 
@@ -1399,4 +1426,23 @@ export async function globalSearchAction(query: string): Promise<SearchResult> {
 export async function recentPagesAction(paths: string[]): Promise<SearchHit[]> {
   await getCurrentUser();
   return describePaths(paths.filter((p) => typeof p === "string").slice(0, 6));
+}
+
+// „Wie lange brauchst du noch?“: neues Ende der Postproduktion
+export async function extendPostAction(dealId: number, until: string): Promise<{ error?: string }> {
+  await getCurrentUser();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || Number.isNaN(Date.parse(until))) return { error: "Bitte ein gültiges Datum wählen." };
+  if (until < todayIso()) return { error: "Das Datum liegt in der Vergangenheit." };
+  await extendPost(dealId, until);
+  refresh();
+  return {};
+}
+
+// Vorschlag aus der Zahlungsmoral übernehmen
+export async function setPaymentTermAction(companyId: number, days: number) {
+  await getCurrentUser();
+  z.number().int().min(0).max(180).parse(days);
+  await db.update(companies).set({ paymentTermDays: days }).where(eq(companies.id, companyId));
+  await refreshPaymentTasks();
+  refresh();
 }

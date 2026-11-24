@@ -7,7 +7,8 @@ import { KIND_LABEL, KIND_TONE, TONE_SOFT } from "@/lib/tones";
 import { MIN_OFFERS, ratingFor } from "@/lib/rating";
 import { AssessmentCard } from "@/components/rating";
 import { InlineTitle } from "@/components/inline-title";
-import { renameCompanyAction } from "../../actions";
+import { renameCompanyAction, setPaymentTermAction } from "../../actions";
+import { paymentMorals, termSuggestion } from "@/lib/payments";
 import { companyOptions, mailSenders, pickPeople, callContexts, companyCall, companyName, dealsWonBy, personCall, peopleOfActivities, phoneNumbers, getCompany, projectsOfSupplier } from "@/lib/queries";
 import { serviceTagOptions } from "@/lib/service-tags";
 import { ContactActions } from "@/components/contact-actions";
@@ -40,6 +41,11 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
     ),
   );
 
+  // Zahlungsmoral aus bezahlten Rechnungen; weicht sie deutlich vom Zahlungsziel ab, Vorschlag zum Anpassen
+  const moral = company.kind === "kunde" ? (await paymentMorals([company.id])).get(company.id) : undefined;
+  const suggestTerm = termSuggestion(moral, company.paymentTermDays);
+  const termText = company.paymentTermDays !== null ? `Zahlungsziel ${company.paymentTermDays} Tage` : "kein Zahlungsziel eingetragen";
+
   const lastContact = { label: "Letzter Kontakt", value: stats.lastContact ? dateDe(new Date(stats.lastContact).toISOString()) : "–" };
   const kpis = supplier
     ? [{ label: "Projekte", value: String(supplied.length) }, { label: "Kosten in Projekten", value: euro(suppliedCost) }, lastContact]
@@ -47,6 +53,11 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         { label: "Umsatz (Lexware)", value: euro(assessment?.facts.revenue ?? 0) },
         { label: "Vorgänge im CRM", value: String(stats.requests) },
         lastContact,
+        {
+          label: "Zahlt im Schnitt nach",
+          value: moral ? `${moral.avgDays} Tagen` : "–",
+          hint: moral ? `${moral.count} bezahlte Rechnungen · ${termText}` : `noch zu wenig bezahlte Rechnungen · ${termText}`,
+        },
       ];
   const tagLink = supplier ? { href: "/lieferanten", param: "kategorie" } : null;
 
@@ -98,14 +109,25 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
         )}
       </header>
 
-      <section aria-label="Kennzahlen" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <section aria-label="Kennzahlen" className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
         {kpis.map((k) => (
           <div key={k.label} className="rounded-2xl bg-surface p-4">
             <p className="text-xs text-muted">{k.label}</p>
             <p className="mt-1 text-xl font-bold tracking-tight">{k.value}</p>
+            {"hint" in k && <p className="mt-0.5 text-xs text-muted">{k.hint}</p>}
           </div>
         ))}
       </section>
+
+      {suggestTerm !== null && (
+        <form action={setPaymentTermAction.bind(null, company.id, suggestTerm)} className="flex flex-wrap items-center gap-3 rounded-2xl bg-info-soft px-5 py-3 text-sm text-info-ink">
+          <span className="flex-1">
+            {company.name} zahlt im Schnitt nach {moral!.avgDays} Tagen, eingetragen {company.paymentTermDays !== null ? `sind ${company.paymentTermDays}` : "ist nichts (es gelten 14)"}.
+            Zahlungsziel auf {suggestTerm} Tage setzen? Die Fälligkeit aus Lexware bleibt maßgeblich.
+          </span>
+          <button type="submit" className={btnSecondary}>Auf {suggestTerm} Tage setzen</button>
+        </form>
+      )}
 
       <details className="group rounded-2xl bg-surface">
         <summary className="flex cursor-pointer list-none items-center gap-4 px-5 py-4 [&::-webkit-details-marker]:hidden">

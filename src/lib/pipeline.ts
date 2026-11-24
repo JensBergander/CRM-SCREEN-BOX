@@ -5,6 +5,7 @@ import { activities, deals, tasks, type LostReason, type Stage } from "@/db/sche
 import { syncDealCalendar } from "./calendar";
 import { addDaysIso, todayIso } from "./format";
 import { LOST_REASON_LABEL, STAGE_LABEL } from "./labels";
+import { DEFAULT_TERM_DAYS, refreshPaymentTasks } from "./payments";
 import { CONFIRMED, syncDealWebsite } from "./website";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -60,8 +61,14 @@ async function applyStageEffects(tx: Tx, dealId: number, to: Stage, from: Stage 
   if (to === "angebot") await addAutoTask(tx, deal, "nachfassen", 10);
   if (to === "erledigt") await addAutoTask(tx, deal, "rechnung", 0);
   if (to === "rechnung" || to === "bezahlt") await closeAutoTasks(tx, dealId, ["rechnung"]);
-  if (to === "rechnung") await addAutoTask(tx, deal, "zahlung", 14);
+  // vorläufig; nach dem Speichern richtet refreshPaymentTasks den Termin nach Lexware-Fälligkeit und Zahlungsziel
+  if (to === "rechnung") await addAutoTask(tx, deal, "zahlung", DEFAULT_TERM_DAYS);
   if (to === "bezahlt" || to === "verloren") await closeAutoTasks(tx, dealId, ["rechnung", "zahlung"]);
+
+  // Postproduktion fertig: tatsächliches Ende für die Schätzgenauigkeit festhalten
+  if (from === "bearbeitung" && ["erledigt", "rechnung", "bezahlt"].includes(to) && !deal.postFinished) {
+    await tx.update(deals).set({ postFinished: todayIso() }).where(eq(deals.id, dealId));
+  }
 
   const text = from
     ? `${deal.title}: ${STAGE_LABEL[from]} → ${STAGE_LABEL[to]}`
@@ -138,6 +145,7 @@ export async function changeStage(
     await applyStageEffects(tx, dealId, to, deal.stage);
   });
   if (!from) return;
+  if (to === "rechnung") await refreshPaymentTasks([dealId]);
   // Kalender: „(unbestätigt)“ bis zur Beauftragung, gelöscht bei „Verloren“; Website-Event erst ab „Beauftragt“
   if (CONFIRMED.includes(from) !== CONFIRMED.includes(to) || from === "verloren" || to === "verloren") {
     await syncDealCalendar(dealId);

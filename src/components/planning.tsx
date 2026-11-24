@@ -52,6 +52,15 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
   const suggestedStart = lastDay ? nextWorkday(lastDay) : "";
   const effectivePostStart = touchedPostStart ? postStart : suggestedStart;
 
+  // Erfahrungswert: dauert die Postproduktion meist länger als geplant, realistischeres Ende vorschlagen
+  const realistic = (() => {
+    const f = initial.accuracy?.factor;
+    if (!f || f < 1.1 || !effectivePostStart || !postEnd || postEnd < effectivePostStart) return null;
+    const planned = Math.round((Date.parse(postEnd) - Date.parse(effectivePostStart)) / 86_400_000) + 1;
+    const suggestion = addDaysIso(effectivePostStart, Math.ceil(planned * f) - 1);
+    return suggestion > postEnd ? suggestion : null;
+  })();
+
   const update = (i: number, patch: Partial<Day>) => setDays(days.map((d, j) => (j === i ? { ...d, ...patch } : d)));
   const addDay = () => {
     const prev = days.at(-1);
@@ -177,6 +186,15 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
             </span>
           )}
         </div>
+        {realistic && (
+          <p className="flex flex-wrap items-center gap-2 rounded-xl bg-accent-soft/60 px-4 py-3 text-sm">
+            <span className="flex-1">
+              Deine Postproduktion dauert im Schnitt {Math.round((initial.accuracy!.factor - 1) * 100)} % länger als geplant
+              ({initial.accuracy!.count} Projekte). Realistisch wäre bis {dateDe(realistic)}.
+            </span>
+            <button type="button" onClick={() => setPostEnd(realistic)} className={btnQuiet}>Übernehmen</button>
+          </p>
+        )}
       </section>
 
       {result?.error && <FormError message={result.error} />}

@@ -19,19 +19,47 @@ const dealWithCompany = {
   quick: deals.quick,
   stageChangedAt: deals.stageChangedAt,
   followUpDate: deals.followUpDate,
+  postStart: deals.postStart,
+  postEnd: deals.postEnd,
   createdAt: deals.createdAt,
   companyId: deals.companyId,
   companyName: companies.name,
 };
 export type DealRow = Awaited<ReturnType<typeof listDeals>>[number];
 
-export async function listDeals(includeLost = false) {
+// Board: „Bezahlt“ nur mit den Zahlungen der letzten Tage, das Archiv steht in der Tabelle
+export const BOARD_PAID_DAYS = 30;
+
+export async function listDeals(includeLost = false, opts: { board?: boolean } = {}) {
+  const paidSince = new Date(Date.now() - BOARD_PAID_DAYS * 86_400_000);
   return db
     .select(dealWithCompany)
     .from(deals)
     .innerJoin(companies, eq(companies.id, deals.companyId))
-    .where(includeLost ? undefined : ne(deals.stage, "verloren"))
+    .where(
+      and(
+        includeLost ? undefined : ne(deals.stage, "verloren"),
+        opts.board ? or(ne(deals.stage, "bezahlt"), sql`${deals.stageChangedAt} >= ${paidSince}`) : undefined,
+      ),
+    )
     .orderBy(asc(deals.stageChangedAt));
+}
+
+// Anzahl aller bezahlten Vorgänge (Link „Alle … bezahlten“ unter der Board-Spalte)
+export async function paidCount() {
+  const [row] = await db.select({ n: count() }).from(deals).where(eq(deals.stage, "bezahlt"));
+  return row?.n ?? 0;
+}
+
+// Nächster Produktionstag je Vorgang ab heute (Board: „Dreh 03.12.“)
+export async function nextShootDays(dealIds: number[]): Promise<Map<number, string>> {
+  if (!dealIds.length) return new Map();
+  const rows = await db
+    .select({ dealId: productionDays.dealId, day: sql<string>`min(${productionDays.day})` })
+    .from(productionDays)
+    .where(and(inArray(productionDays.dealId, dealIds), sql`${productionDays.day} >= ${todayIso()}`))
+    .groupBy(productionDays.dealId);
+  return new Map(rows.map((r) => [r.dealId, String(r.day).slice(0, 10)]));
 }
 
 const openTaskFields = {
