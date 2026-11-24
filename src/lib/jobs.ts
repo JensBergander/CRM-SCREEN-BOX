@@ -1,4 +1,5 @@
 import "server-only";
+import { syncAppointments } from "./appointments";
 import { sendAutoReplies } from "./autoreply";
 import { retryCalendarSync } from "./calendar";
 import { sendDigestIfDue } from "./digest";
@@ -38,6 +39,7 @@ export async function runJobs() {
   if (mailboxes().length) {
     await step("montagsmail", sendDigestIfDue);
     await step("kalender", retryCalendarSync);
+    await step("termine", syncAppointments);
   }
   if (websiteConfigured()) await step("website", retryWebsiteSync);
   return result;

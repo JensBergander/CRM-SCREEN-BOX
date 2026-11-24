@@ -197,6 +197,13 @@
       "when": 1795529019082,
       "tag": "0027_payment_post_reminder",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1795540658973,
+      "tag": "0028_termine",
+      "breakpoints": true
     }
   ]
 }

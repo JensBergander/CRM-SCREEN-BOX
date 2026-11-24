@@ -208,7 +208,7 @@ export async function searchMailsAndNotes(q: string, limit = 30) {
       or(like(emails.subject, likeWord(w)), like(emails.preview, likeWord(w)), like(emails.fromName, likeWord(w)), like(emails.fromAddress, likeWord(w)), like(emails.toAddresses, likeWord(w))),
     ),
   );
-  const noteWhere = and(inArray(activities.type, ["notiz", "anruf"]), ...words.map((w) => like(activities.body, likeWord(w))));
+  const noteWhere = and(inArray(activities.type, ["notiz", "anruf", "termin"]), ...words.map((w) => like(activities.body, likeWord(w))));
   const [mails, notes] = await Promise.all([
     db
       .select({

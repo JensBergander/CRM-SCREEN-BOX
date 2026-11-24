@@ -16,6 +16,11 @@ import { incomingForecast } from "@/lib/payments";
 import { postQuestions } from "@/lib/post";
 import { PostQuestions } from "@/components/post-questions";
 import { displayName, firstNameOf } from "@/lib/profile";
+import { appointmentsStale, reviewQuestions, upcomingAppointments } from "@/lib/appointments";
+import { AppointmentList } from "@/components/appointment-list";
+import { AppointmentReview, AppointmentsRefresh } from "@/components/appointment-actions";
+import { companyOptions } from "@/lib/queries";
+import { whenDe } from "@/lib/format";
 
 
 // „KW 48 · 23.11.–29.11.“
@@ -28,7 +33,7 @@ function weekLabel(from: string, to: string) {
 }
 
 export default async function StartPage() {
-  const [user, data, upcoming, questions, recent, competitors, postOpen, forecast] = await Promise.all([
+  const [user, data, upcoming, questions, recent, competitors, postOpen, forecast, appointments, reviews, stale, companyList] = await Promise.all([
     getCurrentUser(),
     getDashboard(),
     upcomingProductionDays(todayIso(), addDaysIso(todayIso(), 14)),
@@ -37,6 +42,10 @@ export default async function StartPage() {
     competitorNames(),
     postQuestions(),
     incomingForecast(),
+    upcomingAppointments(),
+    reviewQuestions(),
+    appointmentsStale(),
+    companyOptions(),
   ]);
   const forecastMax = Math.max(1, forecast.overdue.sum, ...forecast.weeks.map((w) => w.sum));
   const forecastNet = forecast.overdue.net || forecast.weeks.some((w) => w.net);
@@ -86,6 +95,24 @@ export default async function StartPage() {
         ))}
       </section>
 
+      {reviews.length > 0 && (
+        <Card title="Wie war der Termin?" aside={<Badge tone="danger">{reviews.length} {reviews.length === 1 ? "Termin" : "Termine"} nachbereiten</Badge>}>
+          <ul className="flex flex-col">
+            {reviews.map((r) => (
+              <li key={r.id} className="border-t border-line-soft px-5 py-4 first:border-t-0">
+                <AppointmentReview
+                  id={r.id}
+                  title={`${r.subject} · ${[r.companyName, r.personName].filter(Boolean).join(", ")}`}
+                  when={whenDe(r.startAt, r.allDay)}
+                  projects={r.projects}
+                  today={todayIso()}
+                />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       {postOpen.length > 0 && (
         <Card title="Wie lange brauchst du noch?" aside={<Badge tone="danger">{postOpen.length} in Bearbeitung ohne Ende</Badge>}>
           <PostQuestions items={postOpen} today={todayIso()} />
@@ -114,6 +141,14 @@ export default async function StartPage() {
       )}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(380px,100%),1fr))] items-start gap-5">
+        <Card
+          title="Termine"
+          aside={<a href="https://outlook.office.com/calendar/view/workweek" target="_blank" rel="noreferrer" className="text-[13px] text-muted">Outlook-Kalender</a>}
+        >
+          <AppointmentsRefresh stale={stale} />
+          <AppointmentList items={appointments} today={todayIso()} now={now} companies={companyList} />
+        </Card>
+
         {/* leer nur Platz: die Kachel oben zeigt schon „0“ */}
         {data.billing.length > 0 && (
         <Card

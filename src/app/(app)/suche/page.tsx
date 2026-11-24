@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, FileText, Mail, MessageSquare, Phone, User } from "lucide-react";
+import { Building2, CalendarDays, FileText, Mail, MessageSquare, Phone, User } from "lucide-react";
 import { relativeTime, tidyMailText } from "@/lib/format";
 import { STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import { searchAll, searchMailsAndNotes, type SearchHit } from "@/lib/search";
@@ -74,7 +74,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/suche">) 
           <Card title="Notizen und Anrufe" aside={found.notes.length > 0 && <span className="text-xs text-muted">{found.notes.length === 30 ? "neueste 30" : found.notes.length}</span>}>
             {found.notes.length === 0 && <Empty>Keine Notiz gefunden.</Empty>}
             {found.notes.map((n) => {
-              const Icon = n.type === "anruf" ? Phone : MessageSquare;
+              const Icon = n.type === "anruf" ? Phone : n.type === "termin" ? CalendarDays : MessageSquare;
               return (
                 <Link
                   key={n.id}
@@ -84,7 +84,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/suche">) 
                   <Icon size={16} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs text-muted">
-                      {n.type === "anruf" ? "Anruf" : "Notiz"} · {relativeTime(n.createdAt)}
+                      {n.type === "anruf" ? "Anruf" : n.type === "termin" ? "Termin" : "Notiz"} · {relativeTime(n.createdAt)}
                       {[n.company?.trim(), n.deal].filter(Boolean).map((s) => ` · ${s}`)}
                     </span>
                     <span className="line-clamp-3 whitespace-pre-line text-sm">{n.body}</span>

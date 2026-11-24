@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { dateDe, todayIso } from "@/lib/format";
+import { dateDe, todayIso, whenDe } from "@/lib/format";
+import { CalendarPlus } from "lucide-react";
+import { nextAppointment } from "@/lib/appointments";
+import { outlookEventUrl } from "@/lib/outlook";
 import { STAGE_DOT, STAGE_LABEL } from "@/lib/labels";
 import { fullName } from "@/lib/people";
 import { callContexts, companyOptions, getPerson, peopleOfActivities, personCall, personTraces, pickPeople } from "@/lib/queries";
@@ -10,7 +13,7 @@ import { ActivityForm } from "@/components/forms";
 import { AddAffiliation, MergePerson, PersonEditor } from "@/components/person-forms";
 import { TaskList } from "@/components/task-list";
 import { Timeline } from "@/components/timeline";
-import { Card, Empty, LexwareBadge, Row } from "@/components/ui";
+import { btnQuiet, Card, Empty, LexwareBadge, Row } from "@/components/ui";
 
 const TABS = { ueber: "Über", aktivitaeten: "Aktivitäten" } as const;
 
@@ -34,11 +37,23 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
   const traces = await personTraces(person.id);
   const activityCount = data.timeline.length + data.emails.length;
 
+  const upcoming = await nextAppointment({ personId: person.id });
   const kpis = [
     { label: "Letzter Kontakt", value: data.lastContact ? dateDe(new Date(data.lastContact).toISOString()) : "–" },
+    ...(upcoming ? [{ label: "Nächster Termin", value: whenDe(upcoming.startAt, upcoming.allDay), hint: upcoming.subject }] : []),
     { label: "Vorgänge", value: String(data.deals.length) },
     { label: "Offene Aufgaben", value: String(data.tasks.filter((t) => !t.doneAt).length) },
   ];
+  // „Termin mit …“: neuer Termin in Outlook mit der Firmen-Mail der Person (erste aktuelle Firma mit Adresse)
+  const meetingLink = active.find((l) => l.contact.email) ?? null;
+  const meetingUrl = meetingLink
+    ? outlookEventUrl({
+        subject: `Termin ${meetingLink.company?.name.trim() ?? name}`,
+        to: meetingLink.contact.email,
+        crmPath: `/kontakte/${person.id}`,
+        today: todayIso(),
+      })
+    : null;
   const tabLink = (key: keyof typeof TABS) => (key === "ueber" ? `/kontakte/${person.id}` : `/kontakte/${person.id}?tab=${key}`);
 
   return (
@@ -65,6 +80,11 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
           <h1 className="mt-1 text-[28px] font-bold tracking-tight">{name}</h1>
         </div>
         {call && <ContactActions call={call} />}
+        {meetingUrl && (
+          <a href={meetingUrl} target="_blank" rel="noreferrer" title={`Termin mit ${name} in Outlook anlegen`} className={btnQuiet}>
+            <CalendarPlus size={15} aria-hidden="true" /> Termin
+          </a>
+        )}
         <PersonEditor
           person={person}
           links={links.map((l) => ({
@@ -96,11 +116,12 @@ export default async function ContactPage({ params, searchParams }: PageProps<"/
 
       {tab === "ueber" ? (
         <>
-          <section aria-label="Kennzahlen" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <section aria-label="Kennzahlen" className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
             {kpis.map((k) => (
               <div key={k.label} className="rounded-2xl bg-surface p-4">
                 <p className="text-xs text-muted">{k.label}</p>
                 <p className="mt-1 text-xl font-bold tracking-tight">{k.value}</p>
+                {"hint" in k && <p className="mt-0.5 line-clamp-2 text-xs text-muted">{k.hint}</p>}
               </div>
             ))}
           </section>

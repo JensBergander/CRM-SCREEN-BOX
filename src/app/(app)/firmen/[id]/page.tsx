@@ -22,6 +22,8 @@ import { OlderMails } from "@/components/older-mails";
 import { BackButton } from "@/components/back-button";
 import { MergeCompany } from "@/components/merge-company";
 import { mergeCandidates } from "@/lib/merge";
+import { nextAppointment } from "@/lib/appointments";
+import { whenDe } from "@/lib/format";
 
 export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">) {
   const { id } = await params;
@@ -47,12 +49,16 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
   const termText = company.paymentTermDays !== null ? `Zahlungsziel ${company.paymentTermDays} Tage` : "kein Zahlungsziel eingetragen";
 
   const lastContact = { label: "Letzter Kontakt", value: stats.lastContact ? dateDe(new Date(stats.lastContact).toISOString()) : "–" };
-  const kpis = supplier
-    ? [{ label: "Projekte", value: String(supplied.length) }, { label: "Kosten in Projekten", value: euro(suppliedCost) }, lastContact]
+  // aus dem Outlook-Kalender: vor einem Call alles auf einer Seite
+  const upcoming = await nextAppointment({ companyId: company.id });
+  const nextMeeting = upcoming ? [{ label: "Nächster Termin", value: whenDe(upcoming.startAt, upcoming.allDay), hint: upcoming.subject }] : [];
+  const kpis: { label: string; value: string; hint?: string }[] = supplier
+    ? [{ label: "Projekte", value: String(supplied.length) }, { label: "Kosten in Projekten", value: euro(suppliedCost) }, lastContact, ...nextMeeting]
     : [
         { label: "Umsatz (Lexware)", value: euro(assessment?.facts.revenue ?? 0) },
         { label: "Vorgänge im CRM", value: String(stats.requests) },
         lastContact,
+        ...nextMeeting,
         {
           label: "Zahlt im Schnitt nach",
           value: moral ? `${moral.avgDays} Tagen` : "–",
@@ -114,7 +120,7 @@ export default async function CompanyPage({ params }: PageProps<"/firmen/[id]">)
           <div key={k.label} className="rounded-2xl bg-surface p-4">
             <p className="text-xs text-muted">{k.label}</p>
             <p className="mt-1 text-xl font-bold tracking-tight">{k.value}</p>
-            {"hint" in k && <p className="mt-0.5 text-xs text-muted">{k.hint}</p>}
+            {k.hint && <p className="mt-0.5 line-clamp-2 text-xs text-muted">{k.hint}</p>}
           </div>
         ))}
       </section>

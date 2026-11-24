@@ -35,6 +35,7 @@ import { pickTags, saveServiceTagOptions } from "@/lib/service-tags";
 import { changeStage, createDeal } from "@/lib/pipeline";
 import { refreshPaymentTasks } from "@/lib/payments";
 import { estimateAccuracy, extendPost } from "@/lib/post";
+import { appointmentsStale, assignAppointment, reviewAppointment, syncAppointments } from "@/lib/appointments";
 import { companyName, personTraces, projectsFor, type ProjectOption } from "@/lib/queries";
 import { hintProps, ratingFor } from "@/lib/rating";
 import { autocomplete, placeDetails, resolveAddress, type Place } from "@/lib/places";
@@ -621,10 +622,10 @@ function whenFromForm(form: FormData): Date | undefined | "invalid" {
   return date;
 }
 
-// Nur Notizen und Anrufe lassen sich ändern; Phasenwechsel und verschickte Mails halten fest, was passiert ist
+// Nur Notizen, Anrufe und Termin-Einträge lassen sich ändern; Phasenwechsel und verschickte Mails halten fest, was passiert ist
 async function editableActivity(activityId: number) {
   const [row] = await db.select().from(activities).where(eq(activities.id, activityId));
-  return row && (row.type === "notiz" || row.type === "anruf") ? row : null;
+  return row && (row.type === "notiz" || row.type === "anruf" || row.type === "termin") ? row : null;
 }
 
 // Notiz oder Anruf nachträglich ändern: Text, Art, Zeitpunkt und „Mit wem?“ (das Projekt über die Pill im Eintrag)
@@ -636,7 +637,8 @@ export async function updateActivityAction(activityId: number, _: FormState, for
   if (!body) return { error: "Bitte etwas eintragen." };
   const when = whenFromForm(form);
   if (when === "invalid") return { error: WHEN_ERROR };
-  const type = form.get("type") === "anruf" ? "anruf" : "notiz";
+  // ein Termin bleibt ein Termin; Notiz und Anruf lassen sich ineinander umwandeln
+  const type = row.type === "termin" ? "termin" : form.get("type") === "anruf" ? "anruf" : "notiz";
   const companyId = row.companyId ?? (row.dealId ? (await db.select({ c: deals.companyId }).from(deals).where(eq(deals.id, row.dealId)))[0]?.c ?? null : null);
   const personIds = await peopleFromForm(form, companyId);
   await db.transaction(async (tx) => {
@@ -1445,4 +1447,32 @@ export async function setPaymentTermAction(companyId: number, days: number) {
   await db.update(companies).set({ paymentTermDays: days }).where(eq(companies.id, companyId));
   await refreshPaymentTasks();
   refresh();
+}
+
+// Termine aus Outlook: beim Öffnen der Startseite neu lesen, wenn der letzte Abruf älter als 2 Minuten ist
+export async function refreshAppointmentsAction(): Promise<{ changed: boolean; error?: string }> {
+  await getCurrentUser();
+  if (!(await appointmentsStale())) return { changed: false };
+  try {
+    return { changed: (await syncAppointments()).changed };
+  } catch (e) {
+    return { changed: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// Termin ohne Treffer von Hand einer Firma zuordnen (null = Zuordnung lösen)
+export async function assignAppointmentAction(eventId: number, companyId: number | null) {
+  await getCurrentUser();
+  await assignAppointment(eventId, companyId);
+  refresh();
+}
+
+// „Wie war der Call?“ beantworten: Notiz (optional mit Vorgang), Nachfassen am … oder nichts weiter
+export async function reviewAppointmentAction(eventId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const followUp = text(form, "followUp");
+  if (followUp && !/^\d{4}-\d{2}-\d{2}$/.test(followUp)) return { error: "Bitte ein gültiges Datum wählen." };
+  await reviewAppointment(eventId, { note: text(form, "note") ?? undefined, dealId: Number(text(form, "dealId")) || null, followUp });
+  refresh();
+  return {};
 }

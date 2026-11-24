@@ -93,3 +93,16 @@ export function nextMondayIso(iso: string): string {
   const day = new Date(`${iso}T12:00:00Z`).getUTCDay();
   return addDaysIso(iso, ((8 - day) % 7) || 7);
 }
+
+// Uhrzeit in Berlin, z. B. „10:00“
+const timeFormat = new Intl.DateTimeFormat("de-DE", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+export const timeDe = (at: Date) => timeFormat.format(at);
+
+// „Do 27.11.“ (Berliner Kalendertag)
+const weekdayDay = new Intl.DateTimeFormat("de-DE", { timeZone: TZ, weekday: "short", day: "2-digit", month: "2-digit" });
+export const dayDe = (at: Date) => weekdayDay.format(at).replace(".,", "").replace(",", "");
+
+// Termin kurz: „Do 27.11. 10:00“ bzw. „Do 27.11. ganztägig“
+export function whenDe(at: Date, allDay = false): string {
+  return `${dayDe(at)} ${allDay ? "ganztägig" : timeDe(at)}`;
+}

@@ -49,7 +49,8 @@ export type CompanyKind = (typeof COMPANY_KINDS)[number];
 
 // „jahrestermin“: Erinnerung an ein wiederkehrendes Projekt (Vorjahrestermin minus 3 Monate)
 export const TASK_KINDS = ["nachfassen", "rechnung", "zahlung", "jahrestermin"] as const;
-export const ACTIVITY_TYPES = ["notiz", "anruf", "phase", "mail"] as const;
+// „termin“: vergangener Termin aus dem Outlook-Kalender (mit Firma), darunter deine Notiz dazu
+export const ACTIVITY_TYPES = ["notiz", "anruf", "phase", "mail", "termin"] as const;
 
 const timestamps = {
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -352,6 +353,45 @@ export const mailSync = mysqlTable("mail_sync", {
   lastError: text("last_error"),
 });
 
+// Termine aus dem Outlook-Kalender von office@ (nur gelesen; Outlook führt). Gespeichert wird ein Fenster
+// von ein paar Tagen zurück bis eine Woche voraus; Firma und Person aus den Teilnehmern oder von Hand.
+export const calendarEvents = mysqlTable(
+  "calendar_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    mailbox: varchar("mailbox", { length: 120 }).notNull(),
+    // binär sortiert (Migration 0028): Outlook-IDs unterscheiden Groß- und Kleinschreibung
+    graphId: varchar("graph_id", { length: 255 }).notNull(),
+    subject: varchar("subject", { length: 500 }).notNull(),
+    startAt: timestamp("start_at").notNull(),
+    endAt: timestamp("end_at").notNull(),
+    allDay: boolean("all_day").notNull().default(false),
+    location: varchar("location", { length: 500 }),
+    joinUrl: text("join_url"),
+    webLink: text("web_link"),
+    // externe Teilnehmer als JSON: [{ email, name }]
+    attendees: text("attendees"),
+    // vom CRM selbst eingetragener Produktionstermin
+    dealId: int("deal_id").references(() => deals.id, { onDelete: "set null" }),
+    companyId: int("company_id").references(() => companies.id, { onDelete: "set null" }),
+    personId: int("person_id").references(() => people.id, { onDelete: "set null" }),
+    // Firma von Hand zugeordnet: der Abgleich überschreibt sie nicht
+    manual: boolean("manual").notNull().default(false),
+    // Eintrag „Termin“ in der Zeitleiste (einmal angelegt, auch wenn er später gelöscht wird)
+    activityId: int("activity_id").references(() => activities.id, { onDelete: "set null" }),
+    logged: boolean("logged").notNull().default(false),
+    // „Wie war der Call?“ beantwortet oder weggeklickt
+    reviewedAt: timestamp("reviewed_at"),
+    seenAt: timestamp("seen_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("calendar_events_graph_idx").on(t.mailbox, t.graphId),
+    index("calendar_events_start_idx").on(t.startAt),
+    index("calendar_events_company_idx").on(t.companyId, t.startAt),
+    index("calendar_events_person_idx").on(t.personId, t.startAt),
+  ],
+);
+
 // Zwischenspeicher der Angebote und Rechnungen aus Lexware (nur gelesen)
 export const lexwareVouchers = mysqlTable(
   "lexware_vouchers",
@@ -410,3 +450,4 @@ export type Task = typeof tasks.$inferSelect;
 export type DealSupplier = typeof dealSuppliers.$inferSelect;
 export type ProductionDay = typeof productionDays.$inferSelect;
 export type Activity = typeof activities.$inferSelect;
+export type CalendarEvent = typeof calendarEvents.$inferSelect;

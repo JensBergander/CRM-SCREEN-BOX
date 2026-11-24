@@ -30,11 +30,13 @@ export class GraphError extends Error {
   }
 }
 
-export async function graphGet<T>(pathOrUrl: string): Promise<T> {
+// prefer: weitere Prefer-Angaben (z. B. Zeitzone des Kalenders); permission: Berechtigung für die Fehlermeldung
+export async function graphGet<T>(pathOrUrl: string, opts: { prefer?: string; permission?: string } = {}): Promise<T> {
   const url = pathOrUrl.startsWith("https://") ? pathOrUrl : `https://graph.microsoft.com/v1.0${pathOrUrl}`;
+  const prefer = ['outlook.body-content-type="text"', opts.prefer].filter(Boolean).join(", ");
   for (let attempt = 0; attempt < 3; attempt++) {
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${await getToken()}`, Prefer: 'outlook.body-content-type="text"' },
+      headers: { Authorization: `Bearer ${await getToken()}`, Prefer: prefer },
       cache: "no-store",
     });
     if (response.status === 429 || response.status === 503) {
@@ -48,7 +50,9 @@ export async function graphGet<T>(pathOrUrl: string): Promise<T> {
       throw new GraphError(
         response.status,
         response.status === 403 || response.status === 401
-          ? `Kein Zugriff auf die Mails (${response.status}). Ist die Berechtigung Mail.Read freigegeben? ${message}`
+          ? opts.permission
+            ? `Kein Zugriff (${response.status}). Ist die Berechtigung ${opts.permission} freigegeben? ${message}`
+            : `Kein Zugriff auf die Mails (${response.status}). Ist die Berechtigung Mail.Read freigegeben? ${message}`
           : `Microsoft Graph: ${message}`,
       );
     }

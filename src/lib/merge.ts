@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { activities, activityPeople, companies, contacts, dealSuppliers, deals, emails, people, taskPeople, tasks } from "@/db/schema";
+import { activities, activityPeople, calendarEvents, companies, contacts, dealSuppliers, deals, emails, people, taskPeople, tasks } from "@/db/schema";
 import { compatibleNames, contactCols, mergeNames } from "./people";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -58,6 +58,7 @@ export async function mergePeopleTx(tx: Tx, fromId: number, intoId: number) {
   }
   await tx.execute(sql`insert ignore into ${activityPeople} (activity_id, person_id) select activity_id, ${intoId} from ${activityPeople} where person_id = ${fromId}`);
   await tx.execute(sql`insert ignore into ${taskPeople} (task_id, person_id) select task_id, ${intoId} from ${taskPeople} where person_id = ${fromId}`);
+  await tx.update(calendarEvents).set({ personId: intoId }).where(eq(calendarEvents.personId, fromId));
   const [current] = await tx.select({ notes: people.notes }).from(people).where(eq(people.id, intoId));
   const lost = differs(into.mobile, from.mobile) ? [`Beim Zusammenführen übernommen: Handy ${from.mobile}`] : [];
   await tx
@@ -119,6 +120,7 @@ export async function mergeCompanies(fromId: number, intoId: number): Promise<{ 
     await tx.update(tasks).set({ companyId: into.id }).where(eq(tasks.companyId, from.id));
     await tx.update(activities).set({ companyId: into.id }).where(eq(activities.companyId, from.id));
     await tx.update(emails).set({ companyId: into.id }).where(eq(emails.companyId, from.id));
+    await tx.update(calendarEvents).set({ companyId: into.id }).where(eq(calendarEvents.companyId, from.id));
 
     // CRM-eigene Felder ergänzen; Stammdaten nur, wenn sie nicht aus Lexware kommen
     const tags = [...new Set([into.tags, from.tags].flatMap((t) => t?.split(",") ?? []).map((t) => t.trim()).filter(Boolean))].join(", ");

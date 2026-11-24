@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   ArrowRightLeft,
+  CalendarDays,
   CheckSquare,
   ChevronDown,
   ExternalLink,
@@ -35,8 +36,8 @@ export type MailContacts = {
   known: Record<number, { personId: number; name: string }>;
 };
 
-const ICON = { notiz: MessageSquare, anruf: Phone, phase: ArrowRightLeft, mail: Mail };
-const LABEL = { notiz: "Notiz", anruf: "Anruf", phase: "Phase", mail: "Mail" };
+const ICON = { notiz: MessageSquare, anruf: Phone, phase: ArrowRightLeft, mail: Mail, termin: CalendarDays };
+const LABEL = { notiz: "Notiz", anruf: "Anruf", phase: "Phase", mail: "Mail", termin: "Termin" };
 const FILTERS = { alle: "Alle", notizen: "Notizen", anrufe: "Anrufe", mails: "Mails" } as const;
 type Filter = keyof typeof FILTERS | "aufgaben";
 
@@ -45,7 +46,8 @@ function matches(item: Item, filter: Filter) {
   if (filter === "alle") return true;
   if (filter === "mails") return item.kind === "email" || item.activity.type === "mail";
   if (item.kind === "email") return false;
-  return filter === "notizen" ? item.activity.type === "notiz" : filter === "anrufe" ? item.activity.type === "anruf" : false;
+  // Termine aus Outlook tragen deine Notiz zum Gespräch: sie stehen unter „Notizen“
+  return filter === "notizen" ? item.activity.type === "notiz" || item.activity.type === "termin" : filter === "anrufe" ? item.activity.type === "anruf" : false;
 }
 
 // company: Kunde des Projekts, wenn Projekte mehrerer Kunden zur Wahl stehen (bei Lieferanten)
@@ -367,14 +369,17 @@ function EditActivity({ activity, who, people, onDone }: { activity: Activity; w
   const pill = (on: boolean) => `inline-flex min-h-8 cursor-pointer items-center rounded-full border px-3 text-[12px] font-semibold ${on ? "border-ink bg-ink text-surface" : "border-line bg-surface text-muted"}`;
   return (
     <form action={action} className="mt-1 flex flex-col gap-2.5 rounded-xl bg-bg p-3">
-      <div role="radiogroup" aria-label="Art" className="flex gap-1.5">
-        {(["notiz", "anruf"] as const).map((k) => (
-          <label key={k} className={pill(kind === k)}>
-            <input type="radio" name="type" value={k} checked={kind === k} onChange={() => setKind(k)} className="sr-only" />
-            {k === "anruf" ? "Anruf" : "Notiz"}
-          </label>
-        ))}
-      </div>
+      {/* ein Termin aus Outlook bleibt ein Termin */}
+      {activity.type !== "termin" && (
+        <div role="radiogroup" aria-label="Art" className="flex gap-1.5">
+          {(["notiz", "anruf"] as const).map((k) => (
+            <label key={k} className={pill(kind === k)}>
+              <input type="radio" name="type" value={k} checked={kind === k} onChange={() => setKind(k)} className="sr-only" />
+              {k === "anruf" ? "Anruf" : "Notiz"}
+            </label>
+          ))}
+        </div>
+      )}
       <label>
         <span className="sr-only">Text</span>
         <Textarea name="body" rows={Math.min(12, Math.max(3, activity.body.split("\n").length + 1))} defaultValue={activity.body} required autoFocus className="resize-y bg-surface py-2" />
@@ -395,7 +400,7 @@ function ActivityEntry({ activity: a, who, people, projects, today }: { activity
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
   const Icon = ICON[a.type];
-  const editable = a.type === "notiz" || a.type === "anruf";
+  const editable = a.type === "notiz" || a.type === "anruf" || a.type === "termin";
   // Verlorene Vorgänge hervorheben, damit Grund und Notiz beim nächsten Kontakt auffallen
   const lost = a.type === "phase" && a.body.includes("→ Abgelehnt / Verloren");
   const remove = () =>
@@ -436,7 +441,9 @@ function ActivityEntry({ activity: a, who, people, projects, today }: { activity
         )}
         {mode === "delete" && (
           <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-danger-soft/60 p-3 text-sm">
-            <span className="flex-1">{a.type === "anruf" ? "Diesen Anruf" : "Diese Notiz"} wirklich löschen?</span>
+            <span className="flex-1">
+              {a.type === "anruf" ? "Diesen Anruf" : a.type === "termin" ? "Diesen Termin-Eintrag (in Outlook bleibt er)" : "Diese Notiz"} wirklich löschen?
+            </span>
             <button type="button" disabled={pending} onClick={remove} className={`${btnQuiet} text-danger-ink`}>{pending ? "Löscht …" : "Löschen"}</button>
             <button type="button" disabled={pending} onClick={() => setMode("view")} className={btnQuiet}>Abbrechen</button>
             <FormError message={error} />

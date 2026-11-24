@@ -86,7 +86,7 @@ function isIgnored(address: string | null, patterns: Set<string>): boolean {
   return AUTOMATED.test(lower) || patterns.has(lower) || patterns.has(lower.split("@")[1] ?? "");
 }
 
-function isOwn(address: string | null | undefined): boolean {
+export function isOwn(address: string | null | undefined): boolean {
   const domain = address?.split("@")[1]?.toLowerCase();
   return !!domain && ownDomains().has(domain);
 }
