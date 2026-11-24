@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, Video } from "lucide-react";
+import { Video } from "lucide-react";
 import type { Appointment } from "@/lib/appointments";
 import { addDaysIso, dayDe, timeDe } from "@/lib/format";
 import { AssignCompany } from "./appointment-actions";
@@ -104,18 +104,6 @@ function AppointmentRow({ a, big, now, companies }: { a: Appointment; big: boole
         {a.joinUrl && !past && (
           <a href={a.joinUrl} target="_blank" rel="noreferrer" className={btnQuiet} aria-label={`${a.subject}: beitreten`}>
             <Video size={14} aria-hidden="true" /> Beitreten
-          </a>
-        )}
-        {a.webLink && (
-          <a
-            href={a.webLink}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`${a.subject} in Outlook öffnen`}
-            title="In Outlook öffnen"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink"
-          >
-            <ExternalLink size={15} aria-hidden="true" />
           </a>
         )}
       </div>

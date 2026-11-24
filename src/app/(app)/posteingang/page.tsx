@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { mailboxes } from "@/lib/graph";
 import { serviceTagOptions } from "@/lib/service-tags";
-import { relativeTime, todayIso } from "@/lib/format";
+import { relativeTime } from "@/lib/format";
 import { companyOptions, listInbox, mailState } from "@/lib/queries";
 import { InboxList, SyncButton } from "@/components/inbox";
 import { SearchBox } from "@/components/search-box";
@@ -55,7 +55,7 @@ export default async function InboxPage({ searchParams }: PageProps<"/posteingan
       </div>
 
       <Card>
-        <InboxList rows={rows} companies={companies} tagOptions={tagOptions} today={todayIso()} initialOpen={typeof mail === "string" && /^\d+$/.test(mail) ? Number(mail) : null} />
+        <InboxList rows={rows} companies={companies} tagOptions={tagOptions} initialOpen={typeof mail === "string" && /^\d+$/.test(mail) ? Number(mail) : null} />
       </Card>
     </div>
   );

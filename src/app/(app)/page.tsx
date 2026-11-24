@@ -141,10 +141,7 @@ export default async function StartPage() {
       )}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(380px,100%),1fr))] items-start gap-5">
-        <Card
-          title="Termine"
-          aside={<a href="https://outlook.office.com/calendar/view/workweek" target="_blank" rel="noreferrer" className="text-[13px] text-muted">Outlook-Kalender</a>}
-        >
+        <Card title="Termine" aside={<span className="text-xs text-muted">aus Outlook</span>}>
           <AppointmentsRefresh stale={stale} />
           <AppointmentList items={appointments} today={todayIso()} now={now} companies={companyList} />
         </Card>

@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { BellOff, CalendarPlus, CheckSquare, ExternalLink, FolderPlus, Paperclip, RefreshCw, UserPlus, X } from "lucide-react";
+import { BellOff, CheckSquare, ExternalLink, FolderPlus, Paperclip, RefreshCw, UserPlus, X } from "lucide-react";
 import { ignoreMailAction, ignoreSenderAction, syncMailAction, taskFromMailAction } from "@/app/(app)/actions";
 import { relativeTime } from "@/lib/format";
-import { outlookEventUrl } from "@/lib/outlook";
 import type { TagOptions } from "@/lib/service-tags";
 import type { InboxRow } from "@/lib/queries";
 import type { SyncResult } from "@/lib/mail";
@@ -35,10 +34,8 @@ export function SyncButton() {
   );
 }
 
-export function InboxList({ rows, companies, tagOptions, today, initialOpen = null }: {
+export function InboxList({ rows, companies, tagOptions, initialOpen = null }: {
   rows: InboxRow[];
-  // für „Termin in Outlook“ (vorbelegt: morgen)
-  today: string;
   companies: { id: number; name: string }[];
   tagOptions: TagOptions;
   // aus der Startseite: diese Mail gleich zum Lesen und Zuordnen öffnen
@@ -127,20 +124,6 @@ export function InboxList({ rows, companies, tagOptions, today, initialOpen = nu
                     <CheckSquare size={14} aria-hidden="true" /> Aufgabe daraus
                   </button>
                 )}
-                <a
-                  href={outlookEventUrl({
-                    subject: `Termin ${row.companyName?.trim() ?? m.fromName ?? ""}`.trim(),
-                    to: m.outgoing ? m.toAddresses?.split(",")[0]?.trim() : m.fromAddress,
-                    crmPath: m.dealId ? `/vorgaenge/${m.dealId}` : m.companyId ? `/firmen/${m.companyId}` : null,
-                    today,
-                  })}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="Neuer Termin in Outlook mit dem Absender; Datum und Uhrzeit trägst du dort ein"
-                  className={btnQuiet}
-                >
-                  <CalendarPlus size={14} aria-hidden="true" /> Termin in Outlook
-                </a>
                 <Link href={`/vorgaenge/neu?mail=${m.id}`} className={btnQuiet}>
                   <FolderPlus size={14} aria-hidden="true" /> Vorgang daraus
                 </Link>
