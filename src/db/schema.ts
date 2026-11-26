@@ -241,6 +241,8 @@ export const tasks = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     title: varchar("title", { length: 255 }).notNull(),
+    // weitere Infos (z. B. Text und Bild eines geplanten Beitrags); nur in der geöffneten Aufgabe sichtbar
+    details: text("details"),
     dueDate: date("due_date", { mode: "string" }),
     companyId: int("company_id").references(() => companies.id, { onDelete: "cascade" }),
     dealId: int("deal_id").references(() => deals.id, { onDelete: "cascade" }),

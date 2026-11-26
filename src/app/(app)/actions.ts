@@ -800,6 +800,17 @@ export async function createTaskAction(_: FormState, form: FormData): Promise<Fo
   return {};
 }
 
+// Aufgabe geöffnet bearbeiten: Überschrift und weitere Infos
+export async function updateTaskAction(taskId: number, _: FormState, form: FormData): Promise<FormState> {
+  await getCurrentUser();
+  const title = text(form, "title")?.trim();
+  if (!title) return { error: "Bitte eine Überschrift eintragen." };
+  const details = text(form, "details")?.trim() || null;
+  await db.update(tasks).set({ title: title.slice(0, 255), details }).where(eq(tasks.id, taskId));
+  refresh();
+  return {};
+}
+
 // Aufgabe verschieben (Morgen, Nächste Woche oder ein Datum)
 export async function moveTaskAction(taskId: number, dueDate: string): Promise<{ error?: string }> {
   await getCurrentUser();

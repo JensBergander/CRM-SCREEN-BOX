@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
-import { CalendarClock } from "lucide-react";
-import { moveTaskAction, toggleTaskAction } from "@/app/(app)/actions";
+import { Fragment, useActionState, useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { CalendarClock, ChevronDown, FileText } from "lucide-react";
+import { moveTaskAction, toggleTaskAction, updateTaskAction } from "@/app/(app)/actions";
 import { addDaysIso, dateDe, dueLabel, nextMondayIso } from "@/lib/format";
 import type { TaskRow } from "@/lib/queries";
-import { Empty } from "./ui";
+import { btnPrimary, btnQuiet, Empty, FormError, Input, Textarea } from "./ui";
 
 type Change = { id: number; done?: boolean; dueDate?: string };
 
@@ -69,8 +69,75 @@ function MoveMenu({ title, today, onMove }: { title: string; today: string; onMo
   );
 }
 
+// Links in den Infos anklickbar machen
+function Linked({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s<>"')\]]+)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 ? (
+          <a key={i} href={part} target="_blank" rel="noreferrer" className="break-all font-semibold underline underline-offset-2">
+            {part}
+          </a>
+        ) : (
+          <Fragment key={i}>{part}</Fragment>
+        ),
+      )}
+    </>
+  );
+}
+
+// Geöffnete Aufgabe: weitere Infos lesen und Überschrift oder Infos ändern
+function TaskDetails({ task, onClose }: { task: TaskRow; onClose: () => void }) {
+  const [editing, setEditing] = useState(!task.details);
+  const [state, action, pending] = useActionState(updateTaskAction.bind(null, task.id), undefined);
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (wasPending.current && !pending && state && !state.error) setEditing(false);
+    wasPending.current = pending;
+  }, [pending, state]);
+  if (!editing) {
+    return (
+      <div className="mt-2 flex flex-col gap-2 rounded-xl bg-bg p-3">
+        <p className="whitespace-pre-line text-sm leading-relaxed">
+          <Linked text={task.details ?? ""} />
+        </p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setEditing(true)} className={btnQuiet}>Bearbeiten</button>
+          <button type="button" onClick={onClose} className={btnQuiet}>Schließen</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <form action={action} className="mt-2 flex flex-col gap-2.5 rounded-xl bg-bg p-3">
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Überschrift
+        <Input name="title" defaultValue={task.title} required className="bg-surface" />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Weitere Infos
+        <Textarea
+          name="details"
+          defaultValue={task.details ?? ""}
+          rows={Math.min(16, Math.max(4, (task.details ?? "").split("\n").length + 2))}
+          autoFocus
+          placeholder="Notizen, Text, Links … (nur hier in der geöffneten Aufgabe sichtbar)"
+          className="resize-y bg-surface"
+        />
+      </label>
+      <FormError message={state?.error} />
+      <div className="flex gap-2">
+        <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Speichern"}</button>
+        <button type="button" disabled={pending} onClick={task.details ? () => setEditing(false) : onClose} className={btnQuiet}>Abbrechen</button>
+      </div>
+    </form>
+  );
+}
+
 export function TaskList({ tasks, today, empty }: { tasks: TaskRow[]; today: string; empty: string }) {
   const [, startTransition] = useTransition();
+  const [open, setOpen] = useState<number | null>(null);
   const [optimistic, change] = useOptimistic(tasks, (state, c: Change) =>
     state.map((t) =>
       t.id === c.id
@@ -87,7 +154,7 @@ export function TaskList({ tasks, today, empty }: { tasks: TaskRow[]; today: str
         const due = dueLabel(task.dueDate, today);
         const done = !!task.doneAt;
         return (
-          <li key={task.id} className="flex items-center gap-3.5 border-t border-line-soft px-5 py-3">
+          <li key={task.id} className={`flex gap-3.5 border-t border-line-soft px-5 py-3 ${open === task.id ? "items-start" : "items-center"}`}>
             <input
               type="checkbox"
               aria-label={`${task.title} erledigt`}
@@ -102,7 +169,17 @@ export function TaskList({ tasks, today, empty }: { tasks: TaskRow[]; today: str
               className="h-5 w-5 shrink-0 accent-ink"
             />
             <div className="min-w-0 flex-1">
-              <p className={`text-sm font-medium ${done ? "text-muted line-through" : ""}`}>{task.title}</p>
+              {/* Klick auf die Überschrift öffnet die Aufgabe mit den weiteren Infos */}
+              <button
+                type="button"
+                onClick={() => setOpen(open === task.id ? null : task.id)}
+                aria-expanded={open === task.id}
+                className={`group flex max-w-full items-center gap-1.5 text-left text-sm font-medium hover:underline ${done ? "text-muted line-through" : ""}`}
+              >
+                <span className="min-w-0">{task.title}</span>
+                {task.details && <FileText size={13} className="shrink-0 text-muted" aria-label="mit weiteren Infos" />}
+                <ChevronDown size={14} aria-hidden="true" className={`shrink-0 text-muted opacity-0 transition-transform group-hover:opacity-100 group-focus-visible:opacity-100 ${open === task.id ? "rotate-180 opacity-100" : ""}`} />
+              </button>
               {(task.companyName || task.dealTitle) && (
                 <p className="truncate text-xs text-muted">
                   {task.companyId && task.companyName && (
@@ -114,6 +191,7 @@ export function TaskList({ tasks, today, empty }: { tasks: TaskRow[]; today: str
                   )}
                 </p>
               )}
+              {open === task.id && <TaskDetails task={task} onClose={() => setOpen(null)} />}
             </div>
             {!done && (
               <>

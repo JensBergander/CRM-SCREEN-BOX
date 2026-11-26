@@ -65,6 +65,7 @@ export async function nextShootDays(dealIds: number[]): Promise<Map<number, stri
 const openTaskFields = {
   id: tasks.id,
   title: tasks.title,
+  details: tasks.details,
   dueDate: tasks.dueDate,
   kind: tasks.kind,
   doneAt: tasks.doneAt,
