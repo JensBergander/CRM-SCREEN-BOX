@@ -93,6 +93,8 @@ export type NewDeal = {
   projectDate?: string | null;
   compareOnly?: boolean;
   quick?: boolean;
+  // Standard (Datenbank): einmalig, also keine Jahres-Erinnerung
+  oneOff?: boolean;
   notes?: string | null;
 };
 

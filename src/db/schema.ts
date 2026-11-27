@@ -173,7 +173,7 @@ export const deals = mysqlTable(
     postEndPlanned: date("post_end_planned", { mode: "string" }),
     postFinished: date("post_finished", { mode: "string" }),
     // einmaliges Projekt: keine Jahres-Erinnerung
-    oneOff: boolean("one_off").notNull().default(false),
+    oneOff: boolean("one_off").notNull().default(true),
     blockContinuous: boolean("block_continuous").notNull().default(false),
     // ein durchgehender Kalendertermin (bei blockContinuous)
     calendarEventId: varchar("calendar_event_id", { length: 255 }),

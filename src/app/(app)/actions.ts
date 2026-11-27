@@ -111,6 +111,8 @@ export async function createDealAction(_: FormState, form: FormData): Promise<Fo
     contactId: await dealContact(form, companyId, mail?.contactId ?? null),
     compareOnly: form.get("compareOnly") === "on",
     quick,
+    // Schnellauftrag hat kein Häkchen: dann gilt der Standard „einmalig“
+    ...(!quick && { oneOff: form.get("oneOff") === "on" }),
   });
   // Vorgang aus einer Mail oder Notiz: der Eintrag hängt danach am Vorgang
   if (mail) {

@@ -69,6 +69,10 @@ export function DealForm({ companies, preset, quick, today, fromMail, fromNote, 
             <input type="checkbox" name="compareOnly" className="h-5 w-5 accent-ink" />
             Vermutlich nur Vergleichsangebot
           </label>
+          <label className="flex items-center gap-3 text-sm">
+            <input type="checkbox" name="oneOff" defaultChecked className="h-5 w-5 accent-ink" />
+            Einmaliges Projekt (keine Erinnerung im nächsten Jahr)
+          </label>
           <Field label="Notiz">
             <Textarea name="notes" placeholder="Wer hat angefragt, was ist wichtig?" />
           </Field>
