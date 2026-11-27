@@ -5,6 +5,7 @@ import { useActionState, useEffect, useId, useRef, useState, useTransition } fro
 import { assignAppointmentAction, refreshAppointmentsAction, reviewAppointmentAction } from "@/app/(app)/actions";
 import { addDaysIso } from "@/lib/format";
 import { btnPrimary, btnQuiet, FormError, Input, Select, Textarea } from "./ui";
+import { DateInput } from "./date-input";
 
 // Beim Öffnen der Startseite: gespeicherte Termine stehen schon da, der Kalender wird im Hintergrund neu gelesen
 export function AppointmentsRefresh({ stale }: { stale: boolean }) {
@@ -112,7 +113,7 @@ export function AppointmentReview({ id, title, when, projects, today }: ReviewPr
             )}
             <label className="flex flex-col gap-1 text-xs text-muted">
               Nachfassen am (optional)
-              <Input type="date" name="followUp" min={today} className="w-auto bg-surface" />
+              <DateInput name="followUp" min={today} />
             </label>
           </div>
           <FormError message={state?.error} />
@@ -126,7 +127,7 @@ export function AppointmentReview({ id, title, when, projects, today }: ReviewPr
         <form action={action} className="flex flex-wrap items-end gap-2 rounded-xl bg-bg p-3">
           <label className="flex flex-col gap-1 text-xs text-muted">
             Nachfassen am
-            <Input type="date" name="followUp" required min={today} defaultValue={addDaysIso(today, 7)} autoFocus className="w-auto bg-surface" />
+            <DateInput name="followUp" required min={today} defaultValue={addDaysIso(today, 7)} autoFocus />
           </label>
           <button type="submit" disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Aufgabe anlegen"}</button>
           <button type="button" disabled={pending} onClick={() => setMode("ask")} className={btnQuiet}>Abbrechen</button>

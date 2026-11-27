@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { advanceDealAction, extendPostAction } from "@/app/(app)/actions";
 import { addDaysIso, dateDe } from "@/lib/format";
-import { btnPrimary, btnQuiet, FormError, Input } from "./ui";
+import { btnPrimary, btnQuiet, FormError } from "./ui";
+import { DateInput } from "./date-input";
 
 type Item = { dealId: number; title: string; company: string; postEnd: string | null };
 
@@ -67,7 +68,7 @@ function PostQuestion({ item, today, withLink }: { item: Item; today: string; wi
           <span className="flex items-center gap-2">
             <label>
               <span className="sr-only">fertig bis</span>
-              <Input type="date" value={date} min={today} onChange={(e) => setDate(e.target.value)} className="w-auto" />
+              <DateInput value={date} min={today} onChange={setDate} />
             </label>
             <button type="button" disabled={pending || !date} onClick={() => extend(date)} className={btnPrimary}>Speichern</button>
           </span>

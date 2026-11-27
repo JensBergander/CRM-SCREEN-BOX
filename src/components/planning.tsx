@@ -5,6 +5,7 @@ import { CalendarDays, MapPin, Plus, Trash2 } from "lucide-react";
 import { loadPlanningAction, savePlanningAction, type Planning } from "@/app/(app)/actions";
 import { addDaysIso, dateDe, mapsUrl } from "@/lib/format";
 import { btnPrimary, btnQuiet, Field, FormError, Input } from "./ui";
+import { DateInput } from "./date-input";
 import { PlaceInput } from "./place-input";
 
 type Day = Planning["days"][number];
@@ -26,8 +27,6 @@ function nextWorkday(iso: string) {
   return d;
 }
 
-const weekday = (iso: string) => new Intl.DateTimeFormat("de-DE", { weekday: "short", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
-
 export function PlanningForm({ dealId, initial, onSaved, onLater }: {
   dealId: number;
   initial: Planning;
@@ -47,6 +46,8 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
     initial.calendarError ? { calendarError: initial.calendarError } : null,
   );
   const [pending, startTransition] = useTransition();
+  // Neuer Produktionstag bei Anfrage/Angebot: vor dem Speichern fragen, ob der Auftrag bestätigt ist
+  const [asking, setAsking] = useState(false);
 
   // Postproduktion startet standardmäßig am nächsten Arbeitstag nach dem letzten Drehtag
   const suggestedStart = lastDay ? nextWorkday(lastDay) : "";
@@ -72,8 +73,10 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
     ]);
   };
 
-  const save = () =>
+  const newDay = days.some((d) => d.day && !d.id);
+  const save = (beauftragen = false) =>
     startTransition(async () => {
+      setAsking(false);
       const r = await savePlanningAction(dealId, {
         location,
         place,
@@ -82,7 +85,7 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
         postStart: effectivePostStart || null,
         postEnd: postEnd || null,
         blockContinuous: block,
-      });
+      }, beauftragen);
       setResult({ ...r, ok: !r.error });
       if (!r.error && !r.calendarError) onSaved?.();
     });
@@ -127,9 +130,8 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
           {days.map((d, i) => (
             <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <label className="flex items-center gap-2">
-                <span className="w-7 text-xs text-muted">{d.day ? weekday(d.day) : ""}</span>
                 <span className="sr-only">Datum</span>
-                <Input type="date" value={d.day} onChange={(e) => update(i, { day: e.target.value })} className="w-auto" required />
+                <DateInput value={d.day} onChange={(day) => update(i, { day })} required />
               </label>
               <span className="flex items-center gap-2">
                 <label>
@@ -167,18 +169,16 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
         </h3>
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Starttag">
-            <Input
-              type="date"
+            <DateInput
               value={effectivePostStart}
-              onChange={(e) => {
+              onChange={(day) => {
                 setTouchedPostStart(true);
-                setPostStart(e.target.value);
+                setPostStart(day);
               }}
-              className="w-auto"
             />
           </Field>
           <Field label="Zieltag">
-            <Input type="date" value={postEnd} min={effectivePostStart || undefined} onChange={(e) => setPostEnd(e.target.value)} className="w-auto" />
+            <DateInput value={postEnd} min={effectivePostStart || undefined} onChange={setPostEnd} />
           </Field>
           {effectivePostStart && postEnd && (
             <span className="pb-3 text-sm text-muted">
@@ -203,10 +203,26 @@ export function PlanningForm({ dealId, initial, onSaved, onLater }: {
       )}
       {result?.ok && !result.calendarError && <p role="status" className="text-sm text-muted">Gespeichert{days.length ? ", Kalender aktualisiert" : ""}.</p>}
 
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={save} disabled={pending} className={btnPrimary}>{pending ? "Speichert …" : "Speichern"}</button>
-        {onLater && <button type="button" onClick={onLater} className={btnQuiet}>Später</button>}
-      </div>
+      {asking ? (
+        <div role="alertdialog" aria-label="Ist der Auftrag bestätigt?" className="flex flex-col gap-3 rounded-2xl border border-line bg-bg p-4">
+          <div>
+            <p className="font-semibold">Ist der Auftrag bestätigt?</p>
+            <p className="text-sm text-muted">Bei „Ja“ wandert der Vorgang auf „Beauftragt“: Der Kalendertermin ist dann fest, und das Event kommt auf die Website.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => save(true)} disabled={pending} className={btnPrimary}>Ja, beauftragt</button>
+            <button type="button" onClick={() => save(false)} disabled={pending} className={btnQuiet}>Nein, nur Termin speichern</button>
+            <button type="button" onClick={() => setAsking(false)} disabled={pending} className={btnQuiet}>Abbrechen</button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => (initial.unconfirmed && newDay ? setAsking(true) : save())} disabled={pending} className={btnPrimary}>
+            {pending ? "Speichert …" : "Speichern"}
+          </button>
+          {onLater && <button type="button" onClick={onLater} className={btnQuiet}>Später</button>}
+        </div>
+      )}
     </div>
   );
 }

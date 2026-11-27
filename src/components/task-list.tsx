@@ -7,6 +7,7 @@ import { moveTaskAction, toggleTaskAction, updateTaskAction } from "@/app/(app)/
 import { addDaysIso, dateDe, dueLabel, nextMondayIso } from "@/lib/format";
 import type { TaskRow } from "@/lib/queries";
 import { btnPrimary, btnQuiet, Empty, FormError, Input, Textarea } from "./ui";
+import { Calendar } from "./date-input";
 
 type Change = { id: number; done?: boolean; dueDate?: string };
 
@@ -45,7 +46,7 @@ function MoveMenu({ title, today, onMove }: { title: string; today: string; onMo
         <CalendarClock size={16} aria-hidden="true" />
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-56 rounded-xl border border-line bg-surface p-1 shadow-lg">
+        <div role="menu" className="absolute right-0 top-full z-20 mt-1 w-max min-w-56 rounded-xl border border-line bg-surface p-1 shadow-lg">
           <p className="px-3 pb-1 pt-2 text-[11px] font-semibold text-muted">Verschieben auf</p>
           <button type="button" role="menuitem" className={item} onClick={() => pick(tomorrow)}>
             Morgen <span className="text-xs text-muted">{dateDe(tomorrow).slice(0, 6)}</span>
@@ -53,16 +54,8 @@ function MoveMenu({ title, today, onMove }: { title: string; today: string; onMo
           <button type="button" role="menuitem" className={item} onClick={() => pick(monday)}>
             Nächste Woche <span className="text-xs text-muted">Mo {dateDe(monday).slice(0, 6)}</span>
           </button>
-          <label className="flex flex-col gap-1 px-3 py-2 text-sm">
-            Datum
-            <input
-              type="date"
-              min={today}
-              // beim Tippen entstehen Zwischenstände wie 0202-…; erst ein Datum ab heute zählt
-              onChange={(e) => e.target.value >= today && pick(e.target.value)}
-              className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm"
-            />
-          </label>
+          <p className="border-t border-line-soft px-3 pb-1 pt-2 text-[11px] font-semibold text-muted">Anderes Datum</p>
+          <Calendar min={today} onSelect={pick} />
         </div>
       )}
     </div>

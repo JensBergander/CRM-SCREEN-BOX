@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { activities, activityPeople, appState, calendarEvents, companies, contacts, deals, people, taskPeople, tasks } from "@/db/schema";
+import type { Stage } from "@/db/schema";
 import { addDaysIso, todayIso } from "./format";
 import { graphGet, mailboxes } from "./graph";
 import { isOwn, matchAddress } from "./mail";
@@ -215,6 +216,8 @@ export type Appointment = {
   joinUrl: string | null;
   webLink: string | null;
   dealId: number | null;
+  // Phase des Vorgangs bei eigenen Produktionsterminen (Anfrage/Angebot = nur reserviert)
+  dealStage: Stage | null;
   companyId: number | null;
   companyName: string | null;
   personId: number | null;
@@ -229,6 +232,10 @@ async function withNames(rows: (typeof calendarEvents.$inferSelect)[]): Promise<
   const companyNames = new Map(
     companyIds.length ? (await db.select({ id: companies.id, name: companies.name }).from(companies).where(inArray(companies.id, companyIds))).map((c) => [c.id, c.name.trim()]) : [],
   );
+  const dealIds = [...new Set(rows.map((r) => r.dealId).filter((x): x is number => !!x))];
+  const dealStages = new Map(
+    dealIds.length ? (await db.select({ id: deals.id, stage: deals.stage }).from(deals).where(inArray(deals.id, dealIds))).map((d) => [d.id, d.stage]) : [],
+  );
   const personNames = new Map(
     personIds.length ? (await db.select().from(people).where(inArray(people.id, personIds))).map((p) => [p.id, fullName(p)]) : [],
   );
@@ -242,6 +249,7 @@ async function withNames(rows: (typeof calendarEvents.$inferSelect)[]): Promise<
     joinUrl: r.joinUrl,
     webLink: r.webLink,
     dealId: r.dealId,
+    dealStage: r.dealId ? dealStages.get(r.dealId) ?? null : null,
     companyId: r.companyId,
     companyName: r.companyId ? companyNames.get(r.companyId) ?? null : null,
     personId: r.personId,

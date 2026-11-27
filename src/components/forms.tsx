@@ -25,6 +25,7 @@ import { ActivityDialog, type ActivityKind } from "./activity-dialog";
 import { dial, NumberMenu } from "./call-menu";
 import type { PhoneNumber } from "@/lib/queries";
 import { btnPrimary, btnQuiet, Field, FormError, Input, Textarea } from "./ui";
+import { DateInput } from "./date-input";
 
 // Leert ein Formular nach erfolgreichem Absenden
 export function useResetOnSuccess(state: { error?: string } | undefined, pending: boolean) {
@@ -147,7 +148,7 @@ export function EditDealForm({ deal, contacts }: { deal: Deal; contacts: { id: n
           <Input name="amountNet" inputMode="decimal" defaultValue={deal.amountNet?.replace(".", ",") ?? ""} />
         </Field>
         <Field label="Projektdatum">
-          <Input name="projectDate" type="date" defaultValue={deal.projectDate ?? ""} />
+          <DateInput name="projectDate" defaultValue={deal.projectDate ?? ""} full />
         </Field>
         <Field label="Angebotsnr. (Lexware)">
           <Input name="offerNumber" defaultValue={deal.offerNumber ?? ""} />
@@ -286,7 +287,7 @@ export function TaskForm({ companyId, dealId, people = [], initialPeople = [] }:
       </label>
       <label>
         <span className="sr-only">Fällig am</span>
-        <Input name="dueDate" type="date" className="w-auto" />
+        <DateInput name="dueDate" />
       </label>
       <button type="submit" disabled={pending} className={btnQuiet}>Hinzufügen</button>
       {people.length > 0 && (

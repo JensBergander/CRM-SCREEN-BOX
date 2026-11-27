@@ -18,6 +18,8 @@ import { PostQuestions } from "@/components/post-questions";
 import { displayName, firstNameOf } from "@/lib/profile";
 import { appointmentsStale, reviewQuestions, upcomingAppointments } from "@/lib/appointments";
 import { AppointmentList } from "@/components/appointment-list";
+import { ConfirmDealToggle } from "@/components/confirm-deal";
+import { STAGE_LABEL } from "@/lib/labels";
 import { AppointmentReview, AppointmentsRefresh } from "@/components/appointment-actions";
 import { companyOptions } from "@/lib/queries";
 import { whenDe } from "@/lib/format";
@@ -176,29 +178,39 @@ export default async function StartPage() {
 
         <Card title="Nächste Produktionstage" aside={<Link href="/planung" className="text-[13px] text-muted">Planung</Link>}>
           {upcoming.length === 0 && <Empty>In den nächsten 14 Tagen ist keine Produktion geplant.</Empty>}
-          {upcoming.map((p, i) => (
-            <div key={`${p.dealId}-${p.day}-${i}`} className="relative">
-            <Row href={`/vorgaenge/${p.dealId}`}>
-              <div className="w-14 shrink-0 text-center">
-                <p className="text-[11px] font-semibold uppercase text-accent-ink">
+          {upcoming.map((p, i) => {
+            // Anfrage/Angebot: Termin ist nur reserviert (Outlook „Mit Vorbehalt“) – grau statt Produktions-Orange
+            const reserved = p.stage === "anfrage" || p.stage === "angebot";
+            const map = !!Number(p.hasMap) && !!p.location;
+            return (
+            <div key={`${p.dealId}-${p.day}-${i}`} className="flex items-center border-t border-line-soft">
+            <Link href={`/vorgaenge/${p.dealId}`} className="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 pl-5 pr-2 hover:bg-bg/60">
+              <div className={`w-14 shrink-0 rounded-xl py-0.5 text-center ${reserved ? "border border-dashed border-line" : ""}`}>
+                <p className={`text-[11px] font-semibold uppercase ${reserved ? "text-muted" : "text-accent-ink"}`}>
                   {new Intl.DateTimeFormat("de-DE", { weekday: "short", timeZone: "UTC" }).format(new Date(`${p.day}T12:00:00Z`))}
                 </p>
-                <p className="text-lg font-bold leading-tight">{p.day.slice(8)}.{p.day.slice(5, 7)}.</p>
+                <p className={`text-lg font-bold leading-tight ${reserved ? "text-muted" : ""}`}>{p.day.slice(8)}.{p.day.slice(5, 7)}.</p>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{p.company} · {p.title}</p>
-                <p className="truncate text-[13px] text-muted">{p.startTime}–{p.endTime}{p.location && ` · ${p.location}`}</p>
+                <p className="truncate text-[13px] text-muted">
+                  {reserved && <span className="font-semibold">{STAGE_LABEL[p.stage]} · reserviert · </span>}
+                  {p.startTime}–{p.endTime}{p.location && ` · ${p.location}`}
+                </p>
               </div>
-              {!!Number(p.hasMap) && <span className="w-10 shrink-0" />}
-            </Row>
-            {/* Route außerhalb des Zeilenlinks, weil Links nicht verschachtelt sein dürfen */}
-            {!!Number(p.hasMap) && p.location && (
-              <a href={mapsUrl(p.location)} target="_blank" rel="noreferrer" aria-label={`Route zu ${p.location}`} title="In Google Maps öffnen" className="absolute right-4 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
-                <MapPin size={17} aria-hidden="true" />
-              </a>
-            )}
+            </Link>
+            {/* Schalter und Route neben dem Zeilenlink, weil Links und Knöpfe nicht verschachtelt sein dürfen */}
+            <div className="flex shrink-0 items-center gap-1 pr-4">
+              <ConfirmDealToggle dealId={p.dealId} reserved={reserved} label={`${p.company} · ${p.title}`} />
+              {map && (
+                <a href={mapsUrl(p.location!)} target="_blank" rel="noreferrer" aria-label={`Route zu ${p.location}`} title="In Google Maps öffnen" className="flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-bg hover:text-ink">
+                  <MapPin size={17} aria-hidden="true" />
+                </a>
+              )}
             </div>
-          ))}
+            </div>
+            );
+          })}
         </Card>
 
         <Card

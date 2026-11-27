@@ -5,6 +5,7 @@ import { createDealAction } from "@/app/(app)/actions";
 import { ContactSelect } from "./people-picker";
 import { CompanyNameField } from "./company-name-field";
 import { btnAccent, btnPrimary, Field, FormError, Input, Select, Textarea } from "./ui";
+import { DateInput } from "./date-input";
 
 export function DealForm({ companies, preset, quick, today, fromMail, fromNote, contacts = [], contactId }: {
   companies: { id: number; name: string }[];
@@ -48,7 +49,7 @@ export function DealForm({ companies, preset, quick, today, fromMail, fromNote, 
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
         <Field label={quick ? "Termin" : "Projektdatum"}>
-          <Input name="projectDate" type="date" defaultValue={quick ? today : undefined} />
+          <DateInput name="projectDate" defaultValue={quick ? today : undefined} full />
         </Field>
         <Field label="Betrag netto (€)">
           <Input name="amountNet" inputMode="decimal" placeholder="optional" />

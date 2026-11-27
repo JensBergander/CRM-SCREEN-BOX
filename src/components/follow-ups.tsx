@@ -6,7 +6,8 @@ import { followUpDealAction, moveDealAction } from "@/app/(app)/actions";
 import { addDaysIso, daysSince, euro } from "@/lib/format";
 import type { LostReason } from "@/db/schema";
 import { LostDialog } from "./deal-board";
-import { Badge, btnPrimary, btnQuiet, Empty, FormError, Input, Textarea } from "./ui";
+import { Badge, btnPrimary, btnQuiet, Empty, FormError, Textarea } from "./ui";
+import { DateInput } from "./date-input";
 
 type FollowUp = {
   id: number;
@@ -27,8 +28,8 @@ function FollowUpForm({ deal, today, onDone }: { deal: FollowUp; today: string; 
     wasPending.current = pending;
   }, [pending, state, onDone]);
   const chip = "inline-flex min-h-8 items-center rounded-full border border-line bg-surface px-3 text-[12px] font-semibold text-muted hover:text-ink";
-  const dateRef = useRef<HTMLInputElement>(null);
-  const set = (days: number) => dateRef.current && (dateRef.current.value = addDaysIso(today, days));
+  const [date, setDate] = useState(addDaysIso(today, 10));
+  const set = (days: number) => setDate(addDaysIso(today, days));
   return (
     <form action={action} className="mx-5 mb-3 flex flex-col gap-2.5 rounded-xl bg-bg p-3">
       <label>
@@ -37,7 +38,7 @@ function FollowUpForm({ deal, today, onDone }: { deal: FollowUp; today: string; 
       </label>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-semibold text-muted">Wieder nachfassen am</span>
-        <Input ref={dateRef} name="followUpDate" type="date" min={addDaysIso(today, 1)} defaultValue={addDaysIso(today, 10)} required className="w-auto" />
+        <DateInput name="followUpDate" min={addDaysIso(today, 1)} value={date} onChange={setDate} required aria-label="Wieder nachfassen am" />
         <button type="button" className={chip} onClick={() => set(7)}>1 Woche</button>
         <button type="button" className={chip} onClick={() => set(14)}>2 Wochen</button>
       </div>

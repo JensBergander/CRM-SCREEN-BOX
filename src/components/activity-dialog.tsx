@@ -8,6 +8,7 @@ import { PeoplePicker, type PickPerson } from "./people-picker";
 import { WhenField } from "./when-field";
 import { RunningDot } from "./timeline";
 import { btnPrimary, btnQuiet, FormError, Textarea } from "./ui";
+import { DateInput } from "./date-input";
 
 export type ActivityKind = "notiz" | "anruf";
 
@@ -158,13 +159,7 @@ export function ActivityDialog({
                 {q.label}
               </button>
             ))}
-            <input
-              type="date"
-              value={followUp}
-              onChange={(e) => setFollowUp(e.target.value)}
-              aria-label="Wiedervorlage am"
-              className="min-h-9 rounded-full border border-line bg-surface px-3 text-[13px]"
-            />
+            <DateInput value={followUp} onChange={setFollowUp} aria-label="Wiedervorlage am" small />
             {followUp && (
               <button type="button" onClick={() => setFollowUp("")} className="text-[13px] text-muted hover:text-ink">
                 keine

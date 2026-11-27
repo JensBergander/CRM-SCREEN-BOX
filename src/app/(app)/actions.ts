@@ -286,6 +286,8 @@ export type Planning = {
   postStart: string | null;
   postEnd: string | null;
   blockContinuous: boolean;
+  // Anfrage oder Angebot: beim Anlegen eines Produktionstags fragt das Formular, ob der Auftrag bestätigt ist
+  unconfirmed?: boolean;
   calendarError?: string | null;
   // Schätzgenauigkeit der Postproduktion (1,4 = dauert im Schnitt 40 % länger als geplant); nur zum Anzeigen
   accuracy?: { factor: number; count: number } | null;
@@ -327,6 +329,7 @@ export async function loadPlanningAction(dealId: number): Promise<Planning | nul
     postEnd: row.deal.postEnd,
     accuracy: await estimateAccuracy(),
     blockContinuous: row.deal.blockContinuous,
+    unconfirmed: deal.stage === "anfrage" || deal.stage === "angebot",
     calendarError: row.deal.calendarError,
   };
 }
@@ -365,7 +368,8 @@ const planningSchema = z.object({
   blockContinuous: z.boolean(),
 });
 
-export async function savePlanningAction(dealId: number, input: Planning): Promise<{ error?: string; calendarError?: string | null }> {
+// beauftragen: Antwort „Ja“ auf „Ist der Auftrag bestätigt?“ – der Vorgang wandert danach auf „Beauftragt“
+export async function savePlanningAction(dealId: number, input: Planning, beauftragen = false): Promise<{ error?: string; calendarError?: string | null }> {
   await getCurrentUser();
   const parsed = planningSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -412,8 +416,19 @@ export async function savePlanningAction(dealId: number, input: Planning): Promi
       ...(firstDay && { projectDate: firstDay }),
     })
     .where(eq(deals.id, dealId));
-  await syncDealCalendar(dealId);
-  await syncDealWebsite(dealId);
+  const [current] = beauftragen === true ? await db.select({ stage: deals.stage }).from(deals).where(eq(deals.id, dealId)) : [];
+  if (current && (current.stage === "anfrage" || current.stage === "angebot")) {
+    // changeStage gleicht Kalender („(unbestätigt)“ fällt weg) und Website-Event selbst ab
+    await changeStage(dealId, "beauftragt");
+    try {
+      await quickReconcile();
+    } catch (e) {
+      console.error("Lexware-Abgleich nach Phasenwechsel fehlgeschlagen:", e);
+    }
+  } else {
+    await syncDealCalendar(dealId);
+    await syncDealWebsite(dealId);
+  }
   const [after] = await db.select({ e: deals.calendarError }).from(deals).where(eq(deals.id, dealId));
   refresh();
   return { calendarError: after?.e ?? null };
@@ -516,6 +531,27 @@ export async function mergeCompanyAction(fromId: number, intoId: number): Promis
   await syncCompanyOutside(result.keptId);
   refresh();
   redirect(`/firmen/${result.keptId}`);
+}
+
+// Schalter „Reserviert/Bestätigt“ auf der Startseite: Anfrage oder Angebot → Beauftragt.
+// Liefert die vorige Phase für „Rückgängig“.
+export async function confirmDealAction(dealId: number): Promise<{ from?: "anfrage" | "angebot"; error?: string }> {
+  await getCurrentUser();
+  const [deal] = await db.select({ stage: deals.stage }).from(deals).where(eq(deals.id, z.number().int().parse(dealId)));
+  if (!deal) return { error: "Vorgang nicht gefunden." };
+  if (deal.stage !== "anfrage" && deal.stage !== "angebot") return { error: "Der Vorgang ist schon beauftragt." };
+  await moveDealAction(dealId, "beauftragt");
+  return { from: deal.stage };
+}
+
+// „Rückgängig“ nach dem Schalter: nur solange der Vorgang noch auf „Beauftragt“ steht
+export async function unconfirmDealAction(dealId: number, to: "anfrage" | "angebot"): Promise<{ error?: string }> {
+  await getCurrentUser();
+  z.enum(["anfrage", "angebot"]).parse(to);
+  const [deal] = await db.select({ stage: deals.stage }).from(deals).where(eq(deals.id, z.number().int().parse(dealId)));
+  if (deal?.stage !== "beauftragt") return { error: "Der Vorgang steht nicht mehr auf „Beauftragt“." };
+  await moveDealAction(dealId, to);
+  return {};
 }
 
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)

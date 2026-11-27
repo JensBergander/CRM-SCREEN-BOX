@@ -3,6 +3,7 @@ import { Video } from "lucide-react";
 import type { Appointment } from "@/lib/appointments";
 import { addDaysIso, dayDe, timeDe } from "@/lib/format";
 import { AssignCompany } from "./appointment-actions";
+import { ConfirmDealToggle } from "./confirm-deal";
 import { btnQuiet, Empty } from "./ui";
 
 const dayFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" });
@@ -56,6 +57,8 @@ function AppointmentRow({ a, big, now, companies }: { a: Appointment; big: boole
   const past = a.endAt <= now;
   // Ort nur anzeigen, wenn er keine Adresse eines Online-Termins ist
   const place = a.location && !/^https?:\/\//.test(a.location) ? a.location : null;
+  // Eigener Produktionstermin bei Anfrage/Angebot: nur reserviert
+  const reserved = a.dealStage === "anfrage" || a.dealStage === "angebot";
   const who = a.dealId ? null : [a.companyName, a.personName].filter(Boolean).join(" · ");
   return (
     <li
@@ -75,7 +78,10 @@ function AppointmentRow({ a, big, now, companies }: { a: Appointment; big: boole
         <p className={`truncate font-semibold ${big ? "text-[15px]" : "text-sm"}`}>
           {a.dealId ? (
             <Link href={`/vorgaenge/${a.dealId}`} className="hover:underline">
-              <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-accent align-middle" aria-hidden="true" />
+              <span
+                className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${reserved ? "border border-dashed border-muted" : "bg-accent"}`}
+                aria-hidden="true"
+              />
               {a.subject}
             </Link>
           ) : (
@@ -101,6 +107,7 @@ function AppointmentRow({ a, big, now, companies }: { a: Appointment; big: boole
         {!a.dealId && !a.companyId && <AssignCompany eventId={a.id} companies={companies} />}
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {a.dealId && !past && <ConfirmDealToggle dealId={a.dealId} reserved={reserved} label={a.subject} />}
         {a.joinUrl && !past && (
           <a href={a.joinUrl} target="_blank" rel="noreferrer" className={btnQuiet} aria-label={`${a.subject}: beitreten`}>
             <Video size={14} aria-hidden="true" /> Beitreten

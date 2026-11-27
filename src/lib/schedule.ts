@@ -79,6 +79,7 @@ export async function upcomingProductionDays(from: string, to: string) {
       endTime: productionDays.endTime,
       dealId: deals.id,
       title: deals.title,
+      stage: deals.stage,
       location: deals.location,
       hasMap: sql<number>`${deals.locationLat} IS NOT NULL`,
       company: companies.name,

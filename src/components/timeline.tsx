@@ -22,6 +22,7 @@ import { assignEntryAction, createTaskAction, deleteActivityAction, mailTextActi
 import type { Activity, Email } from "@/db/schema";
 import { relativeTime, tidyMailText } from "@/lib/format";
 import { btnPrimary, btnQuiet, Empty, FormError, Input, RunningDot, Textarea } from "./ui";
+import { DateInput } from "./date-input";
 import { PeoplePicker, type PickPerson } from "./people-picker";
 import { WhenField } from "./when-field";
 import { MailContactPanel } from "./mail-contact";
@@ -193,7 +194,7 @@ function TaskInline({ entry, projects, today, onDone }: { entry: Entry; projects
       </label>
       <label>
         <span className="sr-only">Fällig am</span>
-        <Input name="dueDate" type="date" defaultValue={today} className="w-auto" />
+        <DateInput name="dueDate" defaultValue={today} />
       </label>
       {(active.length > 0 || entry.dealId) && (
         <label>
