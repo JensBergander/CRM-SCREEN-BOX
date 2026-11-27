@@ -185,7 +185,7 @@ export default async function StartPage() {
             return (
             <div key={`${p.dealId}-${p.day}-${i}`} className="flex items-center border-t border-line-soft">
             <Link href={`/vorgaenge/${p.dealId}`} className="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 pl-5 pr-2 hover:bg-bg/60">
-              <div className={`w-14 shrink-0 rounded-xl border border-dashed py-0.5 text-center ${reserved ? "border-line" : "border-ok"}`}>
+              <div className={`w-14 shrink-0 rounded-xl border border-dashed py-0.5 text-center ${reserved ? "border-line" : "border-2 border-ok"}`}>
                 <p className={`text-[11px] font-semibold uppercase ${reserved ? "text-muted" : "text-ok-ink"}`}>
                   {new Intl.DateTimeFormat("de-DE", { weekday: "short", timeZone: "UTC" }).format(new Date(`${p.day}T12:00:00Z`))}
                 </p>

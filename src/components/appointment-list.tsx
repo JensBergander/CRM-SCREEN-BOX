@@ -66,7 +66,7 @@ function AppointmentRow({ a, big, now, companies }: { a: Appointment; big: boole
       {/* Eigene Produktionstermine wie in „Nächste Produktionstage“: grau gestrichelt = reserviert, grün gestrichelt = bestätigt */}
       <div
         className={`-my-0.5 shrink-0 rounded-xl border px-1.5 py-0.5 tabular-nums ${big ? "w-16" : "w-14"} ${
-          !(a.dealId && a.dealStage) ? "border-transparent" : reserved ? "border-dashed border-line text-muted" : "border-dashed border-ok"
+          !(a.dealId && a.dealStage) ? "border-transparent" : reserved ? "border-dashed border-line text-muted" : "border-2 border-dashed border-ok"
         }`}
       >
         {a.allDay ? (
