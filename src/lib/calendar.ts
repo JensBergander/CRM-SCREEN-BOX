@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { companies, contacts, deals, productionDays } from "@/db/schema";
 import { selectContacts } from "./people";
@@ -142,7 +142,45 @@ export async function syncDealCalendar(dealId: number): Promise<void> {
     await db.update(deals).set({ calendarEventId: null, calendarError: null }).where(eq(deals.id, dealId));
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    console.error(`Kalenderabgleich für Vorgang ${dealId} fehlgeschlagen:`, e);
     await db.update(deals).set({ calendarError: message.slice(0, 1000) }).where(eq(deals.id, dealId));
+  }
+}
+
+// Firmenname steht im Betreff: nach einer Umbenennung alle Vorgänge der Firma mit Produktionstagen neu abgleichen
+export async function syncCompanyCalendars(companyId: number): Promise<void> {
+  if (!mailboxes()[0]) return;
+  const rows = await db
+    .selectDistinct({ id: deals.id })
+    .from(deals)
+    .innerJoin(productionDays, eq(productionDays.dealId, deals.id))
+    .where(and(eq(deals.companyId, companyId), ne(deals.stage, "verloren")));
+  for (const r of rows) {
+    try {
+      await syncDealCalendar(r.id);
+    } catch (e) {
+      console.error(`Kalenderabgleich für Vorgang ${r.id} fehlgeschlagen:`, e);
+    }
+  }
+}
+
+// Name, Telefon und Mail des Ansprechpartners stehen im Termintext: nach einer Änderung an der Person
+// alle Vorgänge neu abgleichen, in denen sie (über eine ihrer Firmenzuordnungen) Ansprechpartner ist
+export async function syncPersonCalendars(personId: number): Promise<void> {
+  if (!mailboxes()[0]) return;
+  const links = await db.select({ id: contacts.id }).from(contacts).where(eq(contacts.personId, personId));
+  if (!links.length) return;
+  const rows = await db
+    .selectDistinct({ id: deals.id })
+    .from(deals)
+    .innerJoin(productionDays, eq(productionDays.dealId, deals.id))
+    .where(and(inArray(deals.contactId, links.map((l) => l.id)), ne(deals.stage, "verloren")));
+  for (const r of rows) {
+    try {
+      await syncDealCalendar(r.id);
+    } catch (e) {
+      console.error(`Kalenderabgleich für Vorgang ${r.id} fehlgeschlagen:`, e);
+    }
   }
 }
 

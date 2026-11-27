@@ -70,11 +70,11 @@ export async function syncDealWebsite(dealId: number): Promise<void> {
     if (current) {
       const name = current.name === deal.websiteName ? deal.title : undefined;
       const oeffentlich = deal.websitePublic !== deal.websitePublicSent ? deal.websitePublic : undefined;
-      await api("PATCH", "", { id: current.id, startAt, endAt, ort, ...(name && { name }), ...(oeffentlich !== undefined && { oeffentlich }) });
+      await api("PATCH", "", { id: current.id, startAt, endAt, ort, ...(name && { name: name.slice(0, 255) }), ...(oeffentlich !== undefined && { oeffentlich }) });
       await db
         .update(deals)
         .set({
-          ...(name && { websiteName: name }),
+          ...(name && { websiteName: name.slice(0, 255) }),
           ...(oeffentlich !== undefined && { websitePublicSent: oeffentlich }),
           websiteImage: current.bildUrl,
           websiteCandidates: null,
@@ -107,6 +107,7 @@ export async function syncDealWebsite(dealId: number): Promise<void> {
       .where(eq(deals.id, dealId));
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    console.error(`Website-Abgleich für Vorgang ${dealId} fehlgeschlagen:`, e);
     await db.update(deals).set({ websiteError: message.slice(0, 1000) }).where(eq(deals.id, dealId));
   }
 }

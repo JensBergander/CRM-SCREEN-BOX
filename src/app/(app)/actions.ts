@@ -21,7 +21,7 @@ import {
 } from "@/lib/lexware";
 import { loadOlderMails, matchAddress, rematchOpenMails, syncMailboxes, type SyncResult } from "@/lib/mail";
 import { graphSend, mailboxes, messageText } from "@/lib/graph";
-import { deleteDealEvents, syncDealCalendar } from "@/lib/calendar";
+import { deleteDealEvents, syncCompanyCalendars, syncDealCalendar, syncPersonCalendars } from "@/lib/calendar";
 import { mergeCompanies, mergePeople } from "@/lib/merge";
 import { saveDisplayName } from "@/lib/profile";
 import { deleteDealWebsite, linkWebsiteEvent, ownWebsiteEvent, setWebsitePublic, syncDealWebsite, uploadWebsiteImage } from "@/lib/website";
@@ -137,7 +137,7 @@ export async function updateDealAction(dealId: number, _: FormState, form: FormD
   const offerNumber = text(form, "offerNumber")?.trim() || null;
   const invoiceNumber = text(form, "invoiceNumber")?.trim() || null;
   const [current] = await db
-    .select({ companyId: deals.companyId, contactId: deals.contactId, invoiceNumber: deals.invoiceNumber })
+    .select({ companyId: deals.companyId, contactId: deals.contactId, invoiceNumber: deals.invoiceNumber, title: deals.title, notes: deals.notes })
     .from(deals)
     .where(eq(deals.id, dealId));
   const contactId = current ? await contactFromForm(form, current.companyId, current.contactId) : undefined;
@@ -148,6 +148,12 @@ export async function updateDealAction(dealId: number, _: FormState, form: FormD
     .where(eq(deals.id, dealId));
   if (current) await resolveVoucherQuestions([offerNumber, invoiceNumber], current.companyId);
   if (current && current.invoiceNumber !== invoiceNumber) await refreshPaymentTasks([dealId]);
+  if (
+    current &&
+    (current.title !== parsed.data.title || (current.notes ?? null) !== (parsed.data.notes ?? null) || (contactId !== undefined && contactId !== current.contactId))
+  ) {
+    await syncDealOutside(dealId);
+  }
   // Einmaliges Projekt: eine offene Jahres-Erinnerung ist damit erledigt
   if (oneOff) {
     await db
@@ -211,14 +217,49 @@ export async function setRatingAction(companyId: number, rating: number | null, 
   refresh();
 }
 
-export async function renameDealAction(dealId: number, title: string): Promise<{ error?: string }> {
+// Titel, Notiz und Ansprechpartner stehen im Kalendertermin, der Titel auch im Website-Event (als Vorschlag).
+// Ein Fehler beim Abgleich hält das Speichern nicht auf: er wird geloggt, am Vorgang vermerkt und per Cronjob wiederholt.
+// Liefert einen Hinweis, wenn Kalender oder Website nicht nachgezogen werden konnten.
+async function syncDealOutside(dealId: number): Promise<string | undefined> {
+  try {
+    await syncDealCalendar(dealId);
+  } catch (e) {
+    console.error(`Kalenderabgleich für Vorgang ${dealId} fehlgeschlagen:`, e);
+  }
+  try {
+    await syncDealWebsite(dealId);
+  } catch (e) {
+    console.error(`Website-Abgleich für Vorgang ${dealId} fehlgeschlagen:`, e);
+  }
+  const [state] = await db.select({ calendar: deals.calendarError, website: deals.websiteError }).from(deals).where(eq(deals.id, dealId));
+  const failed = [state?.calendar && "Outlook-Kalender", state?.website && "Website-Event"].filter(Boolean);
+  if (failed.length) return `Gespeichert, aber ${failed.join(" und ")} noch nicht aktualisiert. Das CRM versucht es in den nächsten 15 Minuten erneut.`;
+}
+
+async function syncPersonOutside(personId: number) {
+  try {
+    await syncPersonCalendars(personId);
+  } catch (e) {
+    console.error(`Kalenderabgleich für Person ${personId} fehlgeschlagen:`, e);
+  }
+}
+
+async function syncCompanyOutside(companyId: number) {
+  try {
+    await syncCompanyCalendars(companyId);
+  } catch (e) {
+    console.error(`Kalenderabgleich für Firma ${companyId} fehlgeschlagen:`, e);
+  }
+}
+
+export async function renameDealAction(dealId: number, title: string): Promise<{ error?: string; warning?: string }> {
   await getCurrentUser();
   const clean = title.trim().slice(0, 255);
   if (!clean) return { error: "Der Name darf nicht leer sein." };
   await db.update(deals).set({ title: clean }).where(eq(deals.id, dealId));
-  await syncDealWebsite(dealId);
+  const warning = await syncDealOutside(dealId);
   refresh();
-  return {};
+  return { warning };
 }
 
 export async function renameCompanyAction(companyId: number, name: string): Promise<{ error?: string }> {
@@ -227,6 +268,7 @@ export async function renameCompanyAction(companyId: number, name: string): Prom
   if (!clean) return { error: "Der Name darf nicht leer sein." };
   if (await fromLexware(companyId)) return { error: "Der Name kommt aus Lexware. Bitte dort ändern." };
   await db.update(companies).set({ name: clean }).where(eq(companies.id, companyId));
+  await syncCompanyOutside(companyId);
   refresh();
   return {};
 }
@@ -470,6 +512,8 @@ export async function mergeCompanyAction(fromId: number, intoId: number): Promis
   await getCurrentUser();
   const result = await mergeCompanies(z.number().int().parse(fromId), z.number().int().parse(intoId));
   if ("error" in result) return result;
+  // Die Vorgänge der aufgelösten Firma stehen jetzt unter dem Namen der behaltenen
+  await syncCompanyOutside(result.keptId);
   refresh();
   redirect(`/firmen/${result.keptId}`);
 }
@@ -534,10 +578,12 @@ export async function updateCompanyAction(companyId: number, _: FormState, form:
   // Stammdaten von Lexware-Firmen kommen beim Abgleich aus Lexware und werden hier nicht gespeichert
   const { name, street, zip, city, phone, email, ...own } = parsed.data;
   const master = (await fromLexware(companyId)) ? {} : { name, street, zip, city, phone, email };
+  const [before] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId));
   await db
     .update(companies)
     .set({ ...own, ...master, paymentTermDays: own.paymentTermDays ?? null, emailDomain: own.emailDomain?.toLowerCase().replace(/^@/, "") ?? null })
     .where(eq(companies.id, companyId));
+  if ("name" in master && before && before.name !== master.name) await syncCompanyOutside(companyId);
   await refreshPaymentTasks();
   refresh();
   return {};
@@ -1065,6 +1111,7 @@ export async function createContactFromMailAction(mailId: number, _: FormState, 
       if (!known.mobile && person.mobile) personal.mobile = person.mobile;
     }
     if (Object.keys(personal).length) await db.update(people).set(personal).where(eq(people.id, known.personId));
+    if (Object.keys(own).length || Object.keys(personal).length) await syncPersonOutside(known.personId);
   } else {
     contactId = (await createContact({ ...person, companyId, email })).contactId;
   }
@@ -1322,6 +1369,8 @@ export async function updatePersonAction(personId: number, _: FormState, form: F
       })
       .where(eq(contacts.id, l.id));
   }
+  // Name, Telefon und Mail stehen in den Produktionsterminen, in denen die Person Ansprechpartner ist
+  await syncPersonOutside(personId);
   refresh();
   return {};
 }
@@ -1396,6 +1445,7 @@ export async function mergePeopleAction(fromId: number, intoId: number): Promise
   await getCurrentUser();
   if (fromId === intoId) return { error: "Bitte eine andere Person wählen." };
   await mergePeople(fromId, intoId);
+  await syncPersonOutside(intoId);
   redirect(`/kontakte/${intoId}`);
 }
 

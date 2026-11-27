@@ -13,13 +13,15 @@ export function InlineTitle({
 }: {
   value: string;
   label: string;
-  onSave: (value: string) => Promise<{ error?: string } | void>;
+  // warning: gespeichert, aber mit Hinweis (z. B. Kalender noch nicht aktualisiert)
+  onSave: (value: string) => Promise<{ error?: string; warning?: string } | void>;
   // weitere Knöpfe hinter dem Stift, z. B. Foto fürs Website-Event
   extra?: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [error, setError] = useState<string | undefined>();
+  const [warning, setWarning] = useState<string | undefined>();
   const [pending, startTransition] = useTransition();
   const input = useRef<HTMLInputElement>(null);
 
@@ -34,19 +36,22 @@ export function InlineTitle({
     if (next === value) return cancel();
     startTransition(async () => {
       const result = await onSave(next);
-      if (result?.error) setError(result.error);
-      else setEditing(false);
+      if (result?.error) return setError(result.error);
+      setWarning(result?.warning);
+      setEditing(false);
     });
   };
 
   if (!editing) {
     return (
-      <div className="flex items-start gap-2">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-start gap-2">
         <h1 className="text-[28px] font-bold tracking-tight">{value}</h1>
         <button
           type="button"
           onClick={() => {
             setDraft(value);
+            setWarning(undefined);
             setEditing(true);
             setTimeout(() => input.current?.select(), 0);
           }}
@@ -57,6 +62,8 @@ export function InlineTitle({
           <Pencil size={16} aria-hidden="true" />
         </button>
         {extra}
+        </div>
+        {warning && <p role="status" className="text-sm text-danger-ink">{warning}</p>}
       </div>
     );
   }

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { appState, companies, contacts, people as peopleTable, type Company, type CompanyKind } from "@/db/schema";
 import { cleanName, compatibleNames, createContact, mergeNames, sameName, selectContacts } from "./people";
 import { suggestFolderName, todayIso } from "./format";
+import { syncCompanyCalendars, syncPersonCalendars } from "./calendar";
 
 const API = "https://api.lexware.io/v1";
 
@@ -130,6 +131,14 @@ async function applyContact(lx: LexwareContact, company: Company) {
       emailDomain: company.emailDomain ?? [...emails, ...people.map((p) => p.email)].map(domainOf).find(Boolean) ?? null,
     })
     .where(eq(companies.id, company.id));
+  // Firmenname steht im Betreff der Produktionstermine
+  if (nameOf(lx) && nameOf(lx) !== company.name) {
+    try {
+      await syncCompanyCalendars(company.id);
+    } catch (e) {
+      console.error(`Kalenderabgleich für Firma ${company.id} fehlgeschlagen:`, e);
+    }
+  }
 
   // Ansprechpartner: vorhandene wiederfinden (erst Lexware-markierte, dann Mail, dann Name), sonst neu anlegen
   const known = await selectContacts().where(eq(contacts.companyId, company.id));
@@ -145,9 +154,12 @@ async function applyContact(lx: LexwareContact, company: Company) {
     if (hit) {
       matched.add(hit.id);
       // Lexware führt beim Namen; fehlt dort etwas, bleibt der Wert aus dem CRM
+      const names = mergeNames(p, hit);
+      const changed =
+        names.firstName !== hit.firstName || names.lastName !== hit.lastName || (p.email ?? hit.email) !== hit.email || (p.phone ?? hit.phone) !== hit.phone;
       await db
         .update(peopleTable)
-        .set(mergeNames(p, hit))
+        .set(names)
         .where(eq(peopleTable.id, hit.personId));
       await db
         .update(contacts)
@@ -155,6 +167,14 @@ async function applyContact(lx: LexwareContact, company: Company) {
         // ein von Hand gesetztes „früher“ bei einem Lexware-Kontakt bleibt
         .set({ email: p.email ?? hit.email, phone: p.phone ?? hit.phone, fromLexware: true, endedAt: hit.fromLexware ? hit.endedAt : null })
         .where(eq(contacts.id, hit.id));
+      // Name, Telefon und Mail stehen in den Produktionsterminen
+      if (changed) {
+        try {
+          await syncPersonCalendars(hit.personId);
+        } catch (e) {
+          console.error(`Kalenderabgleich für Person ${hit.personId} fehlgeschlagen:`, e);
+        }
+      }
       continue;
     }
     // Dieselbe Person bei einer ANDEREN Firma (gleiche Mail, passender Name): neue Zuordnung statt neuer Person.
