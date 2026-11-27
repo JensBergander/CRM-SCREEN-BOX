@@ -533,8 +533,7 @@ export async function mergeCompanyAction(fromId: number, intoId: number): Promis
   redirect(`/firmen/${result.keptId}`);
 }
 
-// Schalter „Reserviert/Bestätigt“ auf der Startseite: Anfrage oder Angebot → Beauftragt.
-// Liefert die vorige Phase für „Rückgängig“.
+// Schalter „Reserviert/Bestätigt“ auf der Startseite: Anfrage oder Angebot → Beauftragt
 export async function confirmDealAction(dealId: number): Promise<{ from?: "anfrage" | "angebot"; error?: string }> {
   await getCurrentUser();
   const [deal] = await db.select({ stage: deals.stage }).from(deals).where(eq(deals.id, z.number().int().parse(dealId)));
@@ -542,16 +541,6 @@ export async function confirmDealAction(dealId: number): Promise<{ from?: "anfra
   if (deal.stage !== "anfrage" && deal.stage !== "angebot") return { error: "Der Vorgang ist schon beauftragt." };
   await moveDealAction(dealId, "beauftragt");
   return { from: deal.stage };
-}
-
-// „Rückgängig“ nach dem Schalter: nur solange der Vorgang noch auf „Beauftragt“ steht
-export async function unconfirmDealAction(dealId: number, to: "anfrage" | "angebot"): Promise<{ error?: string }> {
-  await getCurrentUser();
-  z.enum(["anfrage", "angebot"]).parse(to);
-  const [deal] = await db.select({ stage: deals.stage }).from(deals).where(eq(deals.id, z.number().int().parse(dealId)));
-  if (deal?.stage !== "beauftragt") return { error: "Der Vorgang steht nicht mehr auf „Beauftragt“." };
-  await moveDealAction(dealId, to);
-  return {};
 }
 
 // Für Formulare mit gebundenen Argumenten (FormData wird ignoriert)

@@ -3,7 +3,6 @@ import { Video } from "lucide-react";
 import type { Appointment } from "@/lib/appointments";
 import { addDaysIso, dayDe, timeDe } from "@/lib/format";
 import { AssignCompany } from "./appointment-actions";
-import { ConfirmDealToggle } from "./confirm-deal";
 import { btnQuiet, Empty } from "./ui";
 
 const dayFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin" });
@@ -57,14 +56,19 @@ function AppointmentRow({ a, big, now, companies }: { a: Appointment; big: boole
   const past = a.endAt <= now;
   // Ort nur anzeigen, wenn er keine Adresse eines Online-Termins ist
   const place = a.location && !/^https?:\/\//.test(a.location) ? a.location : null;
-  // Eigener Produktionstermin bei Anfrage/Angebot: nur reserviert
+  // Eigener Produktionstermin: bei Anfrage/Angebot nur reserviert (grau), ab Beauftragt bestätigt (grün)
   const reserved = a.dealStage === "anfrage" || a.dealStage === "angebot";
   const who = a.dealId ? null : [a.companyName, a.personName].filter(Boolean).join(" · ");
   return (
     <li
       className={`flex items-start gap-3.5 border-t border-line-soft px-5 ${big ? "py-3.5" : "py-2.5"} ${running ? "bg-info-soft/60" : ""} ${past ? "opacity-60" : ""}`}
     >
-      <div className={`shrink-0 tabular-nums ${big ? "w-14" : "w-12"}`}>
+      {/* Eigene Produktionstermine wie in „Nächste Produktionstage“: grau gestrichelt = reserviert, grün = bestätigt */}
+      <div
+        className={`-my-0.5 shrink-0 rounded-xl border px-1.5 py-0.5 tabular-nums ${big ? "w-16" : "w-14"} ${
+          !(a.dealId && a.dealStage) ? "border-transparent" : reserved ? "border-dashed border-line text-muted" : "border-ok bg-ok-soft text-ok-ink"
+        }`}
+      >
         {a.allDay ? (
           <p className="text-xs font-semibold text-muted">ganztägig</p>
         ) : (
@@ -77,9 +81,9 @@ function AppointmentRow({ a, big, now, companies }: { a: Appointment; big: boole
       <div className="min-w-0 flex-1">
         <p className={`truncate font-semibold ${big ? "text-[15px]" : "text-sm"}`}>
           {a.dealId ? (
-            <Link href={`/vorgaenge/${a.dealId}`} className="hover:underline">
+            <Link href={`/vorgaenge/${a.dealId}`} className={`hover:underline ${reserved ? "text-muted" : "text-ok-ink"}`}>
               <span
-                className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${reserved ? "border border-dashed border-muted" : "bg-accent"}`}
+                className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${reserved ? "border border-dashed border-muted" : "bg-ok"}`}
                 aria-hidden="true"
               />
               {a.subject}
@@ -107,7 +111,6 @@ function AppointmentRow({ a, big, now, companies }: { a: Appointment; big: boole
         {!a.dealId && !a.companyId && <AssignCompany eventId={a.id} companies={companies} />}
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        {a.dealId && !past && <ConfirmDealToggle dealId={a.dealId} reserved={reserved} label={a.subject} />}
         {a.joinUrl && !past && (
           <a href={a.joinUrl} target="_blank" rel="noreferrer" className={btnQuiet} aria-label={`${a.subject}: beitreten`}>
             <Video size={14} aria-hidden="true" /> Beitreten

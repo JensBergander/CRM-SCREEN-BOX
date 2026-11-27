@@ -375,6 +375,8 @@ export const calendarEvents = mysqlTable(
     attendees: text("attendees"),
     // vom CRM selbst eingetragener Produktionstermin
     dealId: int("deal_id").references(() => deals.id, { onDelete: "set null" }),
+    // zuletzt gelesener Outlook-Status (tentative = „Mit Vorbehalt“, busy = „Gebucht“): Wechsel auf gebucht bestätigt den Vorgang
+    showAs: varchar("show_as", { length: 20 }),
     companyId: int("company_id").references(() => companies.id, { onDelete: "set null" }),
     personId: int("person_id").references(() => people.id, { onDelete: "set null" }),
     // Firma von Hand zugeordnet: der Abgleich überschreibt sie nicht

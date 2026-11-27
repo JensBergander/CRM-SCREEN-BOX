@@ -74,7 +74,8 @@ export default async function DealPage({ params, searchParams }: PageProps<"/vor
         />
         <div className="flex flex-wrap items-center gap-2">
           {call && <ContactActions call={call} />}
-          <Badge tone={STAGE_TONE[deal.stage]}>
+          {/* Auf einen Blick: Anfrage/Angebot = noch offen (rot), ab Beauftragt = sicher (grün), Verloren grau */}
+          <Badge tone={deal.stage === "verloren" ? STAGE_TONE.verloren : CONFIRMED.includes(deal.stage) ? "ok" : "danger"}>
             {STAGE_LABEL[deal.stage]}
           </Badge>
           <span className="text-sm font-semibold tabular-nums">{euro(deal.amountNet)}</span>

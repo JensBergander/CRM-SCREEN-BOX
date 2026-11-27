@@ -179,17 +179,17 @@ export default async function StartPage() {
         <Card title="Nächste Produktionstage" aside={<Link href="/planung" className="text-[13px] text-muted">Planung</Link>}>
           {upcoming.length === 0 && <Empty>In den nächsten 14 Tagen ist keine Produktion geplant.</Empty>}
           {upcoming.map((p, i) => {
-            // Anfrage/Angebot: Termin ist nur reserviert (Outlook „Mit Vorbehalt“) – grau statt Produktions-Orange
+            // Anfrage/Angebot: nur reserviert (Outlook „Mit Vorbehalt“) – grau gestrichelt; bestätigt – grün umrandet
             const reserved = p.stage === "anfrage" || p.stage === "angebot";
             const map = !!Number(p.hasMap) && !!p.location;
             return (
             <div key={`${p.dealId}-${p.day}-${i}`} className="flex items-center border-t border-line-soft">
             <Link href={`/vorgaenge/${p.dealId}`} className="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 pl-5 pr-2 hover:bg-bg/60">
-              <div className={`w-14 shrink-0 rounded-xl py-0.5 text-center ${reserved ? "border border-dashed border-line" : ""}`}>
-                <p className={`text-[11px] font-semibold uppercase ${reserved ? "text-muted" : "text-accent-ink"}`}>
+              <div className={`w-14 shrink-0 rounded-xl border py-0.5 text-center ${reserved ? "border-dashed border-line" : "border-ok bg-ok-soft"}`}>
+                <p className={`text-[11px] font-semibold uppercase ${reserved ? "text-muted" : "text-ok-ink"}`}>
                   {new Intl.DateTimeFormat("de-DE", { weekday: "short", timeZone: "UTC" }).format(new Date(`${p.day}T12:00:00Z`))}
                 </p>
-                <p className={`text-lg font-bold leading-tight ${reserved ? "text-muted" : ""}`}>{p.day.slice(8)}.{p.day.slice(5, 7)}.</p>
+                <p className={`text-lg font-bold leading-tight ${reserved ? "text-muted" : "text-ok-ink"}`}>{p.day.slice(8)}.{p.day.slice(5, 7)}.</p>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{p.company} · {p.title}</p>

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { activities, activityPeople, appState, calendarEvents, companies, contacts, deals, people, taskPeople, tasks } from "@/db/schema";
 import type { Stage } from "@/db/schema";
 import { addDaysIso, todayIso } from "./format";
+import { changeStage } from "./pipeline";
 import { graphGet, mailboxes } from "./graph";
 import { isOwn, matchAddress } from "./mail";
 import { fullName } from "./people";
@@ -53,6 +54,7 @@ type GraphEvent = {
   webLink?: string;
   onlineMeeting?: { joinUrl?: string } | null;
   bodyPreview?: string;
+  showAs?: string;
 };
 
 type Attendee = { email: string; name: string | null };
@@ -113,7 +115,7 @@ export async function syncAppointments(): Promise<SyncAppointmentsResult> {
     .values({ key: STATE_KEY, value: runStart.toISOString() })
     .onDuplicateKeyUpdate({ set: { value: runStart.toISOString() } });
 
-  const select = "subject,start,end,isAllDay,isCancelled,responseStatus,location,attendees,organizer,webLink,onlineMeeting,bodyPreview";
+  const select = "subject,start,end,isAllDay,isCancelled,responseStatus,location,attendees,organizer,webLink,onlineMeeting,bodyPreview,showAs";
   let url: string | undefined =
     `/users/${encodeURIComponent(mailbox)}/calendarView?startDateTime=${from.toISOString()}&endDateTime=${to.toISOString()}` +
     `&$select=${select}&$orderby=start/dateTime&$top=100`;
@@ -135,6 +137,8 @@ export async function syncAppointments(): Promise<SyncAppointmentsResult> {
   const knownDeals = new Set(dealIds.length ? (await db.select({ id: deals.id }).from(deals).where(inArray(deals.id, dealIds))).map((d) => d.id) : []);
 
   let changed = false;
+  // Produktionstermine, die in Outlook von „Mit Vorbehalt“ auf „Gebucht“ gestellt wurden
+  const bookedInOutlook = new Set<number>();
   for (const e of visible) {
     const attendees = externalAttendees(e);
     const prodDeal = productionDealId(e);
@@ -151,8 +155,11 @@ export async function syncAppointments(): Promise<SyncAppointmentsResult> {
       webLink: e.webLink ?? null,
       attendees: attendees.length ? JSON.stringify(attendees) : null,
       dealId,
+      showAs: e.showAs?.slice(0, 20) ?? null,
       ...(match && { companyId: match.companyId, personId: match.personId }),
     };
+    // Nur der Wechsel zählt, nicht der Zustand: so bestätigen alte, schon gebuchte Termine nichts
+    if (dealId && old?.showAs === "tentative" && (e.showAs === "busy" || e.showAs === "oof")) bookedInOutlook.add(dealId);
     if (!old) {
       await db.insert(calendarEvents).values({ mailbox, graphId: e.id, ...fields, seenAt: runStart });
       changed = true;
@@ -167,6 +174,14 @@ export async function syncAppointments(): Promise<SyncAppointmentsResult> {
     await db.update(calendarEvents).set({ ...fields, seenAt: runStart }).where(eq(calendarEvents.id, old.id));
   }
 
+  for (const dealId of bookedInOutlook) {
+    try {
+      if (await confirmFromOutlook(dealId)) changed = true;
+    } catch (e) {
+      console.error(`Bestätigung aus Outlook für Vorgang ${dealId} fehlgeschlagen:`, e);
+    }
+  }
+
   // In Outlook gelöscht, abgesagt oder abgelehnt: verschwindet, außer er steht schon in der Zeitleiste
   const gone = [...existing.values()].filter((r) => !r.logged && !visible.some((e) => e.id === r.graphId)).map((r) => r.id);
   if (gone.length) {
@@ -179,6 +194,23 @@ export async function syncAppointments(): Promise<SyncAppointmentsResult> {
 
   const logged = await logPastAppointments();
   return { read: visible.length, changed: changed || logged > 0, logged };
+}
+
+// In Outlook auf „Gebucht“ gestellt: Anfrage/Angebot → Beauftragt, wie der Schalter auf der Startseite.
+// Nur in diese Richtung; zurück auf „Mit Vorbehalt“ ändert die Phase nicht (der Abgleich stellt den Termin wieder auf gebucht).
+async function confirmFromOutlook(dealId: number): Promise<boolean> {
+  const [deal] = await db.select({ stage: deals.stage }).from(deals).where(eq(deals.id, dealId));
+  if (deal?.stage !== "anfrage" && deal?.stage !== "angebot") return false;
+  await changeStage(dealId, "beauftragt");
+  // Zeitleiste: woher die Bestätigung kam
+  const [entry] = await db
+    .select({ id: activities.id, body: activities.body })
+    .from(activities)
+    .where(and(eq(activities.dealId, dealId), eq(activities.type, "phase")))
+    .orderBy(sql`${activities.id} desc`)
+    .limit(1);
+  if (entry) await db.update(activities).set({ body: `${entry.body} (in Outlook auf „Gebucht“ gestellt)` }).where(eq(activities.id, entry.id));
+  return true;
 }
 
 // Beim Öffnen der Startseite: nur lesen, wenn der letzte Abruf länger her ist

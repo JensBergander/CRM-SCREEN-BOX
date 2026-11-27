@@ -211,6 +211,13 @@
       "when": 1795710012931,
       "tag": "0029_aufgaben_details",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1795812414691,
+      "tag": "0030_termin_status",
+      "breakpoints": true
     }
   ]
 }
