@@ -63,10 +63,10 @@ function AppointmentRow({ a, big, now, companies }: { a: Appointment; big: boole
     <li
       className={`flex items-start gap-3.5 border-t border-line-soft px-5 ${big ? "py-3.5" : "py-2.5"} ${running ? "bg-info-soft/60" : ""} ${past ? "opacity-60" : ""}`}
     >
-      {/* Eigene Produktionstermine wie in „Nächste Produktionstage“: grau gestrichelt = reserviert, grün = bestätigt */}
+      {/* Eigene Produktionstermine wie in „Nächste Produktionstage“: grau gestrichelt = reserviert, grün gestrichelt = bestätigt */}
       <div
         className={`-my-0.5 shrink-0 rounded-xl border px-1.5 py-0.5 tabular-nums ${big ? "w-16" : "w-14"} ${
-          !(a.dealId && a.dealStage) ? "border-transparent" : reserved ? "border-dashed border-line text-muted" : "border-ok bg-ok-soft text-ok-ink"
+          !(a.dealId && a.dealStage) ? "border-transparent" : reserved ? "border-dashed border-line text-muted" : "border-dashed border-ok"
         }`}
       >
         {a.allDay ? (
